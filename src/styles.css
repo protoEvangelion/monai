@@ -1,0 +1,57 @@
+
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@source "../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+/* Thin scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.4);
+}
+
+/* Background orb animations */
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  25%  { transform: translate(18px, -12px) scale(1.04); }
+  50%  { transform: translate(-12px, 18px) scale(0.97); }
+  75%  { transform: translate(10px, 10px) scale(1.02); }
+}
+
+@keyframes orb-drift-alt {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  25%  { transform: translate(-14px, 14px) scale(1.03); }
+  50%  { transform: translate(12px, -10px) scale(0.98); }
+  75%  { transform: translate(-6px, -14px) scale(1.04); }
+}
+
+.orb-1 { animation: orb-drift     24s ease-in-out infinite; }
+.orb-2 { animation: orb-drift-alt 30s ease-in-out infinite; }
+.orb-3 { animation: orb-drift     38s ease-in-out infinite 5s; }
+.orb-4 { animation: orb-drift-alt 20s ease-in-out infinite 10s; }

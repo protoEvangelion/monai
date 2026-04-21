@@ -1,0 +1,29 @@
+{
+  "projectName": "clerk-tanstack-react-start",
+  "mode": "file-router",
+  "typescript": true,
+  "packageManager": "bun",
+  "includeExamples": false,
+  "tailwind": true,
+  "addOnOptions": {
+    "drizzle": {
+      "database": "sqlite"
+    }
+  },
+  "envVarValues": {
+    "VITE_CLERK_PUBLISHABLE_KEY": "a"
+  },
+  "git": false,
+  "install": true,
+  "routerOnly": false,
+  "version": 1,
+  "framework": "react",
+  "chosenAddOns": [
+    "cloudflare",
+    "clerk",
+    "drizzle",
+    "form",
+    "table",
+    "tanstack-query"
+  ]
+}

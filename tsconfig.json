@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "allowArbitraryExtensions": true,
+    "paths": {
+      "#/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "drizzle.config.ts", "check-clerk.ts", "vite.config.ts"]
+}
