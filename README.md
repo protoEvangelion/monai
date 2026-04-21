@@ -1,5 +1,7 @@
 # 💸 Monai — Financial Dashboard
 
+![App Screenshot](./app-screenshot.png)
+
 > A blazing-fast, local-first financial dashboard. Privacy-first. AI-powered. Copilot Money vibes, minus the subscription.
 
 ---
