@@ -1,16 +1,28 @@
 import { sqliteTable, integer, text, real } from 'drizzle-orm/sqlite-core'
 import { sql, relations } from 'drizzle-orm'
 
+export const plaidItems = sqliteTable('plaid_items', {
+  id: integer().primaryKey({ autoIncrement: true }),
+  itemId: text('item_id').notNull().unique(),
+  accessToken: text('access_token').notNull(),
+  userId: text('user_id').notNull(),
+  cursor: text(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+})
+
 export const accounts = sqliteTable('accounts', {
   id: integer().primaryKey({ autoIncrement: true }),
   name: text().notNull(),
   type: text().notNull(), // cash, credit, investment, loan, real_estate
   currentBalance: real('current_balance').notNull().default(0),
+  plaidItemId: integer('plaid_item_id').references(() => plaidItems.id),
+  plaidAccountId: text('plaid_account_id').unique(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
 })
 
 export const categories = sqliteTable('categories', {
   id: integer().primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull(),
   name: text().notNull(),
   icon: text(),
   budgetAmount: real('budget_amount').notNull().default(0),
@@ -23,6 +35,7 @@ export const transactions = sqliteTable('transactions', {
     .notNull()
     .references(() => accounts.id),
   categoryId: integer('category_id').references(() => categories.id),
+  plaidTransactionId: text('plaid_transaction_id').unique(),
   amount: real().notNull(),
   date: integer({ mode: 'timestamp' }).notNull(),
   merchantName: text('merchant_name').notNull(),
@@ -41,7 +54,15 @@ export const historicalBalances = sqliteTable('historical_balances', {
 })
 
 // Relations
-export const accountsRelations = relations(accounts, ({ many }) => ({
+export const plaidItemsRelations = relations(plaidItems, ({ many }) => ({
+  accounts: many(accounts),
+}))
+
+export const accountsRelations = relations(accounts, ({ one, many }) => ({
+  plaidItem: one(plaidItems, {
+    fields: [accounts.plaidItemId],
+    references: [plaidItems.id],
+  }),
   transactions: many(transactions),
   historicalBalances: many(historicalBalances),
 }))
@@ -52,9 +73,7 @@ export const categoriesRelations = relations(categories, ({ one, many }) => ({
     references: [categories.id],
     relationName: 'category_hierarchy',
   }),
-  children: many(categories, {
-    relationName: 'category_hierarchy',
-  }),
+  children: many(categories, { relationName: 'category_hierarchy' }),
   transactions: many(transactions),
 }))
 

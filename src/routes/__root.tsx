@@ -1,35 +1,40 @@
 import { ClerkProvider } from '@clerk/tanstack-react-start'
 import { HeadContent, Scripts, createRootRoute, Link, useLocation } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { 
+import {
   Button,
+  Card,
+  CardContent,
+  Chip,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
   DropdownPopover,
+  ScrollShadow,
   Separator
 } from "@heroui/react";
-import { 
-  CalendarIcon, 
-  ChevronDownIcon, 
-  LayoutDashboardIcon, 
-  ArrowLeftRightIcon, 
-  WalletIcon, 
-  PieChartIcon, 
-  RepeatIcon, 
+import {
+  CalendarIcon,
+  ChevronDownIcon,
+  LayoutDashboardIcon,
+  ArrowLeftRightIcon,
+  WalletIcon,
+  PieChartIcon,
+  RepeatIcon,
   SettingsIcon,
   HelpCircleIcon,
+  SunIcon,
+  MoonIcon,
+  CheckIcon,
   CreditCardIcon,
   LandmarkIcon,
-  TrendingUpIcon,
-  RefreshCwIcon,
-  SunIcon,
-  MoonIcon
+  TrendingUpIcon
 } from "lucide-react";
 import HeaderUser from '../integrations/clerk/header-user'
 import { useTimeTravel } from '../store/useTimeTravel';
-import { useTheme } from '../store/useTheme';
+import { useTheme, type ThemePalette } from '../store/useTheme';
+import { useEffect, useRef, useState } from 'react';
+import { formatCurrency } from '../lib/format';
 
 import appCss from '../styles.css?url'
 
@@ -43,6 +48,9 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: 'stylesheet', href: appCss },
+      { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+      { rel: 'icon', href: '/favicon.ico', sizes: '32x32' },
+      { rel: 'manifest', href: '/manifest.json' },
     ],
   }),
   shellComponent: RootDocument,
@@ -55,17 +63,45 @@ const sidebarAccounts = [
 ];
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { viewDate, setViewDate, resetToCurrentMonth } = useTimeTravel();
-  const { theme, toggleTheme } = useTheme();
+  const { viewDate, setViewDate } = useTimeTravel();
+  const { theme, toggleTheme, setPalette } = useTheme();
+  const isDarkTheme = theme.endsWith('-dark')
+  const currentPalette = (theme.replace('-dark', '') as ThemePalette)
+  const paletteLabel = currentPalette[0].toUpperCase() + currentPalette.slice(1)
   const location = useLocation();
-  
+  const [mounted, setMounted] = useState(false);
+  const monthInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const currentViewDate = new Date(viewDate);
   const monthName = currentViewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const pageTitle =
+    location.pathname === '/' ? 'Dashboard'
+    : location.pathname.startsWith('/transactions') ? 'Transactions'
+    : location.pathname.startsWith('/accounts') ? 'Accounts'
+    : location.pathname.startsWith('/categories') ? 'Categories'
+    : 'Overview'
 
   const isAuthPage = location.pathname.startsWith('/sign-in');
 
+  const monthInputValue = `${currentViewDate.getFullYear()}-${String(currentViewDate.getMonth() + 1).padStart(2, '0')}`
+
+  const openMonthPicker = () => {
+    const input = monthInputRef.current
+    if (!input) return
+    if (typeof input.showPicker === 'function') {
+      input.showPicker()
+      return
+    }
+    input.focus()
+    input.click()
+  }
+
   return (
-    <html lang="en" className={theme}>
+    <html lang="en" className={isDarkTheme ? 'dark' : 'light'} data-theme={theme}>
       <head>
         <HeadContent />
       </head>
@@ -75,147 +111,180 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             
             {/* Radial Lens Flare Background */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-              {/* Top-left cluster */}
-              <div className="orb-1 absolute top-[-30%] left-[-20%] w-[65%] h-[65%] rounded-full bg-indigo-500/25 blur-[150px]" />
-              <div className="orb-3 absolute top-[-10%] left-[-5%] w-[40%] h-[40%] rounded-full bg-violet-600/20 blur-[120px]" />
-              <div className="absolute top-[5%] left-[10%] w-[20%] h-[20%] rounded-full bg-teal-400/15 blur-[80px]" />
-              {/* Bottom-right cluster */}
-              <div className="orb-2 absolute bottom-[-30%] right-[-20%] w-[65%] h-[65%] rounded-full bg-teal-500/30 blur-[150px]" />
-              <div className="orb-4 absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-teal-400/25 blur-[120px]" />
-              <div className="absolute bottom-[5%] right-[10%] w-[22%] h-[22%] rounded-full bg-cyan-400/20 blur-[80px]" />
+              <div className="orb-1 absolute top-[-25%] left-[-18%] w-[60%] h-[60%] rounded-full bg-primary/25 blur-[140px]" />
+              <div className="orb-2 absolute bottom-[-25%] right-[-18%] w-[60%] h-[60%] rounded-full bg-secondary/25 blur-[140px]" />
+              <div className="orb-3 absolute top-[5%] right-[0%] w-[38%] h-[38%] rounded-full bg-warning-soft blur-[110px]" />
+              <div className="orb-4 absolute bottom-[10%] left-[15%] w-[28%] h-[28%] rounded-full bg-success/12 blur-[90px]" />
+              <div className="absolute top-[45%] left-[42%] w-[18%] h-[18%] rounded-full bg-primary/10 blur-[70px]" />
             </div>
 
-            {isAuthPage ? (
-              /* Centered Login Layout */
-              <div className="flex-grow flex items-center justify-center z-10 p-4">
-                <div className="w-full max-w-md">
-                  <div className="flex flex-col items-center gap-6 mb-8 text-center">
-                    <div className="font-black text-5xl tracking-tighter bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-gradient-x">MONAI</div>
-                    <p className="text-default-500 font-medium text-lg">Your premium, local-first financial command center.</p>
-                  </div>
-                  <div className="bg-background/60 backdrop-blur-2xl p-8 rounded-3xl border border-divider/50 shadow-2xl">
-                    {children}
+            {mounted ? (
+              isAuthPage ? (
+                /* Centered Login Layout */
+                <div className="grow flex items-center justify-center z-10 p-4">
+                  <div className="w-full max-w-md">
+                    <div className="flex flex-col items-center gap-6 mb-8 text-center">
+                      <div className="font-black text-5xl tracking-tighter bg-linear-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-gradient-x">MONAI</div>
+                      <p className="text-default-500 font-medium text-lg">Your premium, local-first financial command center.</p>
+                    </div>
+                    <div className="bg-background/60 backdrop-blur-2xl p-8 rounded-3xl border border-divider/50 shadow-2xl">
+                      {children}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              /* Main App Layout */
-              <>
-                {/* Sidebar */}
-                <aside className="w-64 border-r border-primary/10 flex flex-col bg-background/40 backdrop-blur-2xl z-10 shadow-[2px_0_40px_rgba(0,0,0,0.06)]">
-                  <div className="p-6 flex flex-col gap-8 h-full">
-                    
-                    {/* Logo & Refresh */}
-                    <div className="flex items-center justify-between">
-                      <Link to="/" className="font-black text-2xl tracking-tighter hover:opacity-80 transition-opacity bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent bg-[length:200%] hover:bg-right">MONAI</Link>
-                      <Button variant="ghost" isIconOnly size="sm">
-                        <RefreshCwIcon size={16} className="text-default-400" />
-                      </Button>
-                    </div>
-
-                    {/* Primary Navigation */}
-                    <nav className="flex flex-col gap-1">
-                      <SidebarLink to="/" icon={<LayoutDashboardIcon size={20} />} label="Dashboard" />
-                      <SidebarLink to="/transactions" icon={<ArrowLeftRightIcon size={20} />} label="Transactions" />
-                      <SidebarLink to="/accounts" icon={<WalletIcon size={20} />} label="Accounts" />
-                      <SidebarLink to="/categories" icon={<PieChartIcon size={20} />} label="Categories" />
-                      <SidebarLink to="/" icon={<RepeatIcon size={20} />} label="Recurrings" />
-                    </nav>
-
-                    {/* Account Summary */}
-                    <div className="flex flex-col gap-4 mt-4 overflow-y-auto pr-2 custom-scrollbar">
-                      <p className="text-tiny uppercase font-bold text-default-400 px-3">Net Worth</p>
-                      <div className="flex flex-col gap-1">
-                        {sidebarAccounts.map(acc => (
-                          <div key={acc.group} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-default-100 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-3">
-                              {acc.icon}
-                              <span className="text-sm font-medium text-default-600 group-hover:text-foreground">{acc.group}</span>
-                            </div>
-                            <span className="text-sm font-semibold">${acc.balance.toLocaleString()}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Bottom Actions */}
-                    <div className="mt-auto flex flex-col gap-4">
-                      <Separator className="bg-divider/50" />
-                      <div className="flex flex-col gap-1">
-                        <SidebarLink to="/" icon={<SettingsIcon size={20} />} label="Settings" />
-                        <SidebarLink to="/" icon={<HelpCircleIcon size={20} />} label="Get Help" />
-                      </div>
-                      <div className="flex items-center justify-between px-1">
+              ) : (
+                /* Main App Layout */
+                <>
+                  {/* Sidebar */}
+                  <aside className="w-72 border-r border-divider/60 flex flex-col bg-content1/70 backdrop-blur-2xl z-10">
+                    <div className="px-5 pb-5 pt-3 flex flex-col gap-4 h-full">
+                      
+                      {/* Logo + User */}
+                      <div className="flex items-center justify-between">
+                        <Link to="/" className="flex items-center gap-2.5 hover:opacity-85 transition-opacity">
+                          <img src="/favicon.svg" alt="Monai" className="h-8 w-8" />
+                          <span className="font-black text-xl tracking-tight text-foreground">MONAI</span>
+                        </Link>
                         <HeaderUser />
-                        <Button 
-                          variant="ghost" 
-                          isIconOnly 
-                          size="sm" 
+                      </div>
+
+                      <Card className="bg-content2/65 border border-divider/50 shadow-none">
+                        <CardContent className="p-2">
+                          <nav className="flex flex-col gap-1">
+                            <SidebarLink to="/" icon={<LayoutDashboardIcon size={18} />} label="Dashboard" />
+                            <SidebarLink to="/transactions" icon={<ArrowLeftRightIcon size={18} />} label="Transactions" />
+                            <SidebarLink to="/accounts" icon={<WalletIcon size={18} />} label="Accounts" />
+                            <SidebarLink to="/categories" icon={<PieChartIcon size={18} />} label="Categories" />
+                            <SidebarStaticItem icon={<RepeatIcon size={18} />} label="Recurrings" />
+                          </nav>
+                        </CardContent>
+                      </Card>
+
+                      {/* Account Summary */}
+                      <Card className="bg-content2/65 border border-divider/50 shadow-none">
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-tiny uppercase font-bold text-default-400">Net Worth</p>
+                            <Chip size="sm" variant="soft">3</Chip>
+                          </div>
+                          <ScrollShadow className="max-h-56 pr-1">
+                            <div className="flex flex-col gap-1">
+                              {sidebarAccounts.map(acc => (
+                                <div key={acc.group} className="flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-content1 transition-colors group cursor-pointer">
+                                  <div className="flex items-center gap-2.5">
+                                    {acc.icon}
+                                    <span className="text-sm font-medium text-default-600 group-hover:text-foreground">{acc.group}</span>
+                                  </div>
+                                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(acc.balance, { maximumFractionDigits: 0 })}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollShadow>
+                        </CardContent>
+                      </Card>
+
+                      {/* Bottom Actions */}
+                      <div className="mt-auto flex flex-col gap-3">
+                        <Separator className="bg-divider/50" />
+                        <div className="flex flex-col gap-1 px-1">
+                          <SidebarStaticItem icon={<SettingsIcon size={18} />} label="Settings" />
+                          <SidebarStaticItem icon={<HelpCircleIcon size={18} />} label="Get Help" />
+                        </div>
+                        <div className="h-1" />
+                      </div>
+                    </div>
+                  </aside>
+
+                  {/* Main Content Area */}
+                  <div className="grow flex flex-col overflow-hidden z-10">
+                    
+                    {/* Top Header */}
+                    <header className="h-16 border-b border-divider/70 flex items-center justify-between px-8 bg-content1/70 backdrop-blur-xl sticky top-0 z-40">
+                      <div className="flex items-center gap-4">
+                        <Chip variant="soft" className="font-semibold">{pageTitle}</Chip>
+                        <input
+                          ref={monthInputRef}
+                          type="month"
+                          value={monthInputValue}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            if (!value) return
+                            const nextDate = new Date(`${value}-01T00:00:00`)
+                            setViewDate(nextDate.toISOString())
+                          }}
+                          className="sr-only"
+                          aria-label="Choose month"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 px-4 font-semibold rounded-full bg-content2 hover:bg-content2/80"
+                          onPress={openMonthPicker}
+                        >
+                          <CalendarIcon size={16} />
+                          {monthName}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Dropdown>
+                          <DropdownTrigger>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-full px-3"
+                            >
+                              {paletteLabel}
+                              <ChevronDownIcon size={14} />
+                            </Button>
+                          </DropdownTrigger>
+                          <DropdownPopover>
+                            <DropdownMenu aria-label="Theme palette">
+                              <DropdownItem key="ocean" onAction={() => setPalette('ocean')}>
+                                <div className="flex items-center justify-between gap-3 w-full">
+                                  <span>Ocean</span>
+                                  {currentPalette === 'ocean' && <CheckIcon size={14} />}
+                                </div>
+                              </DropdownItem>
+                              <DropdownItem key="graphite" onAction={() => setPalette('graphite')}>
+                                <div className="flex items-center justify-between gap-3 w-full">
+                                  <span>Graphite</span>
+                                  {currentPalette === 'graphite' && <CheckIcon size={14} />}
+                                </div>
+                              </DropdownItem>
+                              <DropdownItem key="sunset" onAction={() => setPalette('sunset')}>
+                                <div className="flex items-center justify-between gap-3 w-full">
+                                  <span>Sunset</span>
+                                  {currentPalette === 'sunset' && <CheckIcon size={14} />}
+                                </div>
+                              </DropdownItem>
+                            </DropdownMenu>
+                          </DropdownPopover>
+                        </Dropdown>
+                        <Button
+                          variant="ghost"
+                          isIconOnly
+                          size="sm"
                           onClick={toggleTheme}
                           className="rounded-full"
                         >
-                          {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
+                          {isDarkTheme ? <SunIcon size={17} /> : <MoonIcon size={17} />}
                         </Button>
                       </div>
-                    </div>
+                    </header>
+
+                    {/* Page Content */}
+                    <main className="grow overflow-y-auto p-8 bg-transparent">
+                      <div className="container mx-auto">
+                        {children}
+                      </div>
+                    </main>
                   </div>
-                </aside>
-
-                {/* Main Content Area */}
-                <div className="flex-grow flex flex-col overflow-hidden z-10">
-                  
-                  {/* Top Header */}
-                  <header className="h-16 border-b border-divider flex items-center justify-between px-8 bg-background/40 backdrop-blur-md sticky top-0 z-40">
-                    <div className="flex items-center gap-4">
-                       <Dropdown>
-                        <DropdownTrigger>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className="flex items-center gap-2 bg-background/50 backdrop-blur-sm text-foreground px-4 py-2 rounded-full text-sm font-semibold cursor-pointer border border-primary/25 hover:border-primary/50 hover:bg-primary/5 transition-all shadow-sm hover:shadow-md hover:shadow-primary/10"
-                          >
-                            <CalendarIcon size={16} />
-                            {monthName}
-                            <ChevronDownIcon size={16} />
-                          </div>
-                        </DropdownTrigger>
-                        <DropdownPopover>
-                          <DropdownMenu aria-label="Time Travel">
-                            <DropdownItem key="current" onAction={() => resetToCurrentMonth()}>Current Month</DropdownItem>
-                            <DropdownItem key="prev" onAction={() => {
-                              const prev = new Date(currentViewDate);
-                              prev.setMonth(prev.getMonth() - 1);
-                              setViewDate(prev.toISOString());
-                            }}>Previous Month</DropdownItem>
-                            <DropdownItem key="next" onAction={() => {
-                              const next = new Date(currentViewDate);
-                              next.setMonth(next.getMonth() + 1);
-                              setViewDate(next.toISOString());
-                            }}>Next Month</DropdownItem>
-                          </DropdownMenu>
-                        </DropdownPopover>
-                      </Dropdown>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                      <Button size="sm" className="rounded-full font-bold px-6 h-9 bg-gradient-to-r from-primary to-secondary text-white border-none shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-105 hover:opacity-95 transition-all">
-                        + New
-                      </Button>
-                    </div>
-                  </header>
-
-                  {/* Page Content */}
-                  <main className="flex-grow overflow-y-auto p-8 bg-transparent">
-                    <div className="container mx-auto">
-                      {children}
-                    </div>
-                  </main>
-                </div>
-              </>
-            )}
+                </>
+              )
+            ) : null}
           </div>
         </ClerkProvider>
-        {/* <TanStackRouterDevtools /> */}
         <Scripts />
       </body>
     </html>
@@ -226,13 +295,22 @@ function SidebarLink({ to, icon, label }: { to: string, icon: React.ReactNode, l
   return (
     <Link
       to={to}
-      activeProps={{ className: "bg-gradient-to-r from-primary/20 to-secondary/10 text-primary font-bold shadow-md ring-1 ring-primary/30 shadow-primary/10" }}
-      className="flex items-center gap-4 px-3 py-2.5 rounded-xl text-default-500 hover:bg-default-100/70 hover:text-foreground transition-all group"
+      activeProps={{ className: "bg-primary/15 text-primary font-semibold" }}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-default-600 hover:bg-content1 hover:text-foreground transition-all group"
     >
-      <span className="group-hover:scale-110 transition-transform">
+      <span className="group-hover:scale-105 transition-transform">
         {icon}
       </span>
-      <span className="text-sm font-semibold">{label}</span>
+      <span className="text-sm">{label}</span>
     </Link>
+  )
+}
+
+function SidebarStaticItem({ icon, label }: { icon: React.ReactNode, label: string }) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-default-500/90">
+      <span>{icon}</span>
+      <span className="text-sm font-medium">{label}</span>
+    </div>
   )
 }
