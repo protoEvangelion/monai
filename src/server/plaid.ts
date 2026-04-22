@@ -61,7 +61,8 @@ export const exchangePublicToken = createServerFn()
 
     await seedAccounts(access_token, item.id)
     await seedDefaultCategories(userId)
-    await syncTransactions(access_token, item.id, userId)
+    // Clear cursor so Plaid returns full history (up to ~2 years) on first sync
+    await syncTransactions(access_token, item.id, userId, true)
   })
 
 async function seedAccounts(accessToken: string, itemId: number) {
@@ -88,15 +89,16 @@ async function seedAccounts(accessToken: string, itemId: number) {
   }
 }
 
-async function syncTransactions(accessToken: string, itemId: number, userId: string) {
+async function syncTransactions(accessToken: string, itemId: number, userId: string, fullHistory = false) {
   const { db } = await import('../db')
-  console.log(`Starting sync for item ${itemId}`)
+  console.log(`Starting sync for item ${itemId}${fullHistory ? ' (full history)' : ''}`)
 
   const item = await db.query.plaidItems.findFirst({
     where: eq(plaidItems.id, itemId),
   })
 
-  let cursor = item?.cursor ?? undefined
+  // fullHistory = true clears cursor so Plaid returns everything (new account link)
+  let cursor = fullHistory ? undefined : (item?.cursor ?? undefined)
   let hasMore = true
   let addedCount = 0
 
@@ -140,6 +142,7 @@ async function syncTransactions(accessToken: string, itemId: number, userId: str
         .where(eq(plaidItems.id, itemId))
     }
     console.log(`Sync completed for item ${itemId}. Total added: ${addedCount}`)
+    await db.update(plaidItems).set({ lastSyncedAt: new Date() }).where(eq(plaidItems.id, itemId))
     await categorizeTransactions(userId, itemId)
   } catch (error) {
     console.error(`Sync failed for item ${itemId}:`, error)
@@ -159,6 +162,28 @@ export const manualSync = createServerFn().handler(async () => {
 
   for (const item of items) {
     await syncTransactions(item.accessToken, item.id, userId)
+  }
+})
+
+const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+export const autoSync = createServerFn().handler(async () => {
+  const { userId } = await getAuthOrDevAuth()
+  if (!userId) return
+
+  const { db } = await import('../db')
+
+  const items = await db.query.plaidItems.findMany({
+    where: eq(plaidItems.userId, userId),
+  })
+
+  const now = Date.now()
+  for (const item of items) {
+    const lastSync = item.lastSyncedAt?.getTime() ?? 0
+    if (now - lastSync >= SYNC_INTERVAL_MS) {
+      console.log(`Auto-sync: item ${item.id} last synced ${Math.round((now - lastSync) / 3600000)}h ago`)
+      await syncTransactions(item.accessToken, item.id, userId)
+    }
   }
 })
 

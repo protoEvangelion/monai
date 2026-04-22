@@ -35,6 +35,8 @@ import { useTimeTravel } from '../store/useTimeTravel';
 import { useTheme, type ThemePalette } from '../store/useTheme';
 import { useEffect, useRef, useState } from 'react';
 import { formatCurrency } from '../lib/format';
+import { getAccounts } from '../server/accounts';
+import { autoSync } from '../server/plaid';
 
 import appCss from '../styles.css?url'
 
@@ -54,13 +56,33 @@ export const Route = createRootRoute({
     ],
   }),
   shellComponent: RootDocument,
+  loader: async () => {
+    // Fire-and-forget auto-sync: runs server-side, no-ops if last sync was <24h ago
+    autoSync().catch((e) => console.error('Auto-sync error:', e))
+  },
 })
 
-const sidebarAccounts = [
-  { group: 'Credit card', balance: 2568, icon: <CreditCardIcon size={16} className="text-primary" /> },
-  { group: 'Depository', balance: 11031, icon: <LandmarkIcon size={16} className="text-success" /> },
-  { group: 'Investment', balance: 254495, icon: <TrendingUpIcon size={16} className="text-warning" /> },
-];
+type SidebarAccount = {
+  type: string
+  group: string
+  balance: number
+}
+
+const sidebarTypeLabels: Record<string, string> = {
+  credit: 'Credit card',
+  cash: 'Depository',
+  investment: 'Investment',
+  loan: 'Loan',
+  real_estate: 'Real Estate',
+}
+
+function getSidebarIcon(type: string) {
+  if (type === 'credit') return <CreditCardIcon size={16} className="text-primary" />
+  if (type === 'cash') return <LandmarkIcon size={16} className="text-success" />
+  if (type === 'investment') return <TrendingUpIcon size={16} className="text-warning" />
+  if (type === 'loan') return <WalletIcon size={16} className="text-danger" />
+  return <PieChartIcon size={16} className="text-default-400" />
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { viewDate, setViewDate } = useTimeTravel();
@@ -70,6 +92,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const paletteLabel = currentPalette[0].toUpperCase() + currentPalette.slice(1)
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
+  const [sidebarAccounts, setSidebarAccounts] = useState<SidebarAccount[]>([])
   const monthInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -86,6 +109,41 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     : 'Overview'
 
   const isAuthPage = location.pathname.startsWith('/sign-in');
+
+  useEffect(() => {
+    if (isAuthPage) return
+
+    let active = true
+
+    const loadSidebarAccounts = async () => {
+      try {
+        const accounts = await getAccounts()
+        const grouped = accounts.reduce<Record<string, number>>((acc, account) => {
+          const type = account.type ?? 'other'
+          acc[type] = (acc[type] ?? 0) + Number(account.currentBalance ?? 0)
+          return acc
+        }, {})
+
+        const next = Object.entries(grouped)
+          .map(([type, balance]) => ({
+            type,
+            group: sidebarTypeLabels[type] ?? type,
+            balance,
+          }))
+          .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
+
+        if (active) setSidebarAccounts(next)
+      } catch {
+        if (active) setSidebarAccounts([])
+      }
+    }
+
+    void loadSidebarAccounts()
+
+    return () => {
+      active = false
+    }
+  }, [isAuthPage, location.pathname])
 
   const monthInputValue = `${currentViewDate.getFullYear()}-${String(currentViewDate.getMonth() + 1).padStart(2, '0')}`
 
@@ -111,10 +169,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             
             {/* Radial Lens Flare Background */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-              <div className="orb-1 absolute top-[-25%] left-[-18%] w-[60%] h-[60%] rounded-full bg-primary/25 blur-[140px]" />
-              <div className="orb-2 absolute bottom-[-25%] right-[-18%] w-[60%] h-[60%] rounded-full bg-secondary/25 blur-[140px]" />
-              <div className="orb-3 absolute top-[5%] right-[0%] w-[38%] h-[38%] rounded-full bg-warning-soft blur-[110px]" />
-              <div className="orb-4 absolute bottom-[10%] left-[15%] w-[28%] h-[28%] rounded-full bg-success/12 blur-[90px]" />
+              {/* Purple top-left */}
+              <div className="orb-1 absolute top-[-25%] left-[-18%] w-[60%] h-[60%] rounded-full blur-[140px]" style={{ background: 'rgba(139,92,246,0.35)' }} />
+              {/* Teal bottom-right */}
+              <div className="orb-2 absolute bottom-[-25%] right-[-18%] w-[60%] h-[60%] rounded-full blur-[140px]" style={{ background: 'rgba(20,184,166,0.35)' }} />
+
               <div className="absolute top-[45%] left-[42%] w-[18%] h-[18%] rounded-full bg-primary/10 blur-[70px]" />
             </div>
 
@@ -165,20 +224,24 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-tiny uppercase font-bold text-default-400">Net Worth</p>
-                            <Chip size="sm" variant="soft">3</Chip>
+                            <Chip size="sm" variant="soft">{sidebarAccounts.length}</Chip>
                           </div>
                           <ScrollShadow className="max-h-56 pr-1">
-                            <div className="flex flex-col gap-1">
-                              {sidebarAccounts.map(acc => (
-                                <div key={acc.group} className="flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-content1 transition-colors group cursor-pointer">
-                                  <div className="flex items-center gap-2.5">
-                                    {acc.icon}
-                                    <span className="text-sm font-medium text-default-600 group-hover:text-foreground">{acc.group}</span>
+                            {sidebarAccounts.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {sidebarAccounts.map(acc => (
+                                  <div key={acc.type} className="flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-content1 transition-colors group cursor-pointer">
+                                    <div className="flex items-center gap-2.5">
+                                      {getSidebarIcon(acc.type)}
+                                      <span className="text-sm font-medium text-default-600 group-hover:text-foreground">{acc.group}</span>
+                                    </div>
+                                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(acc.balance, { maximumFractionDigits: 0 })}</span>
                                   </div>
-                                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(acc.balance, { maximumFractionDigits: 0 })}</span>
-                                </div>
-                              ))}
-                            </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="px-2.5 py-2 text-sm text-default-400">No accounts linked</div>
+                            )}
                           </ScrollShadow>
                         </CardContent>
                       </Card>
@@ -229,14 +292,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                       <div className="flex items-center gap-2">
                         <Dropdown>
                           <DropdownTrigger>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="rounded-full px-3"
-                            >
+                            <div className="flex items-center gap-1 cursor-pointer text-sm rounded-full px-3 py-1 hover:bg-white/10 transition-colors">
                               {paletteLabel}
                               <ChevronDownIcon size={14} />
-                            </Button>
+                            </div>
                           </DropdownTrigger>
                           <DropdownPopover>
                             <DropdownMenu aria-label="Theme palette">
@@ -265,7 +324,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                           variant="ghost"
                           isIconOnly
                           size="sm"
-                          onClick={toggleTheme}
+                          onPress={toggleTheme}
                           className="rounded-full"
                         >
                           {isDarkTheme ? <SunIcon size={17} /> : <MoonIcon size={17} />}

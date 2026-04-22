@@ -64,12 +64,17 @@ function dateLabel(dateVal: Date | string): string {
 export function ReviewTable({
   transactions,
   categories,
+  showAll = false,
+  searchQuery = '',
 }: {
   transactions: Tx[]
   categories: CategoryGroup[]
+  showAll?: boolean
+  searchQuery?: string
 }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [selectAllPages, setSelectAllPages] = useState(false)
   const [page, setPage] = useState(0)
   const [pickerTxId, setPickerTxId] = useState<number | null>(null)
   const [catSearch, setCatSearch] = useState('')
@@ -81,11 +86,14 @@ export function ReviewTable({
   const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(categories[0]?.id ?? null)
   const [isCreatingCategory, setIsCreatingCategory] = useState(false)
 
-  const unreviewed = transactions.filter(tx => !tx.isReviewed)
-  const total = unreviewed.length
+  const query = searchQuery.toLowerCase()
+  const visibleTxns = (showAll ? transactions : transactions.filter(tx => !tx.isReviewed))
+    .filter(tx => !query || tx.merchantName.toLowerCase().includes(query))
+
+  const total = visibleTxns.length
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const clampedPage = Math.min(page, pageCount - 1)
-  const pageTxns = unreviewed.slice(clampedPage * PAGE_SIZE, (clampedPage + 1) * PAGE_SIZE)
+  const pageTxns = visibleTxns.slice(clampedPage * PAGE_SIZE, (clampedPage + 1) * PAGE_SIZE)
 
   const grouped: { label: string; txns: typeof pageTxns }[] = []
   for (const tx of pageTxns) {
@@ -96,21 +104,29 @@ export function ReviewTable({
   }
 
   const allPageIds = pageTxns.map(tx => tx.id)
+  const allTransactionIds = visibleTxns.map(tx => tx.id)
   const allPageSelected = allPageIds.length > 0 && allPageIds.every(id => selected.has(id))
 
   const toggleAll = () => {
-    if (allPageSelected) {
-      setSelected(prev => {
-        const next = new Set(prev)
-        allPageIds.forEach(id => next.delete(id))
-        return next
-      })
+    // First click: select all on current page
+    // Second click (if all page selected): select all across all pages
+    // Third click: deselect all
+    if (selectAllPages) {
+      setSelectAllPages(false)
+      setSelected(new Set())
+    } else if (allPageSelected) {
+      setSelectAllPages(true)
+      setSelected(new Set(allTransactionIds))
     } else {
       setSelected(prev => new Set([...prev, ...allPageIds]))
     }
   }
 
   const toggleOne = (id: number) => {
+    // If "select all pages" is active, clicking one item deactivates it
+    if (selectAllPages) {
+      setSelectAllPages(false)
+    }
     setSelected(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -118,13 +134,14 @@ export function ReviewTable({
     })
   }
 
-  const markIds = selected.size > 0 ? [...selected] : allPageIds
+  const markIds = selectAllPages ? allTransactionIds : (selected.size > 0 ? [...selected] : allPageIds)
 
   const handleMarkReviewed = async () => {
     if (!markIds.length) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (markTransactionsReviewed as any)({ data: { ids: markIds } })
     setSelected(new Set())
+    setSelectAllPages(false)
     router.invalidate()
   }
 
@@ -202,7 +219,11 @@ export function ReviewTable({
   if (total === 0) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-default-300 italic">All caught up — no transactions to review</p>
+        <p className="text-sm text-default-300 italic">
+          {showAll
+            ? searchQuery ? 'No transactions match your search' : 'No transactions yet'
+            : 'All caught up — no transactions to review'}
+        </p>
       </div>
     )
   }
@@ -211,9 +232,13 @@ export function ReviewTable({
     <div>
       {/* Select-all header */}
       <div className="flex items-center gap-3 px-6 py-2 border-b border-divider/20 bg-default-50/20">
-        <StyledCheckbox checked={allPageSelected} onChange={toggleAll} aria-label="Select all transactions on page" />
+        <StyledCheckbox checked={selectAllPages || allPageSelected} onChange={toggleAll} aria-label="Select transactions" />
         <span className="text-xs text-default-400">
-          {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+          {selectAllPages
+            ? `All ${total} selected`
+            : selected.size > 0
+              ? `${selected.size} selected`
+              : 'Select page or all'}
         </span>
       </div>
 
@@ -231,7 +256,7 @@ export function ReviewTable({
                 onClick={() => toggleOne(tx.id)}
               >
                 <StyledCheckbox
-                  checked={selected.has(tx.id)}
+                  checked={selectAllPages || selected.has(tx.id)}
                   onChange={() => toggleOne(tx.id)}
                   aria-label={`Select transaction ${tx.merchantName}`}
                   onClick={e => e.stopPropagation()}
@@ -334,7 +359,13 @@ export function ReviewTable({
                   {formatCurrency(Math.abs(tx.amount))}
                 </span>
 
-                <div className="ml-2.5 w-2 h-2 rounded-full bg-primary shrink-0" />
+                <div className="ml-2.5 w-2 h-2 rounded-full shrink-0">
+                  {showAll
+                    ? tx.isReviewed
+                      ? <CheckIcon size={12} className="text-success" />
+                      : <div className="w-2 h-2 rounded-full bg-primary" />
+                    : <div className="w-2 h-2 rounded-full bg-primary" />}
+                </div>
               </div>
             )
           })}
@@ -350,21 +381,21 @@ export function ReviewTable({
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={clampedPage === 0}
-            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-default-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-default-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             <ChevronLeftIcon size={14} />
           </button>
           <button
             onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
             disabled={clampedPage >= pageCount - 1}
-            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-default-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-default-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             <ChevronRightIcon size={14} />
           </button>
         </div>
         <button
           onClick={handleMarkReviewed}
-          className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold rounded-xl hover:opacity-80 transition-opacity"
+          className={`flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold rounded-xl hover:opacity-80 transition-opacity cursor-pointer ${showAll ? 'invisible' : ''}`}
         >
           <CheckIcon size={13} />
           Mark {markIds.length} as reviewed

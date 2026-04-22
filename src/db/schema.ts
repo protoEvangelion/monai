@@ -7,6 +7,7 @@ export const plaidItems = sqliteTable('plaid_items', {
   accessToken: text('access_token').notNull(),
   userId: text('user_id').notNull(),
   cursor: text(),
+  lastSyncedAt: integer('last_synced_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
 })
 

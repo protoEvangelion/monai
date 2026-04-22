@@ -12,6 +12,6 @@ dist-ssr
 __unconfig*
 todos.json
 .playwright-mcp
-dev.db
+data/
 CLAUDE.md
 screenshots
