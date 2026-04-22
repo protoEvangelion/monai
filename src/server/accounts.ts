@@ -1,10 +1,10 @@
 import { createServerFn } from '@tanstack/react-start'
-import { auth } from '@clerk/tanstack-react-start/server'
+import { getAuthOrDevAuth } from '../lib/devAuth'
 import { plaidItems } from '../db/schema'
 import { eq } from 'drizzle-orm'
 
 export const getAccounts = createServerFn().handler(async () => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')

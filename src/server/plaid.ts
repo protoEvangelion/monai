@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { auth } from '@clerk/tanstack-react-start/server'
+import { getAuthOrDevAuth } from '../lib/devAuth'
 import { plaidItems, accounts, transactions } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { seedDefaultCategories } from './categories'
@@ -26,7 +26,7 @@ const plaidPost = async (path: string, body: object) => {
 }
 
 export const createLinkToken = createServerFn().handler(async () => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const data = await plaidPost('/link/token/create', {
@@ -42,7 +42,7 @@ export const createLinkToken = createServerFn().handler(async () => {
 
 export const exchangePublicToken = createServerFn()
   .handler(async (ctx) => {
-    const { userId } = await auth()
+    const { userId } = await getAuthOrDevAuth()
     if (!userId) throw new Error('Unauthorized')
 
     const { db } = await import('../db')
@@ -148,7 +148,7 @@ async function syncTransactions(accessToken: string, itemId: number, userId: str
 }
 
 export const manualSync = createServerFn().handler(async () => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
@@ -163,7 +163,7 @@ export const manualSync = createServerFn().handler(async () => {
 })
 
 export const removeItem = createServerFn().handler(async (ctx) => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
@@ -187,7 +187,7 @@ export const removeItem = createServerFn().handler(async (ctx) => {
 })
 
 export const deleteAccount = createServerFn().handler(async (ctx) => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')

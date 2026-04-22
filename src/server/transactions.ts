@@ -1,10 +1,10 @@
 import { createServerFn } from '@tanstack/react-start'
-import { auth } from '@clerk/tanstack-react-start/server'
+import { getAuthOrDevAuth } from '../lib/devAuth'
 import { transactions, plaidItems, categories } from '../db/schema'
 import { eq, desc, inArray, and } from 'drizzle-orm'
 
 export const getTransactions = createServerFn().handler(async () => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
@@ -31,7 +31,7 @@ export const getTransactions = createServerFn().handler(async () => {
 })
 
 export const markTransactionsReviewed = createServerFn().handler(async (ctx) => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,7 +53,7 @@ export const markTransactionsReviewed = createServerFn().handler(async (ctx) => 
 })
 
 export const updateTransactionCategory = createServerFn().handler(async (ctx) => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

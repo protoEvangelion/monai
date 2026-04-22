@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { auth } from '@clerk/tanstack-react-start/server'
+import { getAuthOrDevAuth } from '../lib/devAuth'
 import { categories, transactions, accounts, plaidItems } from '../db/schema'
 import { eq, inArray, sql } from 'drizzle-orm'
 
@@ -142,7 +142,7 @@ export async function seedDefaultCategories(userId: string) {
 }
 
 export const getCategoriesWithSpending = createServerFn().handler(async () => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
@@ -189,7 +189,7 @@ export const getCategoriesWithSpending = createServerFn().handler(async () => {
 })
 
 export const getCategories = createServerFn().handler(async () => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
@@ -205,7 +205,7 @@ export const getCategories = createServerFn().handler(async () => {
 })
 
 export const createCategory = createServerFn().handler(async (ctx) => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
@@ -230,7 +230,7 @@ export const createCategory = createServerFn().handler(async (ctx) => {
 })
 
 export const updateCategory = createServerFn().handler(async (ctx) => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
@@ -250,7 +250,7 @@ export const updateCategory = createServerFn().handler(async (ctx) => {
 })
 
 export const deleteCategory = createServerFn().handler(async (ctx) => {
-  const { userId } = await auth()
+  const { userId } = await getAuthOrDevAuth()
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')

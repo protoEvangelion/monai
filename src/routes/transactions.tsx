@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
-import { auth } from '@clerk/tanstack-react-start/server'
+import { getAuthOrDevAuth } from '../lib/devAuth'
 import {
   InputGroup,
   InputGroupPrefix,
@@ -16,7 +16,7 @@ import { useState } from 'react';
 import { formatCurrency } from '../lib/format';
 
 const authStateFn = createServerFn().handler(async () => {
-  const { isAuthenticated, userId } = await auth()
+  const { isAuthenticated, userId } = await getAuthOrDevAuth()
 
   if (!isAuthenticated) {
     throw redirect({

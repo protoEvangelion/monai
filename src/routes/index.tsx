@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, Link } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
-import { auth } from '@clerk/tanstack-react-start/server'
+import { getAuthOrDevAuth } from '../lib/devAuth'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -16,7 +16,7 @@ import { useTimeTravel } from '../store/useTimeTravel'
 import { ReviewTable } from '../components/ReviewTable';
 
 const authStateFn = createServerFn().handler(async () => {
-  const { isAuthenticated } = await auth()
+  const { isAuthenticated } = await getAuthOrDevAuth()
   if (!isAuthenticated) throw redirect({ to: '/sign-in/$' })
 })
 
