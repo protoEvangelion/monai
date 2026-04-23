@@ -1,5 +1,6 @@
 import { execSync } from 'child_process'
 import path from 'path'
+import fs from 'fs'
 import Database from 'better-sqlite3'
 import dotenv from 'dotenv'
 
@@ -8,6 +9,9 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
 const DB_PATH = process.env.DATABASE_URL!
 
 export default async function globalSetup() {
+  // Ensure data directory exists (e.g. on Vercel CI)
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
+
   // Apply schema directly (no migration files needed)
   execSync('bunx drizzle-kit push --force', { stdio: 'inherit', cwd: process.cwd() })
 
