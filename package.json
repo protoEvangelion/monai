@@ -8,12 +8,10 @@
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",
-    "check": "npm run lint && npm run typecheck && npm run test:e2e",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check": "bun run lint && bun run typecheck && bun run test:e2e",
-    "check:ci": "bun run lint && bun run typecheck",
     "deploy": "vercel --prod",
     "lint": "oxlint",
     "typecheck": "tsgo --noEmit",
