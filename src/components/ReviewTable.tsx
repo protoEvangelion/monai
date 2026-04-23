@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from '@tanstack/react-router'
-import { TagIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, PlusIcon, CircleOffIcon } from 'lucide-react'
+import { useServerFn } from '@tanstack/react-start'
+import { TagIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, PlusIcon, CircleOffIcon, SparklesIcon, Loader2Icon } from 'lucide-react'
 import {
   Button,
   Popover,
@@ -19,6 +20,8 @@ import {
 import { formatCurrency } from '../lib/format'
 import { markTransactionsReviewed, updateTransactionCategory } from '../server/transactions'
 import { createCategory } from '../server/categories'
+import { runAICategorization } from '../server/plaid'
+// runAICategorization is wrapped with useServerFn in the component
 
 type Tx = {
   id: number
@@ -85,6 +88,8 @@ export function ReviewTable({
   const [newCategoryBudget, setNewCategoryBudget] = useState('')
   const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(categories[0]?.id ?? null)
   const [isCreatingCategory, setIsCreatingCategory] = useState(false)
+  const [isAICategorizing, startAITransition] = useTransition()
+  const runAICategorizeFn = useServerFn(runAICategorization)
 
   const query = searchQuery.toLowerCase()
   const visibleTxns = (showAll ? transactions : transactions.filter(tx => !tx.isReviewed))
@@ -105,20 +110,16 @@ export function ReviewTable({
 
   const allPageIds = pageTxns.map(tx => tx.id)
   const allTransactionIds = visibleTxns.map(tx => tx.id)
-  const allPageSelected = allPageIds.length > 0 && allPageIds.every(id => selected.has(id))
+  const allSelected = allTransactionIds.length > 0 && allTransactionIds.every(id => selected.has(id))
 
   const toggleAll = () => {
-    // First click: select all on current page
-    // Second click (if all page selected): select all across all pages
-    // Third click: deselect all
-    if (selectAllPages) {
+    // Toggle all rows across all pages
+    if (allSelected || selectAllPages) {
       setSelectAllPages(false)
       setSelected(new Set())
-    } else if (allPageSelected) {
+    } else {
       setSelectAllPages(true)
       setSelected(new Set(allTransactionIds))
-    } else {
-      setSelected(prev => new Set([...prev, ...allPageIds]))
     }
   }
 
@@ -129,7 +130,11 @@ export function ReviewTable({
     }
     setSelected(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
       return next
     })
   }
@@ -143,6 +148,14 @@ export function ReviewTable({
     setSelected(new Set())
     setSelectAllPages(false)
     router.invalidate()
+  }
+
+  const handleAICategorize = () => {
+    startAITransition(async () => {
+      const ids = selected.size > 0 ? [...selected] : undefined
+      await runAICategorizeFn(ids ? { data: { ids } } : {} as any)
+      router.invalidate()
+    })
   }
 
   const handleCategoryChange = async (txId: number, categoryId: number | null) => {
@@ -230,16 +243,39 @@ export function ReviewTable({
 
   return (
     <div>
-      {/* Select-all header */}
-      <div className="flex items-center gap-3 px-6 py-2 border-b border-divider/20 bg-default-50/20">
-        <StyledCheckbox checked={selectAllPages || allPageSelected} onChange={toggleAll} aria-label="Select transactions" />
-        <span className="text-xs text-default-400">
-          {selectAllPages
-            ? `All ${total} selected`
-            : selected.size > 0
-              ? `${selected.size} selected`
-              : 'Select page or all'}
-        </span>
+      {/* Select-all header + actions */}
+      <div className="flex items-center justify-between gap-3 px-6 py-2 border-b border-divider/20 bg-default-50/20">
+        <div className="flex items-center gap-3">
+          <StyledCheckbox checked={selectAllPages || allSelected} onChange={toggleAll} aria-label="Select transactions" />
+          <span className="text-base font-semibold text-foreground/85 leading-none">
+            {selectAllPages
+              ? `All ${total} selected`
+              : selected.size > 0
+                ? `${selected.size} selected`
+                : 'Select all'}
+          </span>
+        </div>
+        {!showAll && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAICategorize}
+              disabled={isAICategorizing}
+              className="relative overflow-hidden flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-linear-to-r from-cyan-500 via-blue-500 to-indigo-500 shadow-md shadow-blue-500/25 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-500/35 active:translate-y-0 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70"
+            >
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/20">
+                {isAICategorizing ? <Loader2Icon size={13} className="animate-spin" /> : <SparklesIcon size={13} className="animate-pulse" />}
+              </span>
+              AI Categorize ({selected.size || markIds.length})
+            </button>
+            <button
+              onClick={handleMarkReviewed}
+              className="h-9 flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold rounded-xl hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <CheckIcon size={13} />
+              Mark Reviewed ({markIds.length})
+            </button>
+          </div>
+        )}
       </div>
 
       {grouped.map(({ label, txns }) => (
@@ -282,9 +318,6 @@ export function ReviewTable({
                       setPickerTxId(null)
                       setCatSearch('')
                     }}
-                    placement="bottom"
-                    shouldFlip
-                    offset={8}
                   >
                     <PopoverTrigger>
                       <button
@@ -372,8 +405,8 @@ export function ReviewTable({
         </div>
       ))}
 
-      {/* Footer: pagination + mark reviewed */}
-      <div className="flex items-center justify-between px-6 py-3 border-t border-divider/30">
+      {/* Footer: pagination */}
+      <div className="flex items-center px-6 py-3 border-t border-divider/30">
         <div className="flex items-center gap-2">
           <span className="text-xs text-default-400">
             {start} – {end} of {total}
@@ -393,13 +426,6 @@ export function ReviewTable({
             <ChevronRightIcon size={14} />
           </button>
         </div>
-        <button
-          onClick={handleMarkReviewed}
-          className={`flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold rounded-xl hover:opacity-80 transition-opacity cursor-pointer ${showAll ? 'invisible' : ''}`}
-        >
-          <CheckIcon size={13} />
-          Mark {markIds.length} as reviewed
-        </button>
       </div>
 
       <Modal
@@ -434,14 +460,9 @@ export function ReviewTable({
                   />
                   <Input
                     value={newCategoryName}
-                    onValueChange={setNewCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
                     placeholder="Category name"
-                    variant="bordered"
-                    radius="lg"
-                    classNames={{
-                      inputWrapper: 'h-16 bg-content2 border-divider hover:border-default-400 data-[focus=true]:border-primary',
-                      input: 'text-2xl font-semibold text-foreground',
-                    }}
+                    className="text-2xl font-semibold"
                   />
                 </div>
 
@@ -467,25 +488,17 @@ export function ReviewTable({
                     min="0"
                     step="1"
                     value={newCategoryBudget}
-                    onValueChange={setNewCategoryBudget}
+                    onChange={e => setNewCategoryBudget(e.target.value)}
                     placeholder="0"
-                    startContent={<span className="text-default-400 text-xl font-semibold">$</span>}
-                    variant="bordered"
-                    radius="lg"
-                    classNames={{
-                      inputWrapper: 'h-14 bg-content2 border-divider hover:border-default-400 data-[focus=true]:border-primary',
-                      input: 'text-xl font-semibold text-foreground',
-                    }}
                   />
                 </div>
               </ModalBody>
 
               <ModalFooter className="flex items-center justify-end gap-3 px-7 py-5 border-t border-divider bg-content1">
                 <Button
-                  variant="flat"
                   onPress={() => setIsCreateCategoryOpen(false)}
                   isDisabled={isCreatingCategory}
-                  className="rounded-xl"
+                  className="rounded-xl bg-default-100 text-foreground hover:bg-default-200"
                 >
                   Cancel
                 </Button>

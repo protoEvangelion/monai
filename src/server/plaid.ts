@@ -165,6 +165,30 @@ export const manualSync = createServerFn().handler(async () => {
   }
 })
 
+export const runAICategorization = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth()
+  if (!userId) throw new Error('Unauthorized')
+
+  const { db } = await import('../db')
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { ids } = ((ctx as any)?.data ?? {}) as { ids?: number[] }
+  const selectedIds = Array.isArray(ids)
+    ? ids.filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+    : undefined
+
+  const items = await db.query.plaidItems.findMany({
+    where: eq(plaidItems.userId, userId),
+  })
+
+  for (const item of items) {
+    await categorizeTransactions(userId, item.id, {
+      recategorizeAll: true,
+      transactionIds: selectedIds,
+    })
+  }
+})
+
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 export const autoSync = createServerFn().handler(async () => {

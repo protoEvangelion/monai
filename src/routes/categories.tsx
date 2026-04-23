@@ -356,7 +356,7 @@ function CategoryModal({ modal, onClose, onSuccess }: CategoryModalProps) {
               variant="ghost"
               isIconOnly
               size="sm"
-              radius="full"
+              className="rounded-full"
               onPress={onClose}
               isDisabled={saving}
             >
@@ -367,21 +367,18 @@ function CategoryModal({ modal, onClose, onSuccess }: CategoryModalProps) {
           <ModalBody className="px-6 py-5 flex flex-col gap-5">
             <div className="flex gap-3 items-end">
               <Input
-                label="Icon"
                 value={icon}
-                onValueChange={setIcon}
+                onChange={e => setIcon(e.target.value)}
                 placeholder={isGroup ? '📁' : '📌'}
                 maxLength={4}
-                className="w-20"
-                classNames={{ input: 'text-2xl text-center' }}
+                className="w-20 text-center"
               />
               <Input
                 autoFocus
-                label="Name"
                 value={name}
-                onValueChange={setName}
+                onChange={e => setName(e.target.value)}
                 placeholder={isGroup ? 'e.g. Food & Dining' : 'e.g. Groceries'}
-                isRequired
+                required
                 className="flex-1"
               />
             </div>
@@ -392,11 +389,9 @@ function CategoryModal({ modal, onClose, onSuccess }: CategoryModalProps) {
                   type="number"
                   min="0"
                   step="1"
-                  label="Monthly Budget"
                   value={budget}
-                  onValueChange={setBudget}
+                  onChange={e => setBudget(e.target.value)}
                   placeholder="0"
-                  startContent={<span className="text-default-400 font-semibold text-sm">$</span>}
                 />
                 <p className="text-[11px] text-default-400">Leave at $0 to track spending without a budget cap.</p>
               </div>
