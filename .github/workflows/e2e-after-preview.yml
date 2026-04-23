@@ -1,0 +1,31 @@
+name: E2E After Vercel Preview
+
+on:
+  repository_dispatch:
+    types:
+      - vercel.deployment.success
+
+jobs:
+  playwright:
+    if: github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout commit under test
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.git.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers and deps
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run E2E against Vercel preview URL
+        env:
+          BASE_URL: ${{ github.event.client_payload.url }}
+        run: bun run test:e2e
