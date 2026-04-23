@@ -2,14 +2,21 @@ import OpenAI from 'openai'
 import { categories, transactions, accounts } from '../db/schema'
 import { eq, inArray } from 'drizzle-orm'
 
-const openrouter = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-  defaultHeaders: {
-    'HTTP-Referer': 'https://monai.app',
-    'X-Title': 'Monai',
-  },
-})
+let openrouter: OpenAI | null = null
+
+function getOpenRouter(): OpenAI {
+  if (!openrouter) {
+    openrouter = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://monai.app',
+        'X-Title': 'Monai',
+      },
+    })
+  }
+  return openrouter
+}
 
 type Category = { id: number; name: string; parentId: number | null }
 type Transaction = { id: number; merchantName: string; amount: number }
@@ -99,11 +106,12 @@ async function categorizeBatch(batch: Transaction[], cats: Category[]): Promise<
   const prompt = `${line1}\n${line2}`
 
   let lastError: unknown = null
+  const client = getOpenRouter()
   for (const model of FREE_MODEL_CANDIDATES) {
     try {
       console.log('[categorize][prompt]', JSON.stringify({ model, prompt }))
 
-      const completion = await openrouter.chat.completions.create({
+      const completion = await client.chat.completions.create({
         model,
         temperature: 0,
         response_format: { type: 'json_object' },
