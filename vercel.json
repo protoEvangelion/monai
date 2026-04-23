@@ -1,4 +1,4 @@
 {
-  "buildCommand": "bun run check:ci && bun run build",
+  "buildCommand": "bunx playwright install chromium --with-deps && bun run check && bun run build",
   "framework": null
 }
