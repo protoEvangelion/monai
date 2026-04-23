@@ -1,4 +1,4 @@
-name: E2E Tests
+name: CI
 
 on:
   push:
@@ -27,8 +27,8 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install chromium --with-deps
 
-      - name: Run E2E tests
-        run: bun run test:e2e
+      - name: Run all checks (lint + typecheck + E2E)
+        run: bun run check
 
       - uses: actions/upload-artifact@v4
         if: failure()
