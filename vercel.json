@@ -1,4 +1,4 @@
 {
-  "buildCommand": "bunx playwright install chromium && bun run check && vite build",
+  "buildCommand": "bunx playwright install chromium && vite build && bun run check",
   "framework": null
 }
