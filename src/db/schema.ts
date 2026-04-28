@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, real } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, integer, text, real, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sql, relations } from 'drizzle-orm'
 
 export const plaidItems = sqliteTable('plaid_items', {
@@ -6,6 +6,7 @@ export const plaidItems = sqliteTable('plaid_items', {
   itemId: text('item_id').notNull().unique(),
   accessToken: text('access_token').notNull(),
   userId: text('user_id').notNull(),
+  institutionName: text('institution_name'),
   cursor: text(),
   lastSyncedAt: integer('last_synced_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
@@ -45,14 +46,19 @@ export const transactions = sqliteTable('transactions', {
   isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),
 })
 
-export const historicalBalances = sqliteTable('historical_balances', {
-  id: integer().primaryKey({ autoIncrement: true }),
-  accountId: integer('account_id')
-    .notNull()
-    .references(() => accounts.id),
-  date: integer({ mode: 'timestamp' }).notNull(),
-  balance: real().notNull(),
-})
+export const historicalBalances = sqliteTable(
+  'historical_balances',
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    date: integer({ mode: 'timestamp' }).notNull(),
+    balance: real().notNull(),
+    source: text().notNull().default('snapshot'), // 'snapshot' | 'plaid_assets'
+  },
+  (t) => [uniqueIndex('historical_balances_account_date_idx').on(t.accountId, t.date)],
+)
 
 // Relations
 export const plaidItemsRelations = relations(plaidItems, ({ many }) => ({

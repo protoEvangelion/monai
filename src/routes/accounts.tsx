@@ -12,12 +12,14 @@ import {
   Loader2Icon,
   Trash2Icon,
   MoreVerticalIcon,
-  AlertTriangleIcon
+  AlertTriangleIcon,
+  RefreshCwIcon,
+  BuildingIcon,
 } from 'lucide-react'
 import { usePlaidLink } from 'react-plaid-link'
 import { useState, useEffect } from 'react'
 import { createLinkToken, exchangePublicToken, removeItem, deleteAccount } from '../server/plaid'
-import { getAccounts } from '../server/accounts'
+import { getAccounts, getConnections } from '../server/accounts'
 import { formatCurrency } from '../lib/format'
 
 const authStateFn = createServerFn().handler(async () => {
@@ -29,7 +31,10 @@ const authStateFn = createServerFn().handler(async () => {
 export const Route = createFileRoute('/accounts')({
   component: Accounts,
   beforeLoad: async () => await authStateFn(),
-  loader: () => getAccounts(),
+  loader: async () => ({
+    accounts: await getAccounts(),
+    connections: await getConnections(),
+  }),
 })
 
 const typeConfig: Record<string, { label: string; icon: React.ReactNode; isDebt: boolean }> = {
@@ -40,17 +45,18 @@ const typeConfig: Record<string, { label: string; icon: React.ReactNode; isDebt:
   real_estate: { label: 'Real Estate', icon: <HomeIcon size={20} className="text-secondary" />,     isDebt: false },
 }
 
-function AddAccountButton({ onSuccess }: { onSuccess: () => void }) {
+function AddAccountButton({ onSuccess, label = 'Add Account', icon, variant = 'primary', size = 'md' }: { onSuccess: () => void; label?: string; icon?: React.ReactNode; variant?: 'primary' | 'ghost'; size?: 'sm' | 'md' }) {
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const { open, ready } = usePlaidLink({
     token: token ?? '',
-    onSuccess: async (publicToken) => {
+    onSuccess: async (publicToken, metadata) => {
       setLoading(true)
       try {
+        const institutionName = metadata?.institution?.name ?? undefined
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (exchangePublicToken as any)({ data: { publicToken } })
+        await (exchangePublicToken as any)({ data: { publicToken, institutionName } })
         onSuccess()
       } finally {
         setLoading(false)
@@ -74,17 +80,18 @@ function AddAccountButton({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <Button variant="primary" onPress={handleClick} isDisabled={loading}>
-      {loading ? <Loader2Icon size={18} className="animate-spin" /> : <PlusIcon size={18} />}
-      {loading ? 'Connecting...' : 'Add Account'}
+    <Button variant={variant} size={size} onPress={handleClick} isDisabled={loading}>
+      {loading ? <Loader2Icon size={15} className="animate-spin" /> : (icon ?? <PlusIcon size={15} />)}
+      {loading ? 'Connecting...' : label}
     </Button>
   )
 }
 
 function Accounts() {
   const router = useRouter()
-  const allAccounts = Route.useLoaderData()
+  const { accounts: allAccounts, connections } = Route.useLoaderData()
   const [isDeleting, setIsDeleting] = useState<number | null>(null)
+  const [isDisconnecting, setIsDisconnecting] = useState<number | null>(null)
 
   const grouped = Object.entries(typeConfig).reduce<
     Record<string, { config: (typeof typeConfig)[string]; accounts: typeof allAccounts }>
@@ -100,7 +107,7 @@ function Accounts() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (deleteAccount as any)({ data: { id } })
-      router.invalidate()
+      await router.invalidate()
     } finally {
       setIsDeleting(null)
     }
@@ -108,15 +115,15 @@ function Accounts() {
 
   const handleDisconnectBank = async (plaidItemId: number | null) => {
     if (!plaidItemId) return
-    if (!confirm('Disconnect this bank? ALL associated accounts and transactions will be permanently deleted.')) return
+    if (!confirm('Disconnect this institution? ALL associated accounts and transactions will be permanently deleted.')) return
     
-    setIsDeleting(plaidItemId)
+    setIsDisconnecting(plaidItemId)
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (removeItem as any)({ data: { id: plaidItemId } })
-      router.invalidate()
+      await router.invalidate()
     } finally {
-      setIsDeleting(null)
+      setIsDisconnecting(null)
     }
   }
 
@@ -126,6 +133,57 @@ function Accounts() {
         <h1 className="text-3xl font-bold tracking-tight">Accounts</h1>
         <AddAccountButton onSuccess={() => router.invalidate()} />
       </div>
+
+      {/* Connections section */}
+      {connections.length > 0 && (
+        <Card className="w-full bg-background/60 backdrop-blur-md shadow-2xl shadow-black/5 border-divider/50 overflow-hidden">
+          <CardHeader className="px-6 pt-5 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-default-100/50">
+                <BuildingIcon size={20} className="text-default-500" />
+              </div>
+              <h4 className="font-bold text-lg tracking-tight">Connections</h4>
+            </div>
+          </CardHeader>
+          <Separator className="opacity-50" />
+          <CardContent className="px-0 py-0">
+            <div className="flex flex-col divide-y divide-divider/50">
+              {connections.map(conn => (
+                <div key={conn.id} className="flex justify-between items-center px-6 py-4 hover:bg-default-50/50 transition-all relative">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold text-default-800">
+                      {conn.institutionName ?? 'Unknown Institution'}
+                    </span>
+                    <span className="text-xs text-default-400">
+                      {conn.accountCount} account{conn.accountCount !== 1 ? 's' : ''}
+                      {conn.lastSyncedAt ? ` · last synced ${new Date(conn.lastSyncedAt).toLocaleDateString()}` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <AddAccountButton onSuccess={() => router.invalidate()} label="Reconnect" icon={<RefreshCwIcon size={15} />} variant="ghost" size="sm" />
+                    <Button
+                      variant="danger-soft"
+                      size="sm"
+                      onPress={() => handleDisconnectBank(conn.id)}
+                      isDisabled={isDisconnecting === conn.id}
+                    >
+                      {isDisconnecting === conn.id
+                        ? <Loader2Icon size={15} className="animate-spin" />
+                        : <Trash2Icon size={15} />}
+                      Disconnect
+                    </Button>
+                  </div>
+                  {isDisconnecting === conn.id && (
+                    <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center z-10">
+                      <Loader2Icon size={20} className="animate-spin text-danger" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {Object.keys(grouped).length === 0 ? (
         <Card className="w-full bg-background/60 backdrop-blur-md shadow-2xl shadow-black/5 border-divider/50">
