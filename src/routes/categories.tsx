@@ -20,7 +20,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ResponsiveContainer,
   ComposedChart,
   Bar,
   Cell,
@@ -87,6 +86,13 @@ type CategoryTableRow = {
   activeChildren: number
 }
 
+type ChartDatum = {
+  day: number
+  label: string
+  spent: number
+  budget?: number
+}
+
 function BudgetProgress({ spent, budget }: { spent: number; budget: number }) {
   const isZeroBudgetOver = budget <= 0 && spent > 0
   const rawPercent = budget > 0
@@ -107,6 +113,65 @@ function BudgetProgress({ spent, budget }: { spent: number; budget: number }) {
         className={`h-full rounded-full transition-[width] duration-300 ${fillClass}`}
         style={{ width: `${clampedPercent}%` }}
       />
+    </div>
+  )
+}
+
+function SpendingChart({
+  data,
+  showBudgetLine,
+}: {
+  data: ChartDatum[]
+  showBudgetLine: boolean
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ width: 0, height: 0 })
+
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element) return
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect()
+      setSize({
+        width: Math.max(0, Math.floor(rect.width)),
+        height: Math.max(0, Math.floor(rect.height)),
+      })
+    }
+
+    updateSize()
+    const observer = new ResizeObserver(updateSize)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div
+      ref={containerRef}
+      className="h-36 w-full rounded-2xl border border-divider/40 bg-default-50 px-3 py-2"
+    >
+      {size.width > 0 && size.height > 0 ? (
+        <ComposedChart width={size.width} height={size.height} data={data} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.35)" vertical={false} />
+          <XAxis dataKey="label" axisLine={false} tickLine={false} interval={3} />
+          <YAxis hide />
+          <ChartTooltip
+            formatter={(value, name) => {
+              const numericValue = typeof value === 'number' ? value : Number(value ?? 0)
+              return [formatCurrency(numericValue), name === 'spent' ? 'Spent' : 'Budget / day']
+            }}
+            labelFormatter={(label) => `Day ${label}`}
+          />
+          <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
+            {data.map((entry) => (
+              <Cell key={`spent-${entry.day}`} fill="#22c55e" />
+            ))}
+          </Bar>
+          {showBudgetLine ? (
+            <Line type="monotone" dataKey="budget" stroke="#7dd3fc" strokeWidth={2} dot={false} />
+          ) : null}
+        </ComposedChart>
+      ) : null}
     </div>
   )
 }
@@ -283,6 +348,7 @@ function Categories() {
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null)
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null)
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set())
+  const [detailOpen, setDetailOpen] = useState(false)
 
   const monthTransactions = useMemo(
     () => transactions.filter(tx => tx.amount > 0 && isSameMonth(tx.date, viewDate)),
@@ -348,6 +414,7 @@ function Categories() {
   useEffect(() => {
     if (!derivedGroups.length) {
       setSelectedGroupId(null)
+      setDetailOpen(false)
       return
     }
 
@@ -533,6 +600,7 @@ function Categories() {
                     event.stopPropagation()
                     setSelectedGroupId(item.groupId)
                     setSelectedChildId(null)
+                    setDetailOpen(true)
                     setExpandedGroupIds((prev) => {
                       const next = new Set(prev)
                       if (next.has(item.groupId)) next.delete(item.groupId)
@@ -590,19 +658,19 @@ function Categories() {
 
   return (
     <div className="mx-auto flex w-full max-w-none flex-col gap-5 pb-20">
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-        <div className="lg:justify-self-start">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+        <div className="min-w-0 justify-self-start">
           <h1 className="text-2xl font-bold tracking-tight">Categories</h1>
           <p className="mt-0.5 text-sm text-default-400">
             {groups.length} group{groups.length !== 1 ? 's' : ''} · {groups.reduce((s, g) => s + g.children.length, 0)} categories
           </p>
         </div>
 
-        <div className="flex justify-start lg:justify-center">
+        <div className="justify-self-center">
           <MonthControls transactions={transactions} />
         </div>
 
-        <div className="flex items-center gap-3 lg:justify-self-end">
+        <div className="flex items-center gap-3 justify-self-end">
           <Dropdown>
             <DropdownTrigger className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_16px_color-mix(in_oklch,var(--color-accent)_45%,transparent)] transition-all hover:brightness-95 hover:shadow-[0_0_22px_color-mix(in_oklch,var(--color-accent)_60%,transparent)] active:scale-95">
               <CirclePlusIcon size={14} />
@@ -699,9 +767,11 @@ function Categories() {
                             if (item.kind === 'group') {
                               setSelectedGroupId(item.groupId)
                               setSelectedChildId(null)
+                              setDetailOpen(true)
                             } else if (item.childId) {
                               setSelectedGroupId(item.groupId)
                               setSelectedChildId(item.childId)
+                              setDetailOpen(true)
                             }
                           }}
                         >
@@ -729,7 +799,21 @@ function Categories() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border border-divider/60 bg-content1 shadow-none">
+          {detailOpen ? (
+            <button
+              type="button"
+              aria-label="Close category details"
+              className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm xl:hidden"
+              onClick={() => setDetailOpen(false)}
+            />
+          ) : null}
+
+          <Card className={[
+            'overflow-hidden border border-divider/60 bg-content1 shadow-none',
+            detailOpen
+              ? 'fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto rounded-none xl:static xl:z-auto xl:w-auto xl:max-w-none xl:rounded-2xl'
+              : 'hidden xl:block',
+          ].join(' ')}>
             <CardContent className="p-0">
               {selectedGroup ? (
                 <>
@@ -845,6 +929,16 @@ function Categories() {
                             </DropdownPopover>
                           </Dropdown>
                         )}
+                        <Button
+                          variant="ghost"
+                          isIconOnly
+                          size="sm"
+                          className="rounded-lg xl:hidden"
+                          aria-label="Close category details"
+                          onPress={() => setDetailOpen(false)}
+                        >
+                          <XIcon size={15} />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -860,36 +954,7 @@ function Categories() {
                           : formatCurrency(selectedGroup.spent, { maximumFractionDigits: 0 })}
                       </p>
                     </div>
-                    <div className="h-36 w-full rounded-2xl border border-divider/40 bg-default-50 px-3 py-2">
-                      <ResponsiveContainer
-                        width="100%"
-                        height="100%"
-                        minWidth={0}
-                        minHeight={0}
-                        initialDimension={{ width: 320, height: 144 }}
-                      >
-                        <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.35)" vertical={false} />
-                          <XAxis dataKey="label" axisLine={false} tickLine={false} interval={3} />
-                          <YAxis hide />
-                          <ChartTooltip
-                            formatter={(value, name) => {
-                              const numericValue = typeof value === 'number' ? value : Number(value ?? 0)
-                              return [formatCurrency(numericValue), name === 'spent' ? 'Spent' : 'Budget / day']
-                            }}
-                            labelFormatter={(label) => `Day ${label}`}
-                          />
-                          <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
-                            {chartData.map((entry) => (
-                              <Cell key={`spent-${entry.day}`} fill="#22c55e" />
-                            ))}
-                          </Bar>
-                          {selectedChild ? (
-                            <Line type="monotone" dataKey="budget" stroke="#7dd3fc" strokeWidth={2} dot={false} />
-                          ) : null}
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <SpendingChart data={chartData} showBudgetLine={Boolean(selectedChild)} />
                   </div>
 
                   <div className="flex flex-col">

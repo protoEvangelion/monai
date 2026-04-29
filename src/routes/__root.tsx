@@ -28,7 +28,9 @@ import {
   CheckIcon,
   CreditCardIcon,
   LandmarkIcon,
-  TrendingUpIcon
+  TrendingUpIcon,
+  MenuIcon,
+  XIcon
 } from "lucide-react";
 import HeaderUser from '../integrations/clerk/header-user'
 import { useTimeTravel } from '../store/useTimeTravel';
@@ -93,6 +95,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const [sidebarAccounts, setSidebarAccounts] = useState<SidebarAccount[]>([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const monthInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,6 +112,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     : 'Overview'
 
   const isAuthPage = location.pathname.startsWith('/sign-in');
+
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     if (isAuthPage) return
@@ -196,74 +203,42 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                 <>
                   {/* Sidebar */}
                   <aside className="hidden lg:flex w-72 border-r border-divider/60 flex-col bg-content1/70 backdrop-blur-2xl z-10">
-                    <div className="px-5 pb-5 pt-3 flex flex-col gap-4 h-full">
-                      
-                      {/* Logo + User */}
-                      <div className="flex items-center justify-between">
-                        <Link to="/" className="flex items-center gap-2.5 hover:opacity-85 transition-opacity">
-                          <img src="/favicon.svg" alt="Monai" className="h-8 w-8" />
-                          <span className="font-black text-xl tracking-tight text-foreground">MONAI</span>
-                        </Link>
-                        <HeaderUser />
-                      </div>
-
-                      <Card className="bg-content2/65 border border-divider/50 shadow-none">
-                        <CardContent className="p-2">
-                          <nav className="flex flex-col gap-1">
-                            <SidebarLink to="/" icon={<LayoutDashboardIcon size={18} />} label="Dashboard" />
-                            <SidebarLink to="/transactions" icon={<ArrowLeftRightIcon size={18} />} label="Transactions" />
-                            <SidebarLink to="/accounts" icon={<WalletIcon size={18} />} label="Accounts" />
-                            <SidebarLink to="/categories" icon={<PieChartIcon size={18} />} label="Categories" />
-                            <SidebarStaticItem icon={<RepeatIcon size={18} />} label="Recurrings" />
-                          </nav>
-                        </CardContent>
-                      </Card>
-
-                      {/* Account Summary */}
-                      <Card className="bg-content2/65 border border-divider/50 shadow-none">
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-tiny uppercase font-bold text-default-400">Net Worth</p>
-                            <Chip size="sm" variant="soft">{sidebarAccounts.length}</Chip>
-                          </div>
-                          <ScrollShadow className="max-h-56 pr-1">
-                            {sidebarAccounts.length > 0 ? (
-                              <div className="flex flex-col gap-1">
-                                {sidebarAccounts.map(acc => (
-                                  <div key={acc.type} className="flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-content1 transition-colors group cursor-pointer">
-                                    <div className="flex items-center gap-2.5">
-                                      {getSidebarIcon(acc.type)}
-                                      <span className="text-sm font-medium text-default-600 group-hover:text-foreground">{acc.group}</span>
-                                    </div>
-                                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(acc.balance, { maximumFractionDigits: 0 })}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="px-2.5 py-2 text-sm text-default-400">No accounts linked</div>
-                            )}
-                          </ScrollShadow>
-                        </CardContent>
-                      </Card>
-
-                      {/* Bottom Actions */}
-                      <div className="mt-auto flex flex-col gap-3">
-                        <Separator className="bg-divider/50" />
-                        <div className="flex flex-col gap-1 px-1">
-                          <SidebarStaticItem icon={<SettingsIcon size={18} />} label="Settings" />
-                          <SidebarStaticItem icon={<HelpCircleIcon size={18} />} label="Get Help" />
-                        </div>
-                        <div className="h-1" />
-                      </div>
-                    </div>
+                    <SidebarContent sidebarAccounts={sidebarAccounts} />
                   </aside>
+
+                  {sidebarOpen ? (
+                    <div className="fixed inset-0 z-50 lg:hidden">
+                      <button
+                        type="button"
+                        aria-label="Close sidebar"
+                        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+                        onClick={() => setSidebarOpen(false)}
+                      />
+                      <aside className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-divider/60 bg-content1/95 shadow-2xl backdrop-blur-2xl">
+                        <SidebarContent
+                          sidebarAccounts={sidebarAccounts}
+                          onClose={() => setSidebarOpen(false)}
+                        />
+                      </aside>
+                    </div>
+                  ) : null}
 
                   {/* Main Content Area */}
                   <div className="grow flex flex-col overflow-hidden z-10">
                     
                     {/* Top Header */}
-                    <header className="h-16 border-b border-divider/70 flex items-center justify-between px-8 bg-content1/70 backdrop-blur-xl sticky top-0 z-40">
-                      <div className="flex items-center gap-4">
+                    <header className="h-16 border-b border-divider/70 flex items-center justify-between px-4 lg:px-8 bg-content1/70 backdrop-blur-xl sticky top-0 z-40">
+                      <div className="flex items-center gap-3 lg:gap-4">
+                        <Button
+                          variant="ghost"
+                          isIconOnly
+                          size="sm"
+                          className="rounded-full lg:hidden"
+                          aria-label="Open sidebar"
+                          onPress={() => setSidebarOpen(true)}
+                        >
+                          <MenuIcon size={18} />
+                        </Button>
                         <Chip variant="soft" className="font-semibold">{pageTitle}</Chip>
                         <input
                           ref={monthInputRef}
@@ -345,6 +320,90 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Scripts />
       </body>
     </html>
+  )
+}
+
+function SidebarContent({
+  sidebarAccounts,
+  onClose,
+}: {
+  sidebarAccounts: SidebarAccount[]
+  onClose?: () => void
+}) {
+  return (
+    <div className="px-5 pb-5 pt-3 flex flex-col gap-4 h-full">
+      {/* Logo + User */}
+      <div className="flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2.5 hover:opacity-85 transition-opacity">
+          <img src="/favicon.svg" alt="Monai" className="h-8 w-8" />
+          <span className="font-black text-xl tracking-tight text-foreground">MONAI</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <HeaderUser />
+          {onClose ? (
+            <Button
+              variant="ghost"
+              isIconOnly
+              size="sm"
+              className="rounded-full"
+              aria-label="Close sidebar"
+              onPress={onClose}
+            >
+              <XIcon size={16} />
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <Card className="bg-content2/65 border border-divider/50 shadow-none">
+        <CardContent className="p-2">
+          <nav className="flex flex-col gap-1" onClickCapture={onClose}>
+            <SidebarLink to="/" icon={<LayoutDashboardIcon size={18} />} label="Dashboard" />
+            <SidebarLink to="/transactions" icon={<ArrowLeftRightIcon size={18} />} label="Transactions" />
+            <SidebarLink to="/accounts" icon={<WalletIcon size={18} />} label="Accounts" />
+            <SidebarLink to="/categories" icon={<PieChartIcon size={18} />} label="Categories" />
+            <SidebarStaticItem icon={<RepeatIcon size={18} />} label="Recurrings" />
+          </nav>
+        </CardContent>
+      </Card>
+
+      {/* Account Summary */}
+      <Card className="bg-content2/65 border border-divider/50 shadow-none">
+        <CardContent className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-tiny uppercase font-bold text-default-400">Net Worth</p>
+            <Chip size="sm" variant="soft">{sidebarAccounts.length}</Chip>
+          </div>
+          <ScrollShadow className="max-h-56 pr-1">
+            {sidebarAccounts.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {sidebarAccounts.map(acc => (
+                  <div key={acc.type} className="flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-content1 transition-colors group cursor-pointer">
+                    <div className="flex items-center gap-2.5">
+                      {getSidebarIcon(acc.type)}
+                      <span className="text-sm font-medium text-default-600 group-hover:text-foreground">{acc.group}</span>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(acc.balance, { maximumFractionDigits: 0 })}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-2.5 py-2 text-sm text-default-400">No accounts linked</div>
+            )}
+          </ScrollShadow>
+        </CardContent>
+      </Card>
+
+      {/* Bottom Actions */}
+      <div className="mt-auto flex flex-col gap-3">
+        <Separator className="bg-divider/50" />
+        <div className="flex flex-col gap-1 px-1">
+          <SidebarStaticItem icon={<SettingsIcon size={18} />} label="Settings" />
+          <SidebarStaticItem icon={<HelpCircleIcon size={18} />} label="Get Help" />
+        </div>
+        <div className="h-1" />
+      </div>
+    </div>
   )
 }
 

@@ -17,10 +17,17 @@ export default async function globalSetup() {
 
   const db = new Database(DB_PATH)
 
-  // Seed an account the transactions can reference
+  // Seed a Plaid item and account the transactions can reference
   db.exec(`
-    INSERT OR IGNORE INTO accounts (id, name, type, current_balance)
-    VALUES (1, 'Test Checking', 'cash', 1000);
+    INSERT OR IGNORE INTO plaid_items (id, item_id, access_token, user_id, institution_name, last_synced_at)
+    VALUES (1, 'test_item', 'test_access_token', 'dev_user_123', 'Test Bank', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+
+    UPDATE plaid_items SET last_synced_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000 WHERE id = 1;
+
+    INSERT OR IGNORE INTO accounts (id, name, type, current_balance, plaid_item_id)
+    VALUES (1, 'Test Checking', 'cash', 1000, 1);
+
+    UPDATE accounts SET plaid_item_id = 1 WHERE id = 1;
   `)
 
   // Seed a parent category + child
