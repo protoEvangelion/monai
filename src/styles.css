@@ -56,3 +56,46 @@ body {
 .orb-2 { animation: orb-drift-alt 30s ease-in-out infinite; }
 .orb-3 { animation: orb-drift     38s ease-in-out infinite 5s; }
 .orb-4 { animation: orb-drift-alt 20s ease-in-out infinite 10s; }
+
+/* Budget slider: explicit rail + thumb so background is clearly visible */
+.budget-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--color-default) 35%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-default) 55%, transparent);
+}
+
+.budget-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--color-default) 35%, transparent);
+}
+
+.budget-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  margin-top: -4px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  border: 2px solid color-mix(in oklch, var(--background) 92%, white);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-accent) 28%, transparent);
+}
+
+.budget-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--color-default) 35%, transparent);
+}
+
+.budget-slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  border: 2px solid color-mix(in oklch, var(--background) 92%, white);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-accent) 28%, transparent);
+}

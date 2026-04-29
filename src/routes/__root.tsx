@@ -195,7 +195,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                 /* Main App Layout */
                 <>
                   {/* Sidebar */}
-                  <aside className="w-72 border-r border-divider/60 flex flex-col bg-content1/70 backdrop-blur-2xl z-10">
+                  <aside className="hidden lg:flex w-72 border-r border-divider/60 flex-col bg-content1/70 backdrop-blur-2xl z-10">
                     <div className="px-5 pb-5 pt-3 flex flex-col gap-4 h-full">
                       
                       {/* Logo + User */}
@@ -291,11 +291,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 
                       <div className="flex items-center gap-2">
                         <Dropdown>
-                          <DropdownTrigger>
-                            <div className="flex items-center gap-1 cursor-pointer text-sm rounded-full px-3 py-1 hover:bg-white/10 transition-colors">
-                              {paletteLabel}
-                              <ChevronDownIcon size={14} />
-                            </div>
+                          <DropdownTrigger className="flex items-center gap-1 cursor-pointer text-sm rounded-full px-3 py-1 hover:bg-white/10 transition-colors">
+                            {paletteLabel}
+                            <ChevronDownIcon size={14} />
                           </DropdownTrigger>
                           <DropdownPopover>
                             <DropdownMenu aria-label="Theme palette">
@@ -333,8 +331,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                     </header>
 
                     {/* Page Content */}
-                    <main className="grow overflow-y-auto p-8 bg-transparent">
-                      <div className="container mx-auto">
+                    <main className="grow overflow-y-auto p-6 xl:p-8 bg-transparent">
+                      <div className="mx-auto w-full">
                         {children}
                       </div>
                     </main>
