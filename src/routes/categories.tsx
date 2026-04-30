@@ -5,6 +5,9 @@ import { getAuthOrDevAuth } from '../lib/devAuth'
 import {
   Card, CardContent, Button,
   Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, DropdownPopover,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
   Modal,
   ModalBackdrop,
   ModalContainer,
@@ -17,6 +20,8 @@ import {
   PlusIcon, MoreVerticalIcon, Trash2Icon, PencilIcon,
   PieChartIcon, Loader2Icon, XIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon,
   ChevronsLeftIcon, ChevronsRightIcon, CirclePlusIcon,
+  CheckCircle2Icon, AlertTriangleIcon, InfoIcon,
+  TagIcon, SearchIcon, CheckIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -41,7 +46,19 @@ import {
   updateCategory,
   deleteCategory,
 } from '../server/categories'
-import { getTransactions } from '../server/transactions'
+import {
+  getMonthlyBudgets,
+  updateExpectedIncome,
+  updateMonthlyAllocation,
+} from '../server/budget'
+import {
+  getTransactions,
+  getTags,
+  createTag,
+  setTransactionsInternalTransfer,
+  updateTransactionsCategory,
+  setTagForTransactions,
+} from '../server/transactions'
 import { formatCurrency } from '../lib/format'
 import { useTimeTravel } from '../store/useTimeTravel'
 
@@ -54,17 +71,21 @@ export const Route = createFileRoute('/categories')({
   component: Categories,
   beforeLoad: async () => await authStateFn(),
   loader: async () => {
-    const [groups, transactions] = await Promise.all([
+    const [groups, transactions, budgets, tags] = await Promise.all([
       getCategories(),
       getTransactions(),
+      getMonthlyBudgets(),
+      getTags(),
     ])
-    return { groups, transactions }
+    return { groups, transactions, budgets, tags }
   },
 })
 
 type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number]
 type LoadedChild = LoadedGroup['children'][number]
 type LoadedTransaction = Awaited<ReturnType<typeof getTransactions>>[number]
+type LoadedMonthlyBudget = Awaited<ReturnType<typeof getMonthlyBudgets>>[number]
+type LoadedTag = Awaited<ReturnType<typeof getTags>>[number]
 
 type ModalState =
   | { mode: 'create-group' }
@@ -218,6 +239,15 @@ function isSameMonth(dateValue: Date | string, viewDate: string) {
   return date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth()
 }
 
+function getMonthKey(value: Date | string) {
+  const date = new Date(value)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function centsToDollars(cents: number) {
+  return cents / 100
+}
+
 function shiftMonth(viewDate: string, delta: number) {
   const date = new Date(viewDate)
   return new Date(date.getFullYear(), date.getMonth() + delta, 1).toISOString()
@@ -292,45 +322,241 @@ function MonthControls({ transactions }: { transactions: { date: Date | string }
 }
 
 function CategoriesSummary({
+  expectedIncome,
+  actualIncome,
   totalSpent,
   totalBudget,
-  activeCategories,
-  totalCategories,
+  remainingToAssignCents,
+  incomeInput,
+  savingIncome,
+  onIncomeInputChange,
+  onSaveIncome,
 }: {
+  expectedIncome: number
+  actualIncome: number
   totalSpent: number
   totalBudget: number
-  activeCategories: number
-  totalCategories: number
+  remainingToAssignCents: number
+  incomeInput: string
+  savingIncome: boolean
+  onIncomeInputChange: (value: string) => void
+  onSaveIncome: () => void
 }) {
-  return (
-    <Card className="border border-divider/60 bg-content1 shadow-none">
-      <CardContent className="flex flex-col gap-5 p-5">
-        <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-divider/40 bg-default-50 p-4 md:col-span-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-default-400">Month Overview</p>
-            <div className="mt-2 flex items-end gap-3">
-              <span className="text-3xl font-black tracking-tight text-foreground">
-                {formatCurrency(totalSpent, { maximumFractionDigits: 0 })}
-              </span>
-              <span className="pb-1 text-sm text-default-400">
-                of {formatCurrency(totalBudget, { maximumFractionDigits: 0 })} budgeted
-              </span>
-            </div>
-          </div>
+  const isBalanced = remainingToAssignCents === 0 && expectedIncome > 0
+  const isOverAssigned = remainingToAssignCents < 0
+  const remainingToAssign = centsToDollars(Math.abs(remainingToAssignCents))
+  const incomeChanged = Math.max(0, Number(incomeInput) || 0) !== expectedIncome
+  const assignedPercent = expectedIncome > 0
+    ? Math.min((totalBudget / expectedIncome) * 100, 100)
+    : totalBudget > 0
+      ? 100
+      : 0
+  const remainingPercent = expectedIncome > 0 && !isOverAssigned
+    ? Math.max(0, 100 - assignedPercent)
+    : 0
+  const overPercent = expectedIncome > 0 && isOverAssigned
+    ? Math.min((remainingToAssign / expectedIncome) * 100, 100)
+    : totalBudget > 0 && isOverAssigned
+      ? 100
+      : 0
+  const realityBalance = actualIncome - totalSpent
+  const realityVariance = Math.abs(realityBalance)
+  const isRealityDeficit = realityBalance < 0
+  const spentPercent = actualIncome > 0
+    ? Math.min((totalSpent / actualIncome) * 100, 100)
+    : totalSpent > 0
+      ? 100
+      : 0
+  const surplusPercent = actualIncome > 0 && !isRealityDeficit
+    ? Math.max(0, 100 - spentPercent)
+    : 0
+  const deficitPercent = actualIncome > 0 && isRealityDeficit
+    ? Math.min((realityVariance / actualIncome) * 100, 100)
+    : totalSpent > 0 && isRealityDeficit
+      ? 100
+      : 0
+  const statusLabel = isBalanced
+    ? 'Balanced'
+    : isOverAssigned
+      ? `${formatCurrency(remainingToAssign, { maximumFractionDigits: 0 })} overassigned`
+      : `${formatCurrency(remainingToAssign, { maximumFractionDigits: 0 })} left to assign`
+  const statusDetail = isBalanced
+    ? 'Every dollar assigned'
+    : isOverAssigned
+      ? 'Reduce allocations'
+      : 'Assign remaining income'
 
-          <div className="rounded-2xl border border-divider/40 bg-default-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-default-400">Active Categories</p>
-            <p className="mt-2 text-2xl font-bold text-foreground">{activeCategories}</p>
-          </div>
-          <div className="rounded-2xl border border-divider/40 bg-default-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-default-400">Total Categories</p>
-            <p className="mt-2 text-2xl font-bold text-foreground">{totalCategories}</p>
-          </div>
-          <div className="rounded-2xl border border-divider/40 bg-default-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-default-400">Budget Coverage</p>
-            <p className="mt-2 text-2xl font-bold text-foreground">
-              {totalBudget > 0 ? `${Math.round(Math.min((totalSpent / totalBudget) * 100, 999))}%` : '0%'}
-            </p>
+  return (
+    <Card className="overflow-hidden border border-divider/60 bg-content1 shadow-none">
+      <CardContent className="p-0">
+        <div className={`relative border-l-4 ${
+          isBalanced ? 'border-l-success' : isOverAssigned ? 'border-l-danger' : 'border-l-warning'
+        }`}>
+          <Dropdown>
+            <DropdownTrigger
+              aria-label="About zero-based budgeting"
+              className="absolute right-3 top-3 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-divider/50 bg-background/85 text-default-500 shadow-sm transition-colors hover:border-primary/50 hover:text-primary"
+            >
+              <InfoIcon size={16} />
+            </DropdownTrigger>
+            <DropdownPopover className="w-80 border border-divider/60 p-0 shadow-xl">
+              <div className="p-4">
+                <p className="text-sm font-bold text-foreground">Why zero-based budgeting?</p>
+                <p className="mt-2 text-sm leading-5 text-default-500">
+                  This view helps you give every expected income dollar a job before the month happens, so the plan is intentional instead of reactive.
+                </p>
+                <div className="mt-3 grid gap-2 text-sm text-default-600">
+                  <div className="flex gap-2">
+                    <CheckCircle2Icon size={15} className="mt-0.5 shrink-0 text-success" />
+                    <span>See immediately whether income is fully assigned.</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <CheckCircle2Icon size={15} className="mt-0.5 shrink-0 text-success" />
+                    <span>Catch overbudgeting before spending begins.</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <CheckCircle2Icon size={15} className="mt-0.5 shrink-0 text-success" />
+                    <span>Separate the monthly plan from actual spending.</span>
+                  </div>
+                </div>
+              </div>
+            </DropdownPopover>
+          </Dropdown>
+
+          <div className="grid gap-4 px-4 py-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-center">
+            <div className="flex min-w-0 items-center gap-3 lg:w-64">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+                isBalanced ? 'bg-success/15 text-success' : isOverAssigned ? 'bg-danger/15 text-danger' : 'bg-warning/15 text-warning'
+              }`}>
+                {isBalanced ? <CheckCircle2Icon size={22} /> : <AlertTriangleIcon size={22} />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-default-500">Zero-Based Budget</p>
+                <p className={`truncate text-xl font-black leading-tight ${
+                  isBalanced ? 'text-success' : isOverAssigned ? 'text-danger' : 'text-warning'
+                }`}>
+                  {statusLabel}
+                </p>
+                <p className="truncate text-xs text-default-500">{statusDetail}</p>
+              </div>
+            </div>
+
+            <div className="min-w-0 w-full">
+              <div className="grid w-full gap-4 md:grid-cols-[minmax(0,1fr)_20rem] md:items-center">
+                <div className="grid min-w-0 gap-4 md:max-w-2xl md:flex-1 xl:max-w-3xl">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-default-400">Plan</p>
+                      <div className="flex items-center gap-3 text-xs font-semibold text-default-500">
+                        <span>{formatCurrency(totalBudget, { maximumFractionDigits: 0 })} budgeted</span>
+                        <span className={isBalanced ? 'text-success' : isOverAssigned ? 'text-danger' : 'text-warning'}>
+                          {isOverAssigned ? '+' : ''}{formatCurrency(remainingToAssign, { maximumFractionDigits: 0 })} {isOverAssigned ? 'over' : 'remaining'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-4 overflow-hidden rounded-full border border-divider/40 bg-default-100 shadow-inner">
+                      <div className="flex h-full w-full">
+                        <div
+                          className="h-full bg-success"
+                          style={{ width: `${assignedPercent}%` }}
+                        />
+                        {remainingPercent > 0 ? (
+                          <div
+                            className="h-full bg-warning/35"
+                            style={{ width: `${remainingPercent}%` }}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                    {overPercent > 0 ? (
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-danger/10">
+                        <div className="h-full rounded-full bg-danger" style={{ width: `${overPercent}%` }} />
+                      </div>
+                    ) : null}
+                    <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-medium text-default-400">
+                      <span>Expected {formatCurrency(expectedIncome, { maximumFractionDigits: 0 })}</span>
+                      <span>Budgeted {formatCurrency(totalBudget, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-default-400">Reality</p>
+                      <div className="flex items-center gap-3 text-xs font-semibold text-default-500">
+                        <span>{formatCurrency(totalSpent, { maximumFractionDigits: 0 })} spent</span>
+                        <span className={isRealityDeficit ? 'text-danger' : 'text-success'}>
+                          {formatCurrency(realityVariance, { maximumFractionDigits: 0 })} {isRealityDeficit ? 'deficit' : 'surplus'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-4 overflow-hidden rounded-full border border-divider/40 bg-default-100 shadow-inner">
+                      <div className="flex h-full w-full">
+                        <div
+                          className={isRealityDeficit ? 'h-full bg-danger' : 'h-full bg-[#0ea5e9]'}
+                          style={{ width: `${spentPercent}%` }}
+                        />
+                        {surplusPercent > 0 ? (
+                          <div
+                            className="h-full bg-success/25"
+                            style={{ width: `${surplusPercent}%` }}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                    {deficitPercent > 0 ? (
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-danger/10">
+                        <div className="h-full rounded-full bg-danger" style={{ width: `${deficitPercent}%` }} />
+                      </div>
+                    ) : null}
+                    <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-medium text-default-400">
+                      <span>Received {formatCurrency(actualIncome, { maximumFractionDigits: 0 })}</span>
+                      <span>Spent {formatCurrency(totalSpent, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-2 shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--color-accent)_12%,transparent)]">
+                  <label className="min-w-0 flex-1 cursor-text">
+                    <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-default-500">
+                      <PencilIcon size={10} />
+                      Edit income
+                    </span>
+                    <span className="flex items-center gap-2 rounded-lg border border-divider/60 bg-background px-2.5 py-1.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+                      <span className="text-base font-black text-default-400">$</span>
+                      <input
+                        aria-label="Expected monthly income"
+                        inputMode="decimal"
+                        value={incomeInput}
+                        onChange={(event) => onIncomeInputChange(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.currentTarget.blur()
+                            onSaveIncome()
+                          }
+                        }}
+                        className="min-w-0 flex-1 bg-transparent text-lg font-black tracking-tight text-foreground outline-none"
+                        placeholder="0"
+                      />
+                    </span>
+                    {incomeChanged ? (
+                      <span className="mt-1 block text-[10px] font-semibold text-primary">Unsaved change</span>
+                    ) : null}
+                  </label>
+                  {incomeChanged ? (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="shrink-0 rounded-lg px-3"
+                      onPress={onSaveIncome}
+                      isDisabled={savingIncome}
+                    >
+                      {savingIncome ? <Loader2Icon size={14} className="animate-spin" /> : null}
+                      Save
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -338,9 +564,628 @@ function CategoriesSummary({
   )
 }
 
+function MonthlyBudgetInput({
+  categoryId,
+  month,
+  value,
+  onSaved,
+}: {
+  categoryId: number
+  month: string
+  value: number
+  onSaved: () => void
+}) {
+  const [draft, setDraft] = useState(String(value || ''))
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setDraft(String(value || ''))
+  }, [value])
+
+  const save = async () => {
+    const amount = Math.max(0, Number(draft) || 0)
+    if (amount === value) return
+    setSaving(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (updateMonthlyAllocation as any)({ data: { month, categoryId, amount } })
+      onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
+      <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Budgeted</p>
+      <div className="mt-1 flex items-center gap-2">
+        <span className="text-xs font-bold text-default-400">$</span>
+        <input
+          aria-label="Monthly budget"
+          inputMode="decimal"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={save}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.currentTarget.blur()
+              save()
+            }
+          }}
+          className="min-w-0 flex-1 bg-transparent text-sm font-bold text-foreground outline-none"
+          placeholder="0"
+        />
+        {saving ? <Loader2Icon size={14} className="animate-spin text-default-400" /> : null}
+      </div>
+    </div>
+  )
+}
+
+const TAG_COLORS = [
+  '#ff1f2d', '#ff5b0a', '#fb8500', '#c97909',
+  '#bf8500', '#f6c500', '#8a9900', '#09a10f',
+  '#12b3b0', '#2d8bed', '#5b4ff5', '#a735f4',
+  '#d31fe9', '#f51bb8', '#f50f5d', '#6680b3',
+]
+
+function StyledCheckbox({
+  checked,
+  onChange,
+  onClick,
+  ariaLabel,
+}: {
+  checked: boolean
+  onChange: () => void
+  onClick?: (event: React.MouseEvent<HTMLInputElement>) => void
+  ariaLabel: string
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className="h-4 w-4 shrink-0 cursor-pointer rounded border border-default-300 bg-content2 accent-primary"
+    />
+  )
+}
+
+function getTransactionTags(tx: LoadedTransaction): LoadedTag[] {
+  return (tx.tags ?? [])
+    .map((entry) => entry.tag)
+    .filter((tag): tag is LoadedTag => Boolean(tag))
+}
+
+function CategoryActionPicker({
+  categories,
+  selectedCategoryId,
+  onChange,
+  ariaLabel,
+}: {
+  categories: LoadedGroup[]
+  selectedCategoryId: number | null
+  onChange: (categoryId: number | null) => void
+  ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLowerCase()
+  const groups = categories
+    .filter((group) => group.name.toLowerCase() !== 'income')
+    .map((group) => ({
+      ...group,
+      children: group.children.filter((child) =>
+        !query ||
+        child.name.toLowerCase().includes(query) ||
+        group.name.toLowerCase().includes(query)
+      ),
+    }))
+    .filter((group) => group.children.length > 0)
+
+  return (
+    <Popover
+      isOpen={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (!nextOpen) setSearch('')
+      }}
+    >
+      <PopoverTrigger>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-divider/50 bg-background text-default-600 transition-colors hover:border-primary/40 hover:text-primary"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <PieChartIcon size={15} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 overflow-hidden rounded-2xl border border-divider bg-content1 p-0 shadow-xl">
+        <div className="flex max-h-[min(30rem,calc(100vh-4rem))] min-h-0 flex-col">
+          <div className="flex items-center gap-2 border-b border-divider px-4 py-3">
+            <SearchIcon size={16} className="text-default-400" />
+            <input
+              autoFocus
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search categories"
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-default-400"
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto py-1">
+            {groups.map((group) => (
+              <div key={group.id} className="px-1.5 pb-1.5">
+                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-default-400">
+                  {group.icon} {group.name}
+                </div>
+                {group.children.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(category.id)
+                      setOpen(false)
+                    }}
+                    className={`flex w-full cursor-pointer items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left text-sm transition-all ${
+                      selectedCategoryId === category.id
+                        ? 'border-success/50 bg-success/10 text-success'
+                        : 'border-transparent text-default-700 hover:border-divider hover:bg-content2 hover:text-foreground'
+                    }`}
+                  >
+                    <span className="text-base leading-none">{category.icon}</span>
+                    <span className="min-w-0 flex-1 truncate">{category.name}</span>
+                    {selectedCategoryId === category.id ? <CheckIcon size={13} className="shrink-0" /> : null}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-divider px-1.5 py-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                onChange(null)
+                setOpen(false)
+              }}
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-transparent px-2.5 py-2 text-left text-sm text-default-700 transition-all hover:border-divider hover:bg-content2 hover:text-foreground"
+            >
+              <XIcon size={14} className="shrink-0" />
+              <span>Uncategorized</span>
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function TagActionPicker({
+  tags,
+  targetTransactions,
+  onRefresh,
+}: {
+  tags: LoadedTag[]
+  targetTransactions: LoadedTransaction[]
+  onRefresh: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState(TAG_COLORS[11])
+  const [saving, setSaving] = useState(false)
+  const transactionIds = targetTransactions.map((tx) => tx.id)
+  const query = search.trim().toLowerCase()
+  const filteredTags = tags.filter((tag) => !query || tag.name.toLowerCase().includes(query))
+
+  const tagIsSelectedForAll = useCallback((tagId: number) => {
+    return targetTransactions.length > 0 && targetTransactions.every((tx) =>
+      getTransactionTags(tx).some((tag) => tag.id === tagId)
+    )
+  }, [targetTransactions])
+
+  const toggleTag = async (tag: LoadedTag) => {
+    if (!transactionIds.length) return
+    setSaving(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (setTagForTransactions as any)({
+        data: {
+          transactionIds,
+          tagId: tag.id,
+          selected: !tagIsSelectedForAll(tag.id),
+        },
+      })
+      onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!newTagName.trim() || !transactionIds.length) return
+    setSaving(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const created = await (createTag as any)({ data: { name: newTagName, color: newTagColor } })
+      if (created?.id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (setTagForTransactions as any)({
+          data: { transactionIds, tagId: created.id, selected: true },
+        })
+      }
+      setNewTagName('')
+      setNewTagColor(TAG_COLORS[11])
+      setCreating(false)
+      setOpen(false)
+      onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <Popover
+        isOpen={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen)
+          if (!nextOpen) setSearch('')
+        }}
+      >
+        <PopoverTrigger>
+          <button
+            type="button"
+            aria-label="Manage tags"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-divider/50 bg-background text-default-600 transition-colors hover:border-primary/40 hover:text-primary"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <TagIcon size={15} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 overflow-hidden rounded-2xl border border-divider bg-content1 p-0 shadow-xl">
+          <div className="flex max-h-[min(28rem,calc(100vh-4rem))] min-h-0 flex-col">
+            <div className="flex items-center gap-3 border-b border-divider px-4 py-3">
+              <SearchIcon size={17} className="text-default-400" />
+              <input
+                autoFocus
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search"
+                className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-default-400"
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              {filteredTags.length === 0 ? (
+                <div className="px-2 py-6 text-center text-sm text-default-400">No tags yet</div>
+              ) : (
+                filteredTags.map((tag) => {
+                  const checked = tagIsSelectedForAll(tag.id)
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag)}
+                      className="group flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-default-100"
+                    >
+                      <StyledCheckbox
+                        checked={checked}
+                        onChange={() => toggleTag(tag)}
+                        onClick={(event) => event.stopPropagation()}
+                        ariaLabel={`Toggle tag ${tag.name}`}
+                      />
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{tag.name}</span>
+                      <MoreVerticalIcon size={14} className="text-default-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                    </button>
+                  )
+                })
+              )}
+            </div>
+            <div className="border-t border-divider px-3 py-3">
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-default-100"
+              >
+                <PlusIcon size={17} className="text-default-500" />
+                <span>New tag</span>
+              </button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      <Modal
+        isOpen={creating}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !saving) setCreating(false)
+        }}
+      >
+        <ModalBackdrop variant="opaque" className="bg-black/45">
+          <ModalContainer placement="top" className="pt-10 sm:pt-16">
+            <ModalDialog className="w-full max-w-xl overflow-hidden rounded-2xl border border-divider bg-background p-0 shadow-2xl">
+              <div className="border-b border-divider px-7 py-5">
+                <p className="text-xl font-bold text-foreground">Create a new tag</p>
+              </div>
+              <ModalBody className="px-7 py-6">
+                <label className="block">
+                  <span className="mb-2 block text-base font-bold text-foreground">Name</span>
+                  <Input
+                    autoFocus
+                    value={newTagName}
+                    onChange={(event) => setNewTagName(event.target.value)}
+                    placeholder="Tag name"
+                    aria-label="Tag name"
+                  />
+                </label>
+                <div className="mt-5">
+                  <p className="mb-3 text-base font-bold text-foreground">Color</p>
+                  <div className="grid grid-cols-8 gap-3">
+                    {TAG_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        aria-label={`Select color ${color}`}
+                        onClick={() => setNewTagColor(color)}
+                        className="flex aspect-square min-h-12 items-center justify-center rounded-xl"
+                        style={{ backgroundColor: color }}
+                      >
+                        {newTagColor === color ? <CheckIcon size={22} className="text-white" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </ModalBody>
+              <ModalFooter className="justify-end border-t border-divider px-7 py-5">
+                <Button
+                  variant="primary"
+                  onPress={handleCreate}
+                  isDisabled={saving || !newTagName.trim()}
+                >
+                  {saving ? <Loader2Icon size={14} className="animate-spin" /> : null}
+                  Create
+                </Button>
+              </ModalFooter>
+            </ModalDialog>
+          </ModalContainer>
+        </ModalBackdrop>
+      </Modal>
+    </>
+  )
+}
+
+function TransactionActionTable({
+  transactions,
+  categories,
+  tags,
+  onRefresh,
+}: {
+  transactions: LoadedTransaction[]
+  categories: LoadedGroup[]
+  tags: LoadedTag[]
+  onRefresh: () => void
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(transactions.map((tx) => tx.id))
+      const next = new Set<number>()
+      prev.forEach((id) => {
+        if (validIds.has(id)) next.add(id)
+      })
+      return next
+    })
+  }, [transactions])
+
+  const selectedTransactions = useMemo(
+    () => transactions.filter((tx) => selectedIds.has(tx.id)),
+    [selectedIds, transactions]
+  )
+  const allSelected = transactions.length > 0 && transactions.every((tx) => selectedIds.has(tx.id))
+  const allSelectedAreInternal = selectedTransactions.length > 0 && selectedTransactions.every((tx) => tx.isInternalTransfer)
+
+  const toggleOne = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const setInternalTransfer = async (ids: number[], isInternalTransfer: boolean) => {
+    if (!ids.length) return
+    setSaving(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (setTransactionsInternalTransfer as any)({ data: { ids, isInternalTransfer } })
+      onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const setCategory = async (ids: number[], categoryId: number | null) => {
+    if (!ids.length) return
+    setSaving(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (updateTransactionsCategory as any)({ data: { ids, categoryId } })
+      onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const grouped = transactions.reduce((acc, tx) => {
+    const date = new Date(tx.date)
+    const key = date.toISOString().slice(0, 10)
+    const label = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    const existing = acc.find((group) => group.key === key)
+    if (existing) existing.transactions.push(tx)
+    else acc.push({ key, label, transactions: [tx] })
+    return acc
+  }, [] as Array<{ key: string; label: string; transactions: LoadedTransaction[] }>)
+
+  if (transactions.length === 0) {
+    return (
+      <div className="px-5 py-10 text-center text-sm italic text-default-400">
+        No transactions for this view
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <div className="border-b border-divider/30 px-5 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-default-400">
+            Transactions
+          </p>
+          <button
+            type="button"
+            className="text-xs font-semibold text-default-500 transition-colors hover:text-primary"
+            onClick={() => {
+              setSelectedIds(allSelected ? new Set() : new Set(transactions.map((tx) => tx.id)))
+            }}
+          >
+            {allSelected ? 'Clear' : 'Select all'}
+          </button>
+        </div>
+      </div>
+
+      <div className="divide-y divide-divider/20">
+        {grouped.map((group) => (
+          <div key={group.key}>
+            <div className="bg-default-50/70 px-5 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
+              {group.label}
+            </div>
+            {group.transactions.map((tx) => {
+              const checked = selectedIds.has(tx.id)
+              const txTags = getTransactionTags(tx)
+              return (
+                <div
+                  key={tx.id}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors ${
+                    checked ? 'bg-primary/10' : 'hover:bg-default-50'
+                  }`}
+                >
+                  <StyledCheckbox
+                    checked={checked}
+                    onChange={() => toggleOne(tx.id)}
+                    ariaLabel={`Select transaction ${tx.merchantName}`}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{tx.merchantName}</p>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-default-400">
+                      {tx.account?.name ? <span className="truncate">{tx.account.name}</span> : null}
+                      {tx.isInternalTransfer ? <span className="rounded-full bg-warning/15 px-1.5 py-0.5 font-semibold text-warning">Transfer</span> : null}
+                      {txTags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center gap-1 rounded-full bg-default-100 px-1.5 py-0.5 text-[11px] font-medium text-default-600"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CategoryActionPicker
+                      categories={categories}
+                      selectedCategoryId={tx.categoryId}
+                      ariaLabel={`Change category for ${tx.merchantName}`}
+                      onChange={(categoryId) => setCategory([tx.id], categoryId)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={tx.isInternalTransfer ? 'Unmark internal transfer' : 'Mark internal transfer'}
+                      onClick={() => setInternalTransfer([tx.id], !tx.isInternalTransfer)}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-sm font-black transition-colors ${
+                        tx.isInternalTransfer
+                          ? 'border-warning/50 bg-warning/15 text-warning'
+                          : 'border-divider/50 bg-background text-default-600 hover:border-primary/40 hover:text-primary'
+                      }`}
+                    >
+                      T
+                    </button>
+                    <TagActionPicker tags={tags} targetTransactions={[tx]} onRefresh={onRefresh} />
+                    <span className={`ml-1 w-20 shrink-0 text-right text-sm font-bold tabular-nums ${tx.amount < 0 ? 'text-success' : 'text-foreground'}`}>
+                      {formatCurrency(tx.amount, { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {selectedTransactions.length > 0 ? (
+        <div className="sticky bottom-3 z-10 mx-5 mb-3 mt-4 flex w-[calc(100%-2.5rem)] items-center gap-2 rounded-2xl border border-divider bg-content1/95 p-2 shadow-xl backdrop-blur">
+          <button
+            type="button"
+            aria-label="Clear selection"
+            onClick={() => setSelectedIds(new Set())}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-divider/50 bg-background text-foreground transition-colors hover:text-danger"
+          >
+            <XIcon size={16} />
+          </button>
+          <span className="min-w-0 flex-1 whitespace-nowrap text-sm font-bold text-foreground">
+            {selectedTransactions.length} selected
+          </span>
+          {saving ? <Loader2Icon size={16} className="animate-spin text-default-400" /> : null}
+          <CategoryActionPicker
+            categories={categories}
+            selectedCategoryId={selectedTransactions[0]?.categoryId ?? null}
+            ariaLabel="Change selected categories"
+            onChange={(categoryId) => setCategory(selectedTransactions.map((tx) => tx.id), categoryId)}
+          />
+          <button
+            type="button"
+            aria-label={allSelectedAreInternal ? 'Unmark selected internal transfers' : 'Mark selected internal transfers'}
+            onClick={() => setInternalTransfer(selectedTransactions.map((tx) => tx.id), !allSelectedAreInternal)}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-sm font-black transition-colors ${
+              allSelectedAreInternal
+                ? 'border-warning/50 bg-warning/15 text-warning'
+                : 'border-divider/50 bg-background text-default-600 hover:border-primary/40 hover:text-primary'
+            }`}
+          >
+            T
+          </button>
+          <TagActionPicker tags={tags} targetTransactions={selectedTransactions} onRefresh={onRefresh} />
+          <Dropdown>
+            <DropdownTrigger
+              aria-label="Bulk transaction actions"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-divider/50 bg-background text-default-600 transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              <MoreVerticalIcon size={16} />
+            </DropdownTrigger>
+            <DropdownPopover>
+              <DropdownMenu aria-label="Bulk transaction actions">
+                <DropdownItem key="select-all" onAction={() => setSelectedIds(new Set(transactions.map((tx) => tx.id)))}>
+                  Select all
+                </DropdownItem>
+                <DropdownItem key="clear" onAction={() => setSelectedIds(new Set())}>
+                  Unselect all
+                </DropdownItem>
+              </DropdownMenu>
+            </DropdownPopover>
+          </Dropdown>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function Categories() {
   const router = useRouter()
-  const { groups, transactions } = Route.useLoaderData()
+  const { groups, transactions, budgets, tags } = Route.useLoaderData()
   const { viewDate } = useTimeTravel()
   const refresh = useCallback(() => router.invalidate(), [router])
   const { modal, setModal, deletingId, closeModal, handleModalSuccess, handleDelete } = useCategoryModal(refresh)
@@ -349,10 +1194,69 @@ function Categories() {
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null)
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set())
   const [detailOpen, setDetailOpen] = useState(false)
+  const [incomeInput, setIncomeInput] = useState('')
+  const [savingIncome, setSavingIncome] = useState(false)
 
-  const monthTransactions = useMemo(
-    () => transactions.filter(tx => tx.amount > 0 && isSameMonth(tx.date, viewDate)),
+  const monthKey = useMemo(() => getMonthKey(viewDate), [viewDate])
+  const monthlyBudget = useMemo<LoadedMonthlyBudget | null>(
+    () => budgets.find((budget) => budget.month === monthKey) ?? null,
+    [budgets, monthKey]
+  )
+  const allocationByCategoryId = useMemo(() => {
+    return new Map(
+      (monthlyBudget?.allocations ?? []).map((allocation) => [
+        allocation.categoryId,
+        centsToDollars(allocation.amountCents),
+      ])
+    )
+  }, [monthlyBudget])
+  const expectedIncome = centsToDollars(monthlyBudget?.expectedIncomeCents ?? 0)
+
+  useEffect(() => {
+    setIncomeInput(expectedIncome ? String(expectedIncome) : '')
+  }, [expectedIncome, monthKey])
+
+  const saveExpectedIncome = useCallback(async () => {
+    const expectedIncomeValue = Math.max(0, Number(incomeInput) || 0)
+    if (expectedIncomeValue === expectedIncome) return
+    setSavingIncome(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (updateExpectedIncome as any)({ data: { month: viewDate, expectedIncome: expectedIncomeValue } })
+      refresh()
+    } finally {
+      setSavingIncome(false)
+    }
+  }, [expectedIncome, incomeInput, refresh, viewDate])
+
+  const monthAllTransactions = useMemo(
+    () => transactions.filter(tx => isSameMonth(tx.date, viewDate)),
     [transactions, viewDate]
+  )
+  const budgetedMonthTransactions = useMemo(
+    () => monthAllTransactions.filter(tx => !tx.isInternalTransfer),
+    [monthAllTransactions]
+  )
+  const incomeCategoryIds = useMemo(() => {
+    const ids = new Set<number>()
+    groups
+      .filter((group) => group.name.toLowerCase() === 'income')
+      .forEach((group) => group.children.forEach((child) => ids.add(child.id)))
+    return ids
+  }, [groups])
+  const monthTransactions = useMemo(
+    () => budgetedMonthTransactions.filter(tx => tx.amount > 0 && (!tx.categoryId || !incomeCategoryIds.has(tx.categoryId))),
+    [budgetedMonthTransactions, incomeCategoryIds]
+  )
+  const monthDetailTransactions = useMemo(
+    () => monthAllTransactions.filter(tx => tx.amount > 0 && (!tx.categoryId || !incomeCategoryIds.has(tx.categoryId))),
+    [incomeCategoryIds, monthAllTransactions]
+  )
+  const actualIncome = useMemo(
+    () => budgetedMonthTransactions
+      .filter(tx => tx.amount < 0 || (tx.categoryId && incomeCategoryIds.has(tx.categoryId)))
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
+    [budgetedMonthTransactions, incomeCategoryIds]
   )
 
   const categoryMetrics = useMemo(() => {
@@ -372,8 +1276,10 @@ function Categories() {
       const children = group.children
         .map(child => {
           const metrics = categoryMetrics.get(child.id)
+          const allocationAmount = allocationByCategoryId.get(child.id) ?? child.budgetAmount
           return {
             ...child,
+            allocationAmount,
             spent: metrics?.spent ?? 0,
             txCount: metrics?.txCount ?? 0,
             transactions: metrics?.transactions ?? [],
@@ -385,7 +1291,7 @@ function Categories() {
         })
 
       const spent = children.reduce((sum, child) => sum + child.spent, 0)
-      const budget = children.reduce((sum, child) => sum + child.budgetAmount, 0)
+      const budget = children.reduce((sum, child) => sum + child.allocationAmount, 0)
       const txCount = children.reduce((sum, child) => sum + child.txCount, 0)
 
       return {
@@ -397,19 +1303,28 @@ function Categories() {
         activeChildren: children.filter(child => child.spent > 0).length,
       }
     })
-  }, [categoryMetrics, groups])
+  }, [allocationByCategoryId, categoryMetrics, groups])
 
   const totals = useMemo(() => {
-    const totalSpent = derivedGroups.reduce((sum, group) => sum + group.spent, 0)
-    const totalBudget = derivedGroups.reduce((sum, group) => sum + group.budget, 0)
-    const totalCategories = derivedGroups.reduce((sum, group) => sum + group.children.length, 0)
-    const activeCategories = derivedGroups.reduce(
+    const expenseGroups = derivedGroups.filter((group) => group.name.toLowerCase() !== 'income')
+    const totalSpent = expenseGroups.reduce((sum, group) => sum + group.spent, 0)
+    const totalBudget = expenseGroups.reduce((sum, group) => sum + group.budget, 0)
+    const totalBudgetCents = Math.round(totalBudget * 100)
+    const totalCategories = expenseGroups.reduce((sum, group) => sum + group.children.length, 0)
+    const activeCategories = expenseGroups.reduce(
       (sum, group) => sum + group.children.filter(child => child.spent > 0).length,
       0
     )
 
-    return { totalSpent, totalBudget, totalCategories, activeCategories }
-  }, [derivedGroups])
+    return {
+      totalSpent,
+      totalBudget,
+      totalBudgetCents,
+      totalCategories,
+      activeCategories,
+      remainingToAssignCents: (monthlyBudget?.expectedIncomeCents ?? 0) - totalBudgetCents,
+    }
+  }, [derivedGroups, monthlyBudget])
 
   useEffect(() => {
     if (!derivedGroups.length) {
@@ -497,8 +1412,8 @@ function Categories() {
       dailySpent.set(day, (dailySpent.get(day) ?? 0) + tx.amount)
     })
 
-    const dailyBudget = selectedChild.budgetAmount > 0
-      ? selectedChild.budgetAmount / daysInMonth
+    const dailyBudget = selectedChild.allocationAmount > 0
+      ? selectedChild.allocationAmount / daysInMonth
       : 0
 
     return Array.from({ length: daysInMonth }, (_, idx) => {
@@ -518,23 +1433,27 @@ function Categories() {
     if (!selectedGroup) return []
 
     if (selectedChild) {
-      return selectedChild.transactions
+      return monthDetailTransactions
+        .filter((tx) => tx.categoryId === selectedChild.id)
         .slice()
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     }
 
     const groupCategoryIds = new Set(selectedGroup.children.map((child) => child.id))
-    return monthTransactions
+    return monthDetailTransactions
       .filter((tx) => tx.categoryId && groupCategoryIds.has(tx.categoryId))
       .slice()
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [monthTransactions, selectedChild, selectedGroup])
+  }, [monthDetailTransactions, selectedChild, selectedGroup])
 
   const selectedRowId = selectedChildId !== null
     ? `child-${selectedChildId}`
     : selectedGroupId !== null
       ? `group-${selectedGroupId}`
       : null
+  const selectedBudget = selectedChild ? selectedChild.allocationAmount : selectedGroup?.budget ?? 0
+  const selectedSpent = selectedChild ? selectedChild.spent : selectedGroup?.spent ?? 0
+  const selectedAvailable = selectedBudget - selectedSpent
 
   const tableRows = useMemo<CategoryTableRow[]>(() => {
     const rows: CategoryTableRow[] = []
@@ -564,7 +1483,7 @@ function Categories() {
             name: child.name,
             icon: child.icon,
             spent: child.spent,
-            budget: child.budgetAmount,
+            budget: child.allocationAmount,
             txCount: child.txCount,
             childCount: 0,
             activeChildren: 0,
@@ -639,7 +1558,7 @@ function Categories() {
         cell: ({ row }) => <BudgetProgress spent={row.original.spent} budget={row.original.budget} />,
       }),
       columnHelper.accessor('budget', {
-        header: () => <span className="block text-left">Budget</span>,
+        header: () => <span className="block text-left">Budgeted</span>,
         cell: ({ row, getValue }) => (
           <span className={`block text-left ${row.original.kind === 'group' ? 'text-base font-semibold text-foreground' : 'text-sm font-semibold text-foreground'}`}>
             {formatCurrency(getValue(), { maximumFractionDigits: 0 })}
@@ -704,10 +1623,15 @@ function Categories() {
       </div>
 
       <CategoriesSummary
+        expectedIncome={expectedIncome}
+        actualIncome={actualIncome}
         totalSpent={totals.totalSpent}
         totalBudget={totals.totalBudget}
-        activeCategories={totals.activeCategories}
-        totalCategories={totals.totalCategories}
+        remainingToAssignCents={totals.remainingToAssignCents}
+        incomeInput={incomeInput}
+        savingIncome={savingIncome}
+        onIncomeInputChange={setIncomeInput}
+        onSaveIncome={saveExpectedIncome}
       />
 
       {groups.length === 0 ? (
@@ -726,7 +1650,11 @@ function Categories() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className={`grid items-start gap-4 ${
+          detailOpen
+            ? 'md:grid-cols-[minmax(0,1fr)_minmax(24rem,28rem)]'
+            : 'xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]'
+        }`}>
           <Card className="overflow-hidden border border-divider/60 bg-content1 shadow-none">
             <CardContent className="p-0">
               <div className="overflow-hidden">
@@ -799,19 +1727,10 @@ function Categories() {
             </CardContent>
           </Card>
 
-          {detailOpen ? (
-            <button
-              type="button"
-              aria-label="Close category details"
-              className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm xl:hidden"
-              onClick={() => setDetailOpen(false)}
-            />
-          ) : null}
-
           <Card className={[
             'overflow-hidden border border-divider/60 bg-content1 shadow-none',
             detailOpen
-              ? 'fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto rounded-none xl:static xl:z-auto xl:w-auto xl:max-w-none xl:rounded-2xl'
+              ? 'block'
               : 'hidden xl:block',
           ].join(' ')}>
             <CardContent className="p-0">
@@ -825,16 +1744,16 @@ function Categories() {
                           onClick={() => setModal(selectedChild
                             ? { mode: 'edit-child', category: selectedChild }
                             : { mode: 'edit-group', category: selectedGroup })}
-                          className="group relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-2xl border border-divider/40 bg-default-50 text-2xl transition-colors hover:bg-default-100"
+                          className="group relative flex aspect-square h-12 w-12 min-w-12 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-divider/40 bg-default-50 text-2xl transition-colors hover:bg-default-100"
                           aria-label={selectedChild ? 'Edit category icon' : 'Edit group icon'}
                           title={selectedChild ? 'Edit category icon' : 'Edit group icon'}
                         >
                           <span>{selectedChild?.icon ?? selectedGroup.icon}</span>
-                          <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
                             <PencilIcon size={14} className="text-white" />
                           </span>
                         </button>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">
                             {selectedChild ? selectedChild.name : selectedGroup.name}
                           </h2>
@@ -843,27 +1762,6 @@ function Categories() {
                               ? `${selectedGroup.name}`
                               : 'Spending this month'}
                           </p>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <div className="rounded-xl border border-divider/40 bg-default-50 px-3 py-2">
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-default-400">Spent</p>
-                              <p className="text-base font-bold text-foreground">
-                                {formatCurrency(selectedChild?.spent ?? selectedGroup.spent, { maximumFractionDigits: 0 })}
-                              </p>
-                            </div>
-                            <div className="rounded-xl border border-divider/40 bg-default-50 px-3 py-2">
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-default-400">Budget</p>
-                              <p className="text-base font-bold text-foreground">
-                                {formatCurrency(selectedChild?.budgetAmount ?? selectedGroup.budget, { maximumFractionDigits: 0 })}
-                              </p>
-                            </div>
-                            <div className="rounded-xl border border-divider/40 bg-default-50 px-3 py-2">
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-default-400">Left</p>
-                              <p className={`text-base font-bold ${(selectedChild ? selectedChild.budgetAmount : selectedGroup.budget) - (selectedChild ? selectedChild.spent : selectedGroup.spent) < 0 ? 'text-danger' : 'text-success'}`}>
-                                {((selectedChild ? selectedChild.budgetAmount : selectedGroup.budget) - (selectedChild ? selectedChild.spent : selectedGroup.spent)) < 0 ? '-' : ''}
-                                {formatCurrency(Math.abs((selectedChild ? selectedChild.budgetAmount : selectedGroup.budget) - (selectedChild ? selectedChild.spent : selectedGroup.spent)), { maximumFractionDigits: 0 })}
-                              </p>
-                            </div>
-                          </div>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -941,6 +1839,34 @@ function Categories() {
                         </Button>
                       </div>
                     </div>
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
+                        <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Spent</p>
+                        <p className="truncate text-sm font-bold text-foreground">
+                          {formatCurrency(selectedChild?.spent ?? selectedGroup.spent, { maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                      <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
+                        <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Left</p>
+                        <p className={`truncate text-sm font-bold ${selectedAvailable < 0 ? 'text-danger' : 'text-success'}`}>
+                          {selectedAvailable < 0 ? '-' : ''}
+                          {formatCurrency(Math.abs(selectedAvailable), { maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                      {selectedChild ? (
+                        <MonthlyBudgetInput
+                          categoryId={selectedChild.id}
+                          month={viewDate}
+                          value={selectedChild.allocationAmount}
+                          onSaved={refresh}
+                        />
+                      ) : (
+                        <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
+                          <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Categories</p>
+                          <p className="truncate text-sm font-bold text-foreground">{selectedGroup.children.length}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="border-b border-divider/30 px-5 py-4">
@@ -950,43 +1876,19 @@ function Categories() {
                       </p>
                       <p className="text-sm font-semibold text-default-600">
                         {selectedChild
-                          ? `${formatCurrency(selectedChild.spent, { maximumFractionDigits: 0 })} / ${formatCurrency(selectedChild.budgetAmount, { maximumFractionDigits: 0 })}`
+                          ? `${formatCurrency(selectedChild.spent, { maximumFractionDigits: 0 })} / ${formatCurrency(selectedChild.allocationAmount, { maximumFractionDigits: 0 })}`
                           : formatCurrency(selectedGroup.spent, { maximumFractionDigits: 0 })}
                       </p>
                     </div>
                     <SpendingChart data={chartData} showBudgetLine={Boolean(selectedChild)} />
                   </div>
 
-                  <div className="flex flex-col">
-                      <div className="border-b border-divider/30 px-5 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-default-400">
-                          Transactions
-                        </p>
-                      </div>
-                      {selectedTransactions.length === 0 ? (
-                        <div className="px-5 py-10 text-center text-sm italic text-default-400">
-                          No transactions for this view
-                        </div>
-                      ) : (
-                        selectedTransactions.slice(0, 12).map((tx, idx) => (
-                          <div
-                            key={tx.id}
-                            className={`flex items-start justify-between gap-3 px-5 py-3 ${idx < Math.min(selectedTransactions.length, 12) - 1 ? 'border-b border-divider/20' : ''}`}
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-foreground">{tx.merchantName}</p>
-                              <p className="text-xs text-default-400">
-                                {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                {tx.account?.name ? ` · ${tx.account.name}` : ''}
-                              </p>
-                            </div>
-                            <p className="shrink-0 text-sm font-semibold text-foreground">
-                              {formatCurrency(tx.amount, { maximumFractionDigits: 0 })}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                  </div>
+                  <TransactionActionTable
+                    transactions={selectedTransactions}
+                    categories={groups}
+                    tags={tags}
+                    onRefresh={refresh}
+                  />
                 </>
               ) : null}
             </CardContent>
@@ -1185,7 +2087,7 @@ function CategoryModal({ modal, onClose, onSuccess }: CategoryModalProps) {
 
             {!isGroup && (
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-default-400 font-medium">Monthly Budget <span className="text-default-300">(optional)</span></label>
+                <label className="text-xs text-default-400 font-medium">Default Budget <span className="text-default-300">(optional)</span></label>
                 <div className="rounded-2xl border border-divider/50 bg-default-50/70 px-3 py-3">
                   <input
                     aria-label="Monthly budget slider"

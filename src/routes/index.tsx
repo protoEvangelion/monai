@@ -7,11 +7,12 @@ import {
   Line,
   Tooltip as ChartTooltip,
 } from 'recharts';
-import { ChevronRightIcon } from 'lucide-react';
+import { CheckCircle2Icon, ChevronRightIcon } from 'lucide-react';
 import { formatCurrency } from '../lib/format';
 import { getCategoriesWithSpending } from '../server/categories';
 import { getTransactions } from '../server/transactions';
 import { getAccounts, getNetWorthHistory } from '../server/accounts';
+import { getMonthlyBudgets } from '../server/budget';
 import { useTimeTravel } from '../store/useTimeTravel'
 import { ReviewTable } from '../components/ReviewTable';
 import { useMemo } from 'react'
@@ -25,13 +26,14 @@ export const Route = createFileRoute('/')({
   component: Dashboard,
   beforeLoad: async () => await authStateFn(),
   loader: async () => {
-    const [categories, transactions, accounts, netWorthHistory] = await Promise.all([
+    const [categories, transactions, accounts, netWorthHistory, budgets] = await Promise.all([
       getCategoriesWithSpending(),
       getTransactions(),
       getAccounts(),
       getNetWorthHistory(),
+      getMonthlyBudgets(),
     ])
-    return { categories, transactions, accounts, netWorthHistory }
+    return { categories, transactions, accounts, netWorthHistory, budgets }
   },
 })
 
@@ -45,18 +47,30 @@ type CategoriesData = Awaited<ReturnType<typeof getCategoriesWithSpending>>
 type TransactionsData = Awaited<ReturnType<typeof getTransactions>>
 type AccountsData = Awaited<ReturnType<typeof getAccounts>>
 type NetWorthData = Awaited<ReturnType<typeof getNetWorthHistory>>
+type MonthlyBudgetsData = Awaited<ReturnType<typeof getMonthlyBudgets>>
+
+function getMonthKey(value: Date | string) {
+  const date = new Date(value)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function centsToDollars(cents: number) {
+  return cents / 100
+}
 
 function useDashboardMetrics({
   categories,
   transactions,
   accounts,
   netWorthHistory,
+  budgets,
   viewDate,
 }: {
   categories: CategoriesData
   transactions: TransactionsData
   accounts: AccountsData
   netWorthHistory: NetWorthData
+  budgets: MonthlyBudgetsData
   viewDate: string
 }) {
   return useMemo(() => {
@@ -71,11 +85,34 @@ function useDashboardMetrics({
       return d.getFullYear() === year && d.getMonth() === month
     })
 
-    const totalBudgeted = categories.reduce(
-      (sum, g) => sum + g.children.reduce((s, c) => s + c.budgetAmount, 0), 0
+    const monthKey = getMonthKey(viewDate)
+    const monthlyBudget = budgets.find((budget) => budget.month === monthKey)
+    const allocationByCategoryId = new Map(
+      (monthlyBudget?.allocations ?? []).map((allocation) => [
+        allocation.categoryId,
+        centsToDollars(allocation.amountCents),
+      ])
     )
-    const totalSpent = monthTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0)
+    const incomeCategoryIds = new Set<number>()
+    categories
+      .filter((group) => group.name.toLowerCase() === 'income')
+      .forEach((group) => group.children.forEach((child) => incomeCategoryIds.add(child.id)))
+
+    const expenseGroups = categories.filter((group) => group.name.toLowerCase() !== 'income')
+    const totalBudgeted = expenseGroups.reduce(
+      (sum, g) => sum + g.children.reduce((s, c) => s + (allocationByCategoryId.get(c.id) ?? c.budgetAmount), 0), 0
+    )
+    const budgetableMonthTxns = monthTxns.filter(tx => !tx.isInternalTransfer)
+
+    const totalSpent = budgetableMonthTxns
+      .filter(t => t.amount > 0 && (!t.categoryId || !incomeCategoryIds.has(t.categoryId)))
+      .reduce((s, t) => s + t.amount, 0)
     const totalLeft = totalBudgeted - totalSpent
+    const expectedIncome = centsToDollars(monthlyBudget?.expectedIncomeCents ?? 0)
+    const remainingToAssignCents = (monthlyBudget?.expectedIncomeCents ?? 0) - Math.round(totalBudgeted * 100)
+    const actualIncome = budgetableMonthTxns
+      .filter(tx => tx.amount < 0 || (tx.categoryId && incomeCategoryIds.has(tx.categoryId)))
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0)
 
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month
     const lastDay = isCurrentMonth ? today.getDate() : daysInMonth
@@ -146,9 +183,9 @@ function useDashboardMetrics({
       ? netWorthHistory
       : currentMonthNetWorthChartData
 
-    const { catSpend, catCount } = monthTxns.reduce(
+    const { catSpend, catCount } = budgetableMonthTxns.reduce(
       (acc, tx) => {
-        if (tx.category && tx.amount > 0) {
+        if (tx.category && tx.amount > 0 && !incomeCategoryIds.has(tx.category.id)) {
           acc.catSpend[tx.category.id] = (acc.catSpend[tx.category.id] || 0) + tx.amount
           acc.catCount[tx.category.id] = (acc.catCount[tx.category.id] || 0) + 1
         }
@@ -157,13 +194,13 @@ function useDashboardMetrics({
       { catSpend: {} as Record<number, number>, catCount: {} as Record<number, number> }
     )
 
-    const topGroups = categories
+    const topGroups = expenseGroups
       .map(g => ({
         id: g.id,
         name: g.name,
         icon: g.icon,
         totalSpent: g.children.reduce((s, c) => s + (catSpend[c.id] || 0), 0),
-        totalBudget: g.children.reduce((s, c) => s + c.budgetAmount, 0),
+        totalBudget: g.children.reduce((s, c) => s + (allocationByCategoryId.get(c.id) ?? c.budgetAmount), 0),
         txCount: g.children.reduce((s, c) => s + (catCount[c.id] || 0), 0),
       }))
       .filter(g => g.totalSpent > 0)
@@ -179,13 +216,17 @@ function useDashboardMetrics({
       netWorth,
       netWorthChartData,
       topGroups,
+      expectedIncome,
+      actualIncome,
+      remainingToAssignCents,
+      isZeroBasedBalanced: remainingToAssignCents === 0 && expectedIncome > 0,
       overBudget: totalBudgeted > 0 && totalLeft < 0,
     }
-  }, [categories, transactions, accounts, netWorthHistory, viewDate])
+  }, [categories, transactions, accounts, netWorthHistory, budgets, viewDate])
 }
 
 function Dashboard() {
-  const { categories, transactions, accounts, netWorthHistory } = Route.useLoaderData()
+  const { categories, transactions, accounts, netWorthHistory, budgets } = Route.useLoaderData()
   const { viewDate } = useTimeTravel()
   const {
     totalBudgeted,
@@ -196,12 +237,17 @@ function Dashboard() {
     netWorth,
     netWorthChartData,
     topGroups,
+    expectedIncome,
+    actualIncome,
+    remainingToAssignCents,
+    isZeroBasedBalanced,
     overBudget,
   } = useDashboardMetrics({
     categories,
     transactions,
     accounts,
     netWorthHistory,
+    budgets,
     viewDate,
   })
 
@@ -302,44 +348,68 @@ function Dashboard() {
         {/* Spending / Budget */}
         <div className="bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-5">
-            <h5 className="font-bold text-sm">Budget</h5>
+            <h5 className="font-bold text-sm">Zero-based budget</h5>
             <Link to="/categories" className="flex items-center gap-1 text-xs text-default-400 hover:text-foreground transition-colors">
               Categories <ChevronRightIcon size={14} />
             </Link>
           </div>
-          {totalBudgeted === 0 ? (
-            <p className="text-sm text-default-300 text-center py-6">Set budgets in Categories to track spending</p>
+          {totalBudgeted === 0 && expectedIncome === 0 ? (
+            <p className="text-sm text-default-300 text-center py-6">Set expected income and allocations in Categories</p>
           ) : (
             <div className="space-y-4">
+              <div className={`rounded-2xl border px-4 py-3 ${
+                isZeroBasedBalanced
+                  ? 'border-success/40 bg-success/10 text-success'
+                  : remainingToAssignCents < 0
+                    ? 'border-danger/40 bg-danger/10 text-danger'
+                    : 'border-warning/40 bg-warning/10 text-warning'
+              }`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">
+                      {isZeroBasedBalanced ? 'Ready' : remainingToAssignCents < 0 ? 'Overassigned' : 'Left to assign'}
+                    </div>
+                    <div className="mt-1 text-xl font-black tabular-nums">
+                      {isZeroBasedBalanced
+                        ? 'Every dollar is assigned'
+                        : formatCurrency(Math.abs(centsToDollars(remainingToAssignCents)), { maximumFractionDigits: 0 })}
+                    </div>
+                  </div>
+                  {isZeroBasedBalanced ? <CheckCircle2Icon size={20} /> : null}
+                </div>
+              </div>
+
               <div className="flex justify-between">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-default-400 mb-1">Spent</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-default-400 mb-1">Expected income</div>
                   <div className="text-2xl font-black text-foreground tabular-nums">
-                    {formatCurrency(totalSpent, { maximumFractionDigits: 0 })}
+                    {formatCurrency(expectedIncome, { maximumFractionDigits: 0 })}
+                  </div>
+                  <div className="text-xs text-default-400">
+                    {formatCurrency(actualIncome, { maximumFractionDigits: 0 })} received
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-default-400 mb-1">
-                    {overBudget ? 'Over' : 'Left'}
-                  </div>
-                  <div className={`text-2xl font-black tabular-nums ${overBudget ? 'text-danger' : 'text-success'}`}>
-                    {formatCurrency(Math.abs(totalLeft), { maximumFractionDigits: 0 })}
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-default-400 mb-1">Budgeted</div>
+                  <div className="text-2xl font-black text-foreground tabular-nums">
+                    {formatCurrency(totalBudgeted, { maximumFractionDigits: 0 })}
                   </div>
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-default-400 mb-2">
-                  <span>Budgeted</span>
-                  <span>{Math.min((totalSpent / totalBudgeted) * 100, 999).toFixed(0)}%</span>
+                  <span>Spent</span>
+                  <span>{totalBudgeted > 0 ? Math.min((totalSpent / totalBudgeted) * 100, 999).toFixed(0) : '0'}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-default-100 overflow-hidden">
                   <div
                     className={`h-full rounded-full ${overBudget ? 'bg-danger' : 'bg-success'}`}
-                    style={{ width: `${Math.min((totalSpent / totalBudgeted) * 100, 100)}%` }}
+                    style={{ width: `${totalBudgeted > 0 ? Math.min((totalSpent / totalBudgeted) * 100, 100) : 0}%` }}
                   />
                 </div>
                 <div className="text-default-400 text-xs mt-2">
-                  {formatCurrency(totalBudgeted, { maximumFractionDigits: 0 })} budgeted this month
+                  {formatCurrency(totalSpent, { maximumFractionDigits: 0 })} of {formatCurrency(totalBudgeted, { maximumFractionDigits: 0 })} spent
+                  {overBudget ? ` · ${formatCurrency(Math.abs(totalLeft), { maximumFractionDigits: 0 })} over spending plan` : ''}
                 </div>
               </div>
             </div>

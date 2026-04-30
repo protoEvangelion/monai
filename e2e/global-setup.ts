@@ -41,7 +41,10 @@ export default async function globalSetup() {
 
   // Seed a few unreviewed transactions so the review table is non-empty
   db.exec(`
-    INSERT OR IGNORE INTO transactions (id, account_id, merchant_name, amount, date, is_reviewed)
+    DELETE FROM transaction_tags;
+    DELETE FROM transactions;
+
+    INSERT INTO transactions (id, account_id, merchant_name, amount, date, is_reviewed)
     VALUES
       (1, 1, 'Whole Foods',  42.50, unixepoch('now', '-1 day'), 0),
       (2, 1, 'Uber Eats',    18.75, unixepoch('now', '-2 days'), 0),

@@ -31,6 +31,34 @@ export const categories = sqliteTable('categories', {
   parentId: integer('parent_id'),
 })
 
+export const monthlyBudgets = sqliteTable(
+  'monthly_budgets',
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    userId: text('user_id').notNull(),
+    month: text().notNull(),
+    expectedIncomeCents: integer('expected_income_cents').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+  },
+  (t) => [uniqueIndex('monthly_budgets_user_month_idx').on(t.userId, t.month)],
+)
+
+export const monthlyBudgetAllocations = sqliteTable(
+  'monthly_budget_allocations',
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    monthlyBudgetId: integer('monthly_budget_id')
+      .notNull()
+      .references(() => monthlyBudgets.id),
+    categoryId: integer('category_id')
+      .notNull()
+      .references(() => categories.id),
+    amountCents: integer('amount_cents').notNull().default(0),
+  },
+  (t) => [uniqueIndex('monthly_budget_allocations_budget_category_idx').on(t.monthlyBudgetId, t.categoryId)],
+)
+
 export const transactions = sqliteTable('transactions', {
   id: integer().primaryKey({ autoIncrement: true }),
   accountId: integer('account_id')
@@ -44,7 +72,33 @@ export const transactions = sqliteTable('transactions', {
   note: text(),
   isReviewed: integer('is_reviewed', { mode: 'boolean' }).notNull().default(false),
   isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),
+  isInternalTransfer: integer('is_internal_transfer', { mode: 'boolean' }).notNull().default(false),
 })
+
+export const tags = sqliteTable(
+  'tags',
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    userId: text('user_id').notNull(),
+    name: text().notNull(),
+    color: text().notNull().default('#3b82f6'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+  },
+  (t) => [uniqueIndex('tags_user_name_idx').on(t.userId, t.name)],
+)
+
+export const transactionTags = sqliteTable(
+  'transaction_tags',
+  {
+    transactionId: integer('transaction_id')
+      .notNull()
+      .references(() => transactions.id),
+    tagId: integer('tag_id')
+      .notNull()
+      .references(() => tags.id),
+  },
+  (t) => [uniqueIndex('transaction_tags_tx_tag_idx').on(t.transactionId, t.tagId)],
+)
 
 export const historicalBalances = sqliteTable(
   'historical_balances',
@@ -82,9 +136,25 @@ export const categoriesRelations = relations(categories, ({ one, many }) => ({
   }),
   children: many(categories, { relationName: 'category_hierarchy' }),
   transactions: many(transactions),
+  monthlyBudgetAllocations: many(monthlyBudgetAllocations),
 }))
 
-export const transactionsRelations = relations(transactions, ({ one }) => ({
+export const monthlyBudgetsRelations = relations(monthlyBudgets, ({ many }) => ({
+  allocations: many(monthlyBudgetAllocations),
+}))
+
+export const monthlyBudgetAllocationsRelations = relations(monthlyBudgetAllocations, ({ one }) => ({
+  monthlyBudget: one(monthlyBudgets, {
+    fields: [monthlyBudgetAllocations.monthlyBudgetId],
+    references: [monthlyBudgets.id],
+  }),
+  category: one(categories, {
+    fields: [monthlyBudgetAllocations.categoryId],
+    references: [categories.id],
+  }),
+}))
+
+export const transactionsRelations = relations(transactions, ({ one, many }) => ({
   account: one(accounts, {
     fields: [transactions.accountId],
     references: [accounts.id],
@@ -92,6 +162,22 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
   category: one(categories, {
     fields: [transactions.categoryId],
     references: [categories.id],
+  }),
+  tags: many(transactionTags),
+}))
+
+export const tagsRelations = relations(tags, ({ many }) => ({
+  transactions: many(transactionTags),
+}))
+
+export const transactionTagsRelations = relations(transactionTags, ({ one }) => ({
+  transaction: one(transactions, {
+    fields: [transactionTags.transactionId],
+    references: [transactions.id],
+  }),
+  tag: one(tags, {
+    fields: [transactionTags.tagId],
+    references: [tags.id],
   }),
 }))
 
