@@ -1,0 +1,1 @@
+Before commit run `bun run check`. Verify webapp in vscode simple browser on localhost:3000.
