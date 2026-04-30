@@ -9,6 +9,12 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
 const DB_PATH = process.env.DATABASE_URL!
 
 export default async function globalSetup() {
+  const resolvedDbPath = path.resolve(process.cwd(), DB_PATH)
+  const expectedTestDbPath = path.resolve(process.cwd(), './data/test-e2e.db')
+  if (resolvedDbPath !== expectedTestDbPath) {
+    throw new Error(`Refusing to reset non-test database: ${resolvedDbPath}`)
+  }
+
   // Ensure data directory exists (e.g. on Vercel CI)
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
 
