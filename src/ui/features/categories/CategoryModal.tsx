@@ -1,4 +1,7 @@
 import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
+import { useRouter } from "@tanstack/react-router";
+import { Loader2Icon, PencilIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   Modal,
   ModalBackdrop,
@@ -9,10 +12,7 @@ import {
   Button,
   Input,
 } from "@heroui/react";
-import { PencilIcon, XIcon, Loader2Icon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 import { createCategory, updateCategory } from "../../../server/categories.fns";
-
 type ModalState =
   | { mode: "create-group" }
   | { mode: "create-child"; parentId: number; parentName: string }
@@ -35,22 +35,37 @@ type ModalState =
       };
     };
 
-export function CategoryModal({
-  modal,
-  onClose,
-  onSuccess,
-}: {
-  modal: ModalState;
-  onClose: () => void;
-  onSuccess: () => void;
+export function CategoryModal(props: {
+  modal?: ModalState;
+  onClose?: () => void;
+  onSuccess?: () => void;
+  mode?: "group" | "category";
 }) {
-  const isGroup = modal.mode === "create-group" || modal.mode === "edit-group";
-  const isEdit = modal.mode === "edit-group" || modal.mode === "edit-child";
-
+  const router = useRouter();
+  const onClose = props.onClose ?? (() => router.navigate({ to: "/categories" }));
+  const search =
+    typeof window !== "undefined" && window.location.search
+      ? Object.fromEntries(new URLSearchParams(window.location.search))
+      : {};
+  const mode =
+    props.mode ||
+    (props.modal?.mode === "create-group" || props.modal?.mode === "edit-group"
+      ? "group"
+      : "category");
+  const parentId =
+    props.modal?.mode === "create-child"
+      ? props.modal.parentId
+      : search.parentId
+        ? Number(search.parentId)
+        : undefined;
+  const parentName =
+    props.modal?.mode === "create-child" ? props.modal.parentName : search.parentName || undefined;
+  const isGroup = mode === "group";
   const existing =
-    modal.mode === "edit-group" || modal.mode === "edit-child"
-      ? modal.category
+    props.modal?.mode === "edit-group" || props.modal?.mode === "edit-child"
+      ? props.modal.category
       : null;
+  const isEdit = existing !== null;
 
   const [icon, setIcon] = useState(existing?.icon ?? "");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -58,9 +73,7 @@ export function CategoryModal({
   const iconBtnRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(existing?.name ?? "");
-  const [budget, setBudget] = useState(
-    existing?.budgetAmount ? String(existing.budgetAmount) : "",
-  );
+  const [budget, setBudget] = useState(existing?.budgetAmount ? String(existing.budgetAmount) : "");
   const [saving, setSaving] = useState(false);
   const numericBudget = Math.max(0, Number(budget) || 0);
   const sliderMax = Math.max(2000, Math.ceil(numericBudget / 500) * 500);
@@ -78,8 +91,7 @@ export function CategoryModal({
       }
     };
     document.addEventListener("mousedown", handleClickOutside, true);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside, true);
+    return () => document.removeEventListener("mousedown", handleClickOutside, true);
   }, [showEmojiPicker]);
 
   const toggleEmojiPicker = () => {
@@ -119,30 +131,32 @@ export function CategoryModal({
             name: name.trim(),
             icon: icon.trim() || (isGroup ? "📁" : "📌"),
             budgetAmount: isGroup ? 0 : parseFloat(budget) || 0,
-            parentId: modal.mode === "create-child" ? modal.parentId : null,
+            parentId: !isGroup && parentId ? parentId : null,
           },
         });
       }
-      onSuccess();
+      if (props.onSuccess) props.onSuccess();
+      else onClose();
     } finally {
       setSaving(false);
     }
   };
 
-  const title =
-    modal.mode === "create-group"
+  const title = isEdit
+    ? isGroup
+      ? "Edit Group"
+      : "Edit Category"
+    : isGroup
       ? "New Group"
-      : modal.mode === "create-child"
-        ? `New Category in ${modal.parentName}`
-        : isGroup
-          ? "Edit Group"
-          : "Edit Category";
+      : parentName
+        ? `New Category in ${parentName}`
+        : "New Category";
 
   return (
     <Modal
       isOpen
       onOpenChange={(open) => {
-        if (!open && !saving) onClose();
+        if (!open && !saving && props.onClose) props.onClose();
       }}
     >
       <ModalBackdrop variant="opaque" className="bg-black/60">
@@ -206,9 +220,7 @@ export function CategoryModal({
                     autoFocus
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    placeholder={
-                      isGroup ? "e.g. Food & Dining" : "Category name"
-                    }
+                    placeholder={isGroup ? "e.g. Food & Dining" : "Category name"}
                     required
                   />
                 </div>
@@ -217,8 +229,7 @@ export function CategoryModal({
               {!isGroup && (
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-default-400 font-medium">
-                    Default Budget{" "}
-                    <span className="text-default-300">(optional)</span>
+                    Default Budget <span className="text-default-300">(optional)</span>
                   </label>
                   <div className="rounded-2xl border border-divider/50 bg-default-50/70 px-3 py-3">
                     <input
@@ -255,7 +266,12 @@ export function CategoryModal({
               )}
             </ModalBody>
 
-            <ModalFooter className="flex gap-2 px-5 py-4 border-t border-divider/50">
+            <ModalFooter
+              style={{
+                backgroundColor: "color-mix(in oklch, var(--background) 96%, white 4%)",
+              }}
+              className="flex gap-2 rounded-b-2xl border-t border-divider/50 px-5 py-4"
+            >
               <Button
                 variant="secondary"
                 size="sm"
@@ -272,9 +288,7 @@ export function CategoryModal({
                 onPress={handleSave}
                 isDisabled={saving || !name.trim()}
               >
-                {saving ? (
-                  <Loader2Icon size={14} className="animate-spin" />
-                ) : null}
+                {saving ? <Loader2Icon size={14} className="animate-spin" /> : null}
                 {saving ? "Saving…" : isEdit ? "Save Changes" : "Create"}
               </Button>
             </ModalFooter>

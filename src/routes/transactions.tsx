@@ -24,7 +24,5 @@ export const Route = createFileRoute("/transactions")({
 
 function TransactionsRoute() {
   const { transactions, categories } = Route.useLoaderData();
-  return (
-    <TransactionsScreen transactions={transactions} categories={categories} />
-  );
+  return <TransactionsScreen transactions={transactions} categories={categories} />;
 }

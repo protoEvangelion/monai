@@ -6,6 +6,7 @@ import {
   WalletIcon,
   PieChartIcon,
   ChevronRightIcon,
+  CalendarClockIcon,
   SettingsIcon,
   HelpCircleIcon,
   CreditCardIcon,
@@ -16,6 +17,7 @@ import {
 import HeaderUser from "../integrations/clerk/header-user";
 import { formatCurrency } from "../../lib/format";
 import { useState } from "react";
+import { AppSettingsModal } from "../shared/AppSettingsModal";
 
 export type SidebarAccount = {
   type: string;
@@ -58,15 +60,21 @@ function SidebarLink({
 function SidebarStaticItem({
   icon,
   label,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-default-500/90">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-default-500/90 transition-colors hover:bg-default-200 hover:text-foreground"
+    >
       <span>{icon}</span>
       <span className="text-sm font-medium">{label}</span>
-    </div>
+    </button>
   );
 }
 
@@ -77,6 +85,7 @@ export function AppSidebar({
   sidebarAccounts: SidebarAccount[];
   onClose?: () => void;
 }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     () => new Set(),
   );
@@ -146,11 +155,6 @@ export function AppSidebar({
           label="Dashboard"
         />
         <SidebarLink
-          to="/categories"
-          icon={<PieChartIcon size={18} />}
-          label="Categories"
-        />
-        <SidebarLink
           to="/transactions"
           icon={<ArrowLeftRightIcon size={18} />}
           label="Transactions"
@@ -159,6 +163,21 @@ export function AppSidebar({
           to="/accounts"
           icon={<WalletIcon size={18} />}
           label="Accounts"
+        />
+        <SidebarLink
+          to="/investments"
+          icon={<TrendingUpIcon size={18} />}
+          label="Investments"
+        />
+        <SidebarLink
+          to="/categories"
+          icon={<PieChartIcon size={18} />}
+          label="Categories"
+        />
+        <SidebarLink
+          to="/recurrings"
+          icon={<CalendarClockIcon size={18} />}
+          label="Recurrings"
         />
       </nav>
 
@@ -221,6 +240,7 @@ export function AppSidebar({
           <SidebarStaticItem
             icon={<SettingsIcon size={18} />}
             label="Settings"
+            onClick={() => setSettingsOpen(true)}
           />
           <SidebarStaticItem
             icon={<HelpCircleIcon size={18} />}
@@ -229,6 +249,10 @@ export function AppSidebar({
         </div>
         <div className="h-1" />
       </div>
+      <AppSettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

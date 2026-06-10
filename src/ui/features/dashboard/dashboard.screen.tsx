@@ -61,50 +61,38 @@ function useDashboardMetrics({
     const incomeCategoryIds = new Set<number>();
     categories
       .filter((group) => group.name.toLowerCase() === "income")
-      .forEach((group) =>
-        group.children.forEach((child) => incomeCategoryIds.add(child.id)),
-      );
+      .forEach((group) => group.children.forEach((child) => incomeCategoryIds.add(child.id)));
 
-    const expenseGroups = categories.filter(
-      (group) => group.name.toLowerCase() !== "income",
-    );
+    const expenseGroups = categories.filter((group) => group.name.toLowerCase() !== "income");
     const totalBudgeted = expenseGroups.reduce(
       (sum, g) =>
         sum +
-        g.children.reduce(
-          (s, c) => s + (allocationByCategoryId.get(c.id) ?? c.budgetAmount),
-          0,
-        ),
+        g.children.reduce((s, c) => s + (allocationByCategoryId.get(c.id) ?? c.budgetAmount), 0),
       0,
     );
-    const budgetableMonthTxns = monthTxns.filter(
-      (tx) => !tx.isInternalTransfer,
-    );
+    const budgetableMonthTxns = monthTxns.filter((tx) => tx.transactionType !== "transfer");
 
     const totalSpent = budgetableMonthTxns
       .filter(
         (t) =>
+          t.transactionType === "regular" &&
           t.amount > 0 &&
           (!t.categoryId || !incomeCategoryIds.has(t.categoryId)),
       )
       .reduce((s, t) => s + t.amount, 0);
     const totalLeft = totalBudgeted - totalSpent;
-    const expectedIncome = centsToDollars(
-      monthlyBudget?.expectedIncomeCents ?? 0,
-    );
+    const expectedIncome = centsToDollars(monthlyBudget?.expectedIncomeCents ?? 0);
     const remainingToAssignCents =
-      (monthlyBudget?.expectedIncomeCents ?? 0) -
-      Math.round(totalBudgeted * 100);
+      (monthlyBudget?.expectedIncomeCents ?? 0) - Math.round(totalBudgeted * 100);
     const actualIncome = budgetableMonthTxns
       .filter(
         (tx) =>
-          tx.amount < 0 ||
+          tx.transactionType === "income" ||
           (tx.categoryId && incomeCategoryIds.has(tx.categoryId)),
       )
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-    const isCurrentMonth =
-      today.getFullYear() === year && today.getMonth() === month;
+    const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
     const lastDay = isCurrentMonth ? today.getDate() : daysInMonth;
 
     const totalAssets = accounts
@@ -115,16 +103,13 @@ function useDashboardMetrics({
       .reduce((s, a) => s + Math.abs(a.currentBalance), 0);
     const netWorth = totalAssets - totalDebts;
 
-    const accountTypeById = new Map(
-      accounts.map((account) => [account.id, account.type]),
-    );
+    const accountTypeById = new Map(accounts.map((account) => [account.id, account.type]));
     const { dailyAssetDelta, dailyDebtDelta } = monthTxns.reduce(
       (acc, tx) => {
         const day = new Date(tx.date).getDate();
         const accountType = accountTypeById.get(tx.accountId);
         if (accountType === "cash" || accountType === "investment") {
-          acc.dailyAssetDelta[day] =
-            (acc.dailyAssetDelta[day] || 0) - tx.amount;
+          acc.dailyAssetDelta[day] = (acc.dailyAssetDelta[day] || 0) - tx.amount;
         }
         if (accountType === "credit" || accountType === "loan") {
           acc.dailyDebtDelta[day] = (acc.dailyDebtDelta[day] || 0) + tx.amount;
@@ -146,10 +131,7 @@ function useDashboardMetrics({
       0,
     );
 
-    const currentMonthNetWorthChartData = Array.from(
-      { length: lastDay },
-      (_, i) => i + 1,
-    ).reduce(
+    const currentMonthNetWorthChartData = Array.from({ length: lastDay }, (_, i) => i + 1).reduce(
       (acc, day) => {
         const date = new Date(year, month, day);
         acc.runningAssets += dailyAssetDelta[day] || 0;
@@ -191,13 +173,12 @@ function useDashboardMetrics({
       (acc, tx) => {
         if (
           tx.category &&
+          tx.transactionType === "regular" &&
           tx.amount > 0 &&
           !incomeCategoryIds.has(tx.category.id)
         ) {
-          acc.catSpend[tx.category.id] =
-            (acc.catSpend[tx.category.id] || 0) + tx.amount;
-          acc.catCount[tx.category.id] =
-            (acc.catCount[tx.category.id] || 0) + 1;
+          acc.catSpend[tx.category.id] = (acc.catSpend[tx.category.id] || 0) + tx.amount;
+          acc.catCount[tx.category.id] = (acc.catCount[tx.category.id] || 0) + 1;
         }
         return acc;
       },
@@ -303,18 +284,16 @@ export function DashboardScreen({
   });
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-      {/* ── Left 2/3 ── */}
-      <div className="xl:col-span-2 flex flex-col gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-stretch">
+      {/* Row 1 */}
+      <div className="xl:col-span-2 h-full self-stretch">
         {/* Net Worth */}
-        <div className="bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden">
+        <div className="h-full bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden">
           <div className="flex items-start justify-between px-6 pt-5 pb-3">
             <div>
               <div
                 className={`text-5xl font-black leading-tight tracking-tight ${
-                  accounts.length === 0
-                    ? "text-foreground/20"
-                    : "text-foreground"
+                  accounts.length === 0 ? "text-foreground/20" : "text-foreground"
                 }`}
               >
                 {accounts.length === 0
@@ -338,9 +317,7 @@ export function DashboardScreen({
           <div ref={netWorthChartRef} className="h-[180px] w-full min-w-0">
             {accounts.length === 0 ? (
               <div className="h-full flex items-center justify-center">
-                <p className="text-sm text-default-300">
-                  Connect accounts to see net worth
-                </p>
+                <p className="text-sm text-default-300">Connect accounts to see net worth</p>
               </div>
             ) : netWorthChartSize.width > 0 && netWorthChartSize.height > 0 ? (
               <LineChart
@@ -353,9 +330,7 @@ export function DashboardScreen({
                   content={({ payload }) =>
                     payload?.length ? (
                       <div className="bg-background/90 border border-divider text-xs px-2 py-1 rounded-lg shadow-md">
-                        <div className="mb-1">
-                          {payload[0].payload.dateLabel}
-                        </div>
+                        <div className="mb-1">{payload[0].payload.dateLabel}</div>
                         <div className="text-[#17c964]">
                           Net worth:{" "}
                           {formatCurrency(
@@ -366,15 +341,15 @@ export function DashboardScreen({
                         <div className="text-[#006FEE]">
                           Assets:{" "}
                           {formatCurrency(
-                            (payload.find((item) => item.dataKey === "assets")
-                              ?.value as number) || 0,
+                            (payload.find((item) => item.dataKey === "assets")?.value as number) ||
+                              0,
                           )}
                         </div>
                         <div className="text-[#f31260]">
                           Debts:{" "}
                           {formatCurrency(
-                            (payload.find((item) => item.dataKey === "debts")
-                              ?.value as number) || 0,
+                            (payload.find((item) => item.dataKey === "debts")?.value as number) ||
+                              0,
                           )}
                         </div>
                       </div>
@@ -409,26 +384,11 @@ export function DashboardScreen({
             ) : null}
           </div>
         </div>
-
-        {/* Transactions to Review */}
-        <div className="bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-divider/30">
-            <h5 className="font-bold text-sm">Transactions to review</h5>
-            <Link
-              to="/transactions"
-              className="flex items-center gap-1 text-xs text-default-400 hover:text-foreground transition-colors"
-            >
-              View all <ChevronRightIcon size={14} />
-            </Link>
-          </div>
-          <ReviewTable transactions={transactions} categories={categories} />
-        </div>
       </div>
 
-      {/* ── Right 1/3 ── */}
-      <div className="flex flex-col gap-5">
+      <div className="h-full self-stretch">
         {/* Spending / Budget */}
-        <div className="bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm p-5">
+        <div className="h-full bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-5">
             <h5 className="font-bold text-sm">Zero-based budget</h5>
             <Link
@@ -465,10 +425,9 @@ export function DashboardScreen({
                     <div className="mt-1 text-xl font-black tabular-nums">
                       {isZeroBasedBalanced
                         ? "Every dollar is assigned"
-                        : formatCurrency(
-                            Math.abs(centsToDollars(remainingToAssignCents)),
-                            { maximumFractionDigits: 0 },
-                          )}
+                        : formatCurrency(Math.abs(centsToDollars(remainingToAssignCents)), {
+                            maximumFractionDigits: 0,
+                          })}
                     </div>
                   </div>
                   {isZeroBasedBalanced ? <CheckCircle2Icon size={20} /> : null}
@@ -486,8 +445,7 @@ export function DashboardScreen({
                     })}
                   </div>
                   <div className="text-xs text-default-400">
-                    {formatCurrency(actualIncome, { maximumFractionDigits: 0 })}{" "}
-                    received
+                    {formatCurrency(actualIncome, { maximumFractionDigits: 0 })} received
                   </div>
                 </div>
                 <div className="text-right">
@@ -506,10 +464,7 @@ export function DashboardScreen({
                   <span>Spent</span>
                   <span>
                     {totalBudgeted > 0
-                      ? Math.min(
-                          (totalSpent / totalBudgeted) * 100,
-                          999,
-                        ).toFixed(0)
+                      ? Math.min((totalSpent / totalBudgeted) * 100, 999).toFixed(0)
                       : "0"}
                     %
                   </span>
@@ -524,8 +479,7 @@ export function DashboardScreen({
                 </div>
                 <div className="text-default-400 text-xs mt-2">
                   {formatCurrency(totalSpent, { maximumFractionDigits: 0 })} of{" "}
-                  {formatCurrency(totalBudgeted, { maximumFractionDigits: 0 })}{" "}
-                  spent
+                  {formatCurrency(totalBudgeted, { maximumFractionDigits: 0 })} spent
                   {overBudget
                     ? ` · ${formatCurrency(Math.abs(totalLeft), { maximumFractionDigits: 0 })} over spending plan`
                     : ""}
@@ -534,9 +488,30 @@ export function DashboardScreen({
             </div>
           )}
         </div>
+      </div>
 
+      {/* Row 2 */}
+      <div className="xl:col-span-2 h-full self-stretch">
+        {/* Transactions to Review */}
+        <div className="h-full bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-divider/30">
+            <h5 className="font-bold text-sm">Transactions to review</h5>
+            <Link
+              to="/transactions"
+              className="flex items-center gap-1 text-xs text-default-400 hover:text-foreground transition-colors"
+            >
+              View all <ChevronRightIcon size={14} />
+            </Link>
+          </div>
+          <div className="min-h-0 flex-1">
+            <ReviewTable transactions={transactions} categories={categories} showReviewButton />
+          </div>
+        </div>
+      </div>
+
+      <div className="h-full self-stretch">
         {/* Top Categories */}
-        <div className="bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden">
+        <div className="h-full bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-divider/30">
             <h5 className="font-bold text-sm">Top categories</h5>
             <Link
@@ -565,9 +540,7 @@ export function DashboardScreen({
                     >
                       {cat.txCount}
                     </span>
-                    <span className="flex-1 text-sm font-medium truncate">
-                      {cat.name}
-                    </span>
+                    <span className="flex-1 text-sm font-medium truncate">{cat.name}</span>
                     <span className="text-sm font-semibold tabular-nums">
                       {formatCurrency(cat.totalSpent, {
                         maximumFractionDigits: 0,
@@ -597,7 +570,11 @@ export function DashboardScreen({
             </div>
           )}
         </div>
+      </div>
 
+      <div className="hidden xl:block xl:col-span-2" aria-hidden />
+
+      <div>
         {/* Next Two Weeks */}
         <div className="bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">

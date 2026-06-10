@@ -4,6 +4,109 @@ import { formatCurrency } from "../../../lib/format";
 import { centsToDollars } from "./categories.utils";
 import { EditIncomeField } from "./EditIncomeField";
 
+function BulletMetric({
+  title,
+  actualLabel,
+  targetLabel,
+  actual,
+  target,
+  variant,
+}: {
+  title: string;
+  actualLabel: string;
+  targetLabel: string;
+  actual: number;
+  target: number;
+  variant: "income" | "spending";
+}) {
+  const maxValue = Math.max(actual, target, 1);
+  const fillPercent = Math.min(100, (actual / maxValue) * 100);
+  const targetPercent = Math.min(100, (target / maxValue) * 100);
+  const delta = variant === "income" ? actual - target : target - actual;
+  const isComplete = Math.abs(delta) < 0.005;
+  const isBad = variant === "spending" && delta < 0;
+  const isWarning = variant === "income" && delta < 0;
+  const fillClass =
+    variant === "income"
+      ? actual >= target && target > 0
+        ? "bg-success"
+        : "bg-[#0ea5e9]"
+      : actual > target && target > 0
+        ? "bg-danger"
+        : "bg-success";
+  const deltaLabel = isComplete
+    ? variant === "income"
+      ? "on plan"
+      : "on budget"
+    : variant === "income"
+      ? delta > 0
+        ? `${formatCurrency(delta, { maximumFractionDigits: 0 })} over plan`
+        : `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} remaining`
+      : isBad
+        ? `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} over`
+        : `${formatCurrency(delta, { maximumFractionDigits: 0 })} left`;
+  const actualCompactLabel = `${variant === "income" ? "Recv" : "Spent"} ${formatCurrency(actual, { maximumFractionDigits: 0 })}`;
+  const targetCompactLabel = `${variant === "income" ? "Plan" : "Budget"} ${formatCurrency(target, { maximumFractionDigits: 0 })}`;
+  const deltaCompactLabel = isComplete
+    ? variant === "income"
+      ? "on plan"
+      : "on budget"
+    : variant === "income"
+      ? delta > 0
+        ? `${formatCurrency(delta, { maximumFractionDigits: 0 })} over`
+        : `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} rem`
+      : isBad
+        ? `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} over`
+        : `${formatCurrency(delta, { maximumFractionDigits: 0 })} left`;
+
+  return (
+    <div className="rounded-xl border border-divider/50 bg-background/55 p-3">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-default-400">
+        {title}
+      </p>
+
+      <div
+        aria-label={`${title}: ${actualLabel}, ${targetLabel}`}
+        className="relative h-5 overflow-hidden rounded-full border border-divider/50 bg-default-100 shadow-inner"
+      >
+        <div
+          className={`h-full rounded-full ${fillClass}`}
+          style={{ width: `${fillPercent}%` }}
+        />
+        <div
+          className="absolute top-[-2px] h-7 w-0.5 rounded-full bg-foreground shadow-sm"
+          style={{ left: `calc(${targetPercent}% - 1px)` }}
+        />
+      </div>
+
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-[11px] font-medium text-default-400 sm:gap-3">
+        <span className="truncate text-left">
+          <span className="sm:hidden">{actualCompactLabel}</span>
+          <span className="hidden sm:inline">{actualLabel}</span>
+        </span>
+        <span
+          className={`shrink-0 text-center text-[11px] font-bold sm:text-xs ${
+            isComplete
+              ? "text-success"
+              : isBad
+                ? "text-danger"
+                : isWarning
+                  ? "text-warning"
+                  : "text-success"
+          }`}
+        >
+          <span className="sm:hidden">{deltaCompactLabel}</span>
+          <span className="hidden sm:inline">{deltaLabel}</span>
+        </span>
+        <span className="truncate text-right">
+          <span className="sm:hidden">{targetCompactLabel}</span>
+          <span className="hidden sm:inline">{targetLabel}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function CategoryTopCard({
   expectedIncome,
   actualIncome,
@@ -31,42 +134,9 @@ export function CategoryTopCard({
   const incomeChanged =
     Math.max(0, Number(incomeInput) || 0) !== expectedIncome;
 
-  const assignedPercent =
-    expectedIncome > 0
-      ? Math.min((totalBudget / expectedIncome) * 100, 100)
-      : totalBudget > 0
-        ? 100
-        : 0;
-  const remainingPercent =
-    expectedIncome > 0 && !isOverAssigned
-      ? Math.max(0, 100 - assignedPercent)
-      : 0;
-  const overPercent =
-    expectedIncome > 0 && isOverAssigned
-      ? Math.min((remainingToAssign / expectedIncome) * 100, 100)
-      : totalBudget > 0 && isOverAssigned
-        ? 100
-        : 0;
-
   const realityBalanceRaw = actualIncome - totalSpent;
   const realityBalance =
     Math.abs(realityBalanceRaw) < 0.005 ? 0 : realityBalanceRaw;
-  const realityVariance = Math.abs(realityBalance);
-  const isRealityDeficit = realityBalance < 0;
-  const spentPercent =
-    actualIncome > 0
-      ? Math.min((totalSpent / actualIncome) * 100, 100)
-      : totalSpent > 0
-        ? 100
-        : 0;
-  const surplusPercent =
-    actualIncome > 0 && !isRealityDeficit ? Math.max(0, 100 - spentPercent) : 0;
-  const deficitPercent =
-    actualIncome > 0 && isRealityDeficit
-      ? Math.min((realityVariance / actualIncome) * 100, 100)
-      : totalSpent > 0 && isRealityDeficit
-        ? 100
-        : 0;
 
   const statusLabel = isBalanced
     ? "Balanced"
@@ -167,111 +237,42 @@ export function CategoryTopCard({
               />
             </div>
 
-            {/* Right column: Plan + Reality bars */}
-            <div className="min-w-0 grid gap-4">
-              {/* Plan bar */}
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-default-400">
-                    Plan
-                  </p>
-                  <span
-                    className={`text-xs font-semibold ${isBalanced ? "text-success" : isOverAssigned ? "text-danger" : "text-warning"}`}
-                  >
-                    {isOverAssigned ? "+" : ""}
-                    {formatCurrency(remainingToAssign, {
-                      maximumFractionDigits: 0,
-                    })}{" "}
-                    {isOverAssigned ? "over" : "remaining"}
-                  </span>
-                </div>
-                <div className="h-4 overflow-hidden rounded-full border border-divider/40 bg-default-100 shadow-inner">
-                  <div className="flex h-full w-full">
-                    <div
-                      className="h-full bg-success"
-                      style={{ width: `${assignedPercent}%` }}
-                    />
-                    {remainingPercent > 0 ? (
-                      <div
-                        className="h-full bg-warning/35"
-                        style={{ width: `${remainingPercent}%` }}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-                {overPercent > 0 ? (
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-danger/10">
-                    <div
-                      className="h-full rounded-full bg-danger"
-                      style={{ width: `${overPercent}%` }}
-                    />
-                  </div>
-                ) : null}
-                <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-medium text-default-400">
-                  <span>
-                    Expected{" "}
-                    {formatCurrency(expectedIncome, {
-                      maximumFractionDigits: 0,
-                    })}
-                  </span>
-                  <span>
-                    Budgeted{" "}
-                    {formatCurrency(totalBudget, { maximumFractionDigits: 0 })}
-                  </span>
-                </div>
-              </div>
-
-              {/* Reality bar */}
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-default-400">
-                    Reality
-                  </p>
-                  <span
-                    className={`text-xs font-semibold ${isRealityDeficit ? "text-danger" : "text-success"}`}
-                  >
-                    {formatCurrency(realityVariance, {
-                      maximumFractionDigits: 0,
-                    })}{" "}
-                    {isRealityDeficit ? "deficit" : "surplus"}
-                  </span>
-                </div>
-                <div className="h-4 overflow-hidden rounded-full border border-divider/40 bg-default-100 shadow-inner">
-                  <div className="flex h-full w-full">
-                    <div
-                      className={
-                        isRealityDeficit
-                          ? "h-full bg-danger"
-                          : "h-full bg-[#0ea5e9]"
-                      }
-                      style={{ width: `${spentPercent}%` }}
-                    />
-                    {surplusPercent > 0 ? (
-                      <div
-                        className="h-full bg-success/25"
-                        style={{ width: `${surplusPercent}%` }}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-                {deficitPercent > 0 ? (
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-danger/10">
-                    <div
-                      className="h-full rounded-full bg-danger"
-                      style={{ width: `${deficitPercent}%` }}
-                    />
-                  </div>
-                ) : null}
-                <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-medium text-default-400">
-                  <span>
-                    Received{" "}
-                    {formatCurrency(actualIncome, { maximumFractionDigits: 0 })}
-                  </span>
-                  <span>
-                    Spent{" "}
-                    {formatCurrency(totalSpent, { maximumFractionDigits: 0 })}
-                  </span>
-                </div>
+            <div className="min-w-0 grid gap-3">
+              <BulletMetric
+                title="Income"
+                actualLabel={`Received ${formatCurrency(actualIncome, {
+                  maximumFractionDigits: 0,
+                })}`}
+                targetLabel={`Planned ${formatCurrency(expectedIncome, {
+                  maximumFractionDigits: 0,
+                })}`}
+                actual={actualIncome}
+                target={expectedIncome}
+                variant="income"
+              />
+              <BulletMetric
+                title="Budget"
+                actualLabel={`Spent ${formatCurrency(totalSpent, {
+                  maximumFractionDigits: 0,
+                })}`}
+                targetLabel={`Budgeted ${formatCurrency(totalBudget, {
+                  maximumFractionDigits: 0,
+                })}`}
+                actual={totalSpent}
+                target={totalBudget}
+                variant="spending"
+              />
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-content2/55 px-3 py-2 text-xs font-semibold">
+                <span className="text-default-500">Actual cash flow</span>
+                <span
+                  className={
+                    realityBalance < 0 ? "text-danger" : "text-success"
+                  }
+                >
+                  {formatCurrency(realityBalance, {
+                    maximumFractionDigits: 0,
+                  })}
+                </span>
               </div>
             </div>
           </div>

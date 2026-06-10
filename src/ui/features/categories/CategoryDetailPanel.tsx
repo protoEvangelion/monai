@@ -8,30 +8,22 @@ import {
   DropdownPopover,
   Button,
 } from "@heroui/react";
-import {
-  Loader2Icon,
-  MoreVerticalIcon,
-  PencilIcon,
-  Trash2Icon,
-  XIcon,
-} from "lucide-react";
+import { Loader2Icon, MoreVerticalIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCurrency } from "../../../lib/format";
 import { getCategories } from "../../../server/categories.fns";
 import { getTransactions } from "../../../server/transactions.fns";
-import { getTags } from "../../../server/transactions.fns";
 import { SpendingChart } from "./SpendingChart";
 import { MonthlyBudgetInput } from "./MonthlyBudgetInput";
 import { CategoryActionPicker } from "./CategoryActionPicker";
-import { TagActionPicker } from "./TagActionPicker";
 import {
   setTransactionsInternalTransfer,
+  setTransactionsType,
   updateTransactionsCategory,
 } from "../../../server/transactions.fns";
 
 type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number];
 type LoadedTransaction = Awaited<ReturnType<typeof getTransactions>>[number];
-type LoadedTag = Awaited<ReturnType<typeof getTags>>[number];
 
 type GroupedDay = {
   key: string;
@@ -89,16 +81,9 @@ function StyledCheckbox({
   );
 }
 
-function getTransactionTags(tx: LoadedTransaction): LoadedTag[] {
-  return (tx.tags ?? [])
-    .map((entry) => entry.tag)
-    .filter((tag): tag is LoadedTag => Boolean(tag));
-}
-
 export function CategoryDetailPanel({
   selected,
   selectedGroups,
-  tags,
   viewDate,
   monthLabel,
   chartData,
@@ -112,7 +97,6 @@ export function CategoryDetailPanel({
 }: {
   selected: SelectedItem | null;
   selectedGroups: LoadedGroup[];
-  tags: LoadedTag[];
   viewDate: string;
   monthLabel: string;
   chartData: Array<{
@@ -136,9 +120,7 @@ export function CategoryDetailPanel({
     if (!selected) return [];
     if (selected.kind === "child") return selected.child.transactions;
     return selected.group.children
-      .flatMap(
-        (c) => (c as (typeof selected.group.children)[number]).transactions,
-      )
+      .flatMap((c) => (c as (typeof selected.group.children)[number]).transactions)
       .slice()
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [selected]);
@@ -158,12 +140,10 @@ export function CategoryDetailPanel({
     () => transactions.filter((tx) => selectedIds.has(tx.id)),
     [selectedIds, transactions],
   );
-  const allSelected =
-    transactions.length > 0 &&
-    transactions.every((tx) => selectedIds.has(tx.id));
+  const allSelected = transactions.length > 0 && transactions.every((tx) => selectedIds.has(tx.id));
   const allSelectedAreInternal =
     selectedTransactions.length > 0 &&
-    selectedTransactions.every((tx) => tx.isInternalTransfer);
+    selectedTransactions.every((tx) => tx.transactionType === "transfer");
 
   const toggleOne = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -174,10 +154,7 @@ export function CategoryDetailPanel({
     });
   }, []);
 
-  const setInternalTransfer = async (
-    ids: number[],
-    isInternalTransfer: boolean,
-  ) => {
+  const setInternalTransfer = async (ids: number[], isInternalTransfer: boolean) => {
     if (!ids.length) return;
     setSaving(true);
     try {
@@ -197,6 +174,18 @@ export function CategoryDetailPanel({
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (updateTransactionsCategory as any)({ data: { ids, categoryId } });
+      onRefresh();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setTransactionType = async (ids: number[], transactionType: "income" | "transfer") => {
+    if (!ids.length) return;
+    setSaving(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (setTransactionsType as any)({ data: { ids, transactionType } });
       onRefresh();
     } finally {
       setSaving(false);
@@ -223,18 +212,13 @@ export function CategoryDetailPanel({
 
   if (!selected) return null;
 
-  const isChild = selected.kind === "child";
-  const group = selected.kind === "child" ? selected.group : selected.group;
+  const group = selected.group;
   const child = selected.kind === "child" ? selected.child : null;
-  const selectedSpent =
-    selected.kind === "child" ? selected.child.spent : selected.group.spent;
+  const selectedSpent = selected.kind === "child" ? selected.child.spent : selected.group.spent;
   const selectedBudget =
-    selected.kind === "child"
-      ? selected.child.allocationAmount
-      : selected.group.budget;
+    selected.kind === "child" ? selected.child.allocationAmount : selected.group.budget;
   const selectedAvailableRaw = selectedBudget - selectedSpent;
-  const selectedAvailable =
-    Math.abs(selectedAvailableRaw) < 0.005 ? 0 : selectedAvailableRaw;
+  const selectedAvailable = Math.abs(selectedAvailableRaw) < 0.005 ? 0 : selectedAvailableRaw;
 
   return (
     <Card className="h-full overflow-hidden border border-divider/60 bg-content1 shadow-none flex-1">
@@ -244,9 +228,7 @@ export function CategoryDetailPanel({
             <div className="flex min-w-0 flex-1 items-start gap-3">
               <button
                 type="button"
-                onClick={() =>
-                  child ? onEditChild(child) : onEditGroup(group)
-                }
+                onClick={() => (child ? onEditChild(child) : onEditGroup(group))}
                 className="group relative flex aspect-square h-12 w-12 min-w-12 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-divider/40 bg-default-50 text-2xl transition-colors hover:bg-default-100"
                 aria-label={child ? "Edit category icon" : "Edit group icon"}
               >
@@ -279,10 +261,7 @@ export function CategoryDetailPanel({
                   </DropdownTrigger>
                   <DropdownPopover>
                     <DropdownMenu aria-label="Group actions">
-                      <DropdownItem
-                        key="edit"
-                        onAction={() => onEditGroup(group)}
-                      >
+                      <DropdownItem key="edit" onAction={() => onEditGroup(group)}>
                         <div className="flex items-center gap-2">
                           <PencilIcon size={13} />
                           <span>Edit Group</span>
@@ -315,10 +294,7 @@ export function CategoryDetailPanel({
                   </DropdownTrigger>
                   <DropdownPopover>
                     <DropdownMenu aria-label="Category actions">
-                      <DropdownItem
-                        key="edit"
-                        onAction={() => onEditChild(child)}
-                      >
+                      <DropdownItem key="edit" onAction={() => onEditChild(child)}>
                         <div className="flex items-center gap-2">
                           <PencilIcon size={13} />
                           <span>Edit Category</span>
@@ -353,17 +329,13 @@ export function CategoryDetailPanel({
 
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
-              <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">
-                Spent
-              </p>
+              <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Spent</p>
               <p className="truncate text-sm font-bold text-foreground">
                 {formatCurrency(selectedSpent, { maximumFractionDigits: 0 })}
               </p>
             </div>
             <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
-              <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">
-                Left
-              </p>
+              <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Left</p>
               <p
                 className={`truncate text-sm font-bold ${selectedAvailable < 0 ? "text-danger" : "text-success"}`}
               >
@@ -396,17 +368,14 @@ export function CategoryDetailPanel({
         <div className="border-b border-divider/30 px-5 py-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-default-400">
-              {child
-                ? `${child.name} in ${monthLabel}`
-                : `Spent in ${monthLabel}`}
+              {child ? `${child.name} in ${monthLabel}` : `Spent in ${monthLabel}`}
             </p>
             <p className="text-sm font-semibold text-default-600">
               {child
                 ? `${formatCurrency(child.spent, { maximumFractionDigits: 0 })} / ${formatCurrency(child.allocationAmount, { maximumFractionDigits: 0 })}`
-                : formatCurrency(
-                    selected.kind === "group" ? selected.group.spent : 0,
-                    { maximumFractionDigits: 0 },
-                  )}
+                : formatCurrency(selected.kind === "group" ? selected.group.spent : 0, {
+                    maximumFractionDigits: 0,
+                  })}
             </p>
           </div>
           <SpendingChart data={chartData} showBudgetLine={Boolean(child)} />
@@ -424,9 +393,7 @@ export function CategoryDetailPanel({
                 className="text-xs font-semibold text-default-500 transition-colors hover:text-primary"
                 onClick={() => {
                   setSelectedIds(
-                    allSelected
-                      ? new Set()
-                      : new Set(transactions.map((tx) => tx.id)),
+                    allSelected ? new Set() : new Set(transactions.map((tx) => tx.id)),
                   );
                 }}
               >
@@ -448,7 +415,6 @@ export function CategoryDetailPanel({
                   </div>
                   {g.transactions.map((tx) => {
                     const checked = selectedIds.has(tx.id);
-                    const txTags = getTransactionTags(tx);
                     return (
                       <div
                         key={tx.id}
@@ -465,27 +431,21 @@ export function CategoryDetailPanel({
                           </p>
                           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-default-400">
                             {tx.account?.name ? (
-                              <span className="truncate">
-                                {tx.account.name}
-                              </span>
+                              <span className="truncate">{tx.account.name}</span>
                             ) : null}
-                            {tx.isInternalTransfer ? (
+                            {tx.transactionType === "transfer" ? (
                               <span className="rounded-full bg-warning-soft px-1.5 py-0.5 font-semibold text-warning">
                                 Transfer
                               </span>
                             ) : null}
-                            {txTags.map((tag) => (
-                              <span
-                                key={tag.id}
-                                className="inline-flex items-center gap-1 rounded-full bg-default-100 px-1.5 py-0.5 text-[11px] font-medium text-default-600"
-                              >
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full"
-                                  style={{ backgroundColor: tag.color }}
-                                />
-                                {tag.name}
+                            {tx.transactionType === "income" ? (
+                              <span className="rounded-full bg-success-soft px-1.5 py-0.5 font-semibold text-success">
+                                Income
                               </span>
-                            ))}
+                            ) : null}
+                            {tx.note ? (
+                              <span className="truncate text-default-400">{tx.note}</span>
+                            ) : null}
                           </div>
                         </div>
                         <span
@@ -504,7 +464,12 @@ export function CategoryDetailPanel({
           )}
 
           {selectedTransactions.length > 0 ? (
-            <div className="fixed bottom-4 right-4 z-90 flex w-[calc(40%-2rem)] min-w-64 max-w-104 items-center gap-2 rounded-2xl border border-divider bg-content1/95 p-2 shadow-xl backdrop-blur">
+            <div
+              style={{
+                backgroundColor: "color-mix(in oklch, var(--background) 96%, white 4%)",
+              }}
+              className="fixed bottom-4 right-4 z-90 flex w-[calc(40%-2rem)] min-w-64 max-w-104 items-center gap-2 rounded-2xl border border-divider p-2 shadow-xl"
+            >
               <button
                 type="button"
                 aria-label="Clear selection"
@@ -516,16 +481,18 @@ export function CategoryDetailPanel({
               <span className="min-w-0 flex-1 truncate whitespace-nowrap text-sm font-bold text-foreground">
                 {selectedTransactions.length} selected
               </span>
-              {saving ? (
-                <Loader2Icon
-                  size={16}
-                  className="animate-spin text-default-400"
-                />
-              ) : null}
+              {saving ? <Loader2Icon size={16} className="animate-spin text-default-400" /> : null}
               <CategoryActionPicker
                 categories={selectedGroups}
                 selectedCategoryId={selectedTransactions[0]?.categoryId ?? null}
+                selectedTransactionType={selectedTransactions[0]?.transactionType ?? "regular"}
                 ariaLabel="Change selected categories"
+                onTypeChange={(transactionType) =>
+                  setTransactionType(
+                    selectedTransactions.map((tx) => tx.id),
+                    transactionType,
+                  )
+                }
                 onChange={(categoryId) =>
                   setCategory(
                     selectedTransactions.map((tx) => tx.id),
@@ -554,11 +521,6 @@ export function CategoryDetailPanel({
               >
                 T
               </button>
-              <TagActionPicker
-                tags={tags}
-                targetTransactions={selectedTransactions}
-                onRefresh={onRefresh}
-              />
               <Dropdown>
                 <DropdownTrigger
                   aria-label="Bulk transaction actions"
@@ -570,16 +532,11 @@ export function CategoryDetailPanel({
                   <DropdownMenu aria-label="Bulk transaction actions">
                     <DropdownItem
                       key="select-all"
-                      onAction={() =>
-                        setSelectedIds(new Set(transactions.map((tx) => tx.id)))
-                      }
+                      onAction={() => setSelectedIds(new Set(transactions.map((tx) => tx.id)))}
                     >
                       Select all
                     </DropdownItem>
-                    <DropdownItem
-                      key="clear"
-                      onAction={() => setSelectedIds(new Set())}
-                    >
+                    <DropdownItem key="clear" onAction={() => setSelectedIds(new Set())}>
                       Unselect all
                     </DropdownItem>
                   </DropdownMenu>

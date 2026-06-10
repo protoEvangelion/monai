@@ -1,7 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // Use ephemeral test database for both local and CI runs
-process.env.DATABASE_URL = './data/test-e2e.db'
+const testEnv = {
+  DATABASE_URL: './data/test-e2e.db',
+  MONAI_CREDENTIAL_MODE: 'sandbox',
+  PLAID_ENV: 'sandbox',
+}
+Object.assign(process.env, testEnv)
+
 const localBaseURL = 'http://localhost:3000'
 const baseURL = process.env.BASE_URL || localBaseURL
 
@@ -24,9 +30,10 @@ export default defineConfig({
   webServer: process.env.BASE_URL
     ? undefined
     : {
-        command: process.env.CI ? 'vite preview --port 3000' : 'bun run dev',
-        url: localBaseURL,
-        reuseExistingServer: !process.env.CI,
+      command: process.env.CI ? 'vite preview --port 3000' : 'bun run dev',
+      env: testEnv,
+      url: localBaseURL,
+      reuseExistingServer: process.env.PW_REUSE_SERVER === '1',
         timeout: 60_000,
       },
 })

@@ -55,6 +55,9 @@ export const isMissingPlaidItemError = (error: unknown) => {
   );
 };
 
+export const isPlaidReconnectRequiredError = (error: unknown) =>
+  error instanceof PlaidApiError && error.errorCode === "ITEM_LOGIN_REQUIRED";
+
 export async function deleteLocalItemData(itemId: number) {
   const { db } = await import("../db");
 

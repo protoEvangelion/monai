@@ -1,5 +1,5 @@
 import { categories, transactions } from "../db/schema";
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { match } from "ts-pattern";
 
 type DefaultGroup = {
@@ -10,126 +10,105 @@ type DefaultGroup = {
 
 export const DEFAULT_CATEGORIES: DefaultGroup[] = [
   {
-    name: "Food & Dining",
-    icon: "🍽️",
-    children: [
-      { name: "Groceries", icon: "🛒" },
-      { name: "Restaurants", icon: "🍴" },
-      { name: "Coffee & Drinks", icon: "☕" },
-      { name: "Fast Food", icon: "🍔" },
-    ],
-  },
-  {
-    name: "Home",
+    name: "Household",
     icon: "🏠",
     children: [
-      { name: "Rent / Mortgage", icon: "🏡" },
-      { name: "Utilities", icon: "💡" },
-      { name: "Internet & Phone", icon: "📶" },
-      { name: "Home Maintenance", icon: "🔧" },
+      { name: "Mortgage", icon: "🔑" },
+      { name: "Home", icon: "🏠" },
+      { name: "Electric", icon: "🔋" },
+      { name: "Lawn", icon: "🍃" },
+      { name: "HOA", icon: "💸" },
+      { name: "Cleaning", icon: "🧼" },
+      { name: "Utilities", icon: "🔌" },
+      { name: "Water", icon: "💧" },
+      { name: "Pets", icon: "🐶" },
     ],
   },
   {
-    name: "Transportation",
+    name: "Food",
+    icon: "🥑",
+    children: [
+      { name: "Groceries", icon: "🥑" },
+      { name: "Restaurants", icon: "🍔" },
+    ],
+  },
+  {
+    name: "Giving",
+    icon: "💝",
+    children: [
+      { name: "Church", icon: "💝" },
+      { name: "Gifts", icon: "🎁" },
+    ],
+  },
+  {
+    name: "Other",
+    icon: "🤷‍♂️",
+    children: [
+      { name: "Other", icon: "🤷‍♂️" },
+    ],
+  },
+  {
+    name: "Family",
+    icon: "👨‍👩‍👧‍👦",
+    children: [
+      { name: "Clothing", icon: "👕" },
+      { name: "Education", icon: "📚" },
+      { name: "College", icon: "🔖" },
+      { name: "Baby", icon: "🍼" },
+      { name: "Chores", icon: "🏡" },
+    ],
+  },
+  {
+    name: "Health",
+    icon: "👨‍⚕️",
+    children: [
+      { name: "Doctor", icon: "👨‍⚕️" },
+      { name: "Personal Care", icon: "✂️" },
+      { name: "Gym", icon: "👟" },
+      { name: "Drugs", icon: "💊" },
+    ],
+  },
+  {
+    name: "Fun",
+    icon: "🎟",
+    children: [
+      { name: "Entertainment", icon: "🎟" },
+      { name: "Travel", icon: "🚙" },
+      { name: "Hunting", icon: "🔫" },
+    ],
+  },
+  {
+    name: "Auto",
     icon: "🚗",
     children: [
       { name: "Gas", icon: "⛽" },
-      { name: "Parking", icon: "🅿️" },
-      { name: "Public Transit", icon: "🚌" },
-      { name: "Rideshare", icon: "🚕" },
-      { name: "Car Insurance", icon: "🛡️" },
-      { name: "Car Maintenance", icon: "🔩" },
+      { name: "Car Fund", icon: "🚗" },
+      { name: "Auto Ins", icon: "🚘" },
     ],
   },
   {
-    name: "Shopping",
-    icon: "🛍️",
+    name: "Biz",
+    icon: "📈",
     children: [
-      { name: "Clothing", icon: "👕" },
-      { name: "Electronics", icon: "💻" },
-      { name: "Online Shopping", icon: "📦" },
-      { name: "Home Goods", icon: "🏪" },
-    ],
-  },
-  {
-    name: "Entertainment",
-    icon: "🎬",
-    children: [
-      { name: "Streaming", icon: "📺" },
-      { name: "Movies & Shows", icon: "🎥" },
-      { name: "Games", icon: "🎮" },
-      { name: "Concerts & Events", icon: "🎵" },
-    ],
-  },
-  {
-    name: "Health & Fitness",
-    icon: "💪",
-    children: [
-      { name: "Gym & Fitness", icon: "🏋️" },
-      { name: "Medical", icon: "🏥" },
-      { name: "Pharmacy", icon: "💊" },
-      { name: "Mental Health", icon: "🧠" },
-    ],
-  },
-  {
-    name: "Travel",
-    icon: "✈️",
-    children: [
-      { name: "Flights", icon: "✈️" },
-      { name: "Hotels", icon: "🏨" },
-      { name: "Vacation Activities", icon: "🏖️" },
-    ],
-  },
-  {
-    name: "Income",
-    icon: "💰",
-    children: [
-      { name: "Paycheck", icon: "💵" },
-      { name: "Freelance", icon: "💼" },
-      { name: "Interest & Dividends", icon: "📈" },
-      { name: "Rental Income", icon: "🏘️" },
-    ],
-  },
-  {
-    name: "Personal Care",
-    icon: "🪥",
-    children: [
-      { name: "Haircut & Beauty", icon: "💇" },
-      { name: "Spa & Wellness", icon: "🧖" },
-    ],
-  },
-  {
-    name: "Education",
-    icon: "📚",
-    children: [
-      { name: "Tuition", icon: "🎓" },
-      { name: "Books & Courses", icon: "📖" },
-    ],
-  },
-  {
-    name: "Financial",
-    icon: "🏦",
-    children: [
-      { name: "Credit Card Payment", icon: "💳" },
-      { name: "Loan Payment", icon: "📋" },
-      { name: "Savings Transfer", icon: "🏦" },
-      { name: "Fees & Charges", icon: "⚠️" },
-    ],
-  },
-  {
-    name: "Miscellaneous",
-    icon: "📦",
-    children: [
-      { name: "Gifts", icon: "🎁" },
-      { name: "Donations", icon: "🤝" },
-      { name: "Other", icon: "❓" },
+      { name: "Work Expenses", icon: "💼" },
     ],
   },
 ];
 
 // Old group names that should be merged into a canonical default group name.
 const GROUP_ALIASES: Record<string, string> = {
-  Food: "Food & Dining",
+  "Food & Dining": "Food",
+  Home: "Household",
+  Transportation: "Auto",
+  Shopping: "Family",
+  Entertainment: "Fun",
+  "Health & Fitness": "Health",
+  Travel: "Fun",
+  Income: "Biz",
+  "Personal Care": "Health",
+  Education: "Family",
+  Financial: "Other",
+  Miscellaneous: "Other",
 };
 
 type DbCategory = {

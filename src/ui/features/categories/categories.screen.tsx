@@ -12,12 +12,8 @@ import { PlusIcon, PieChartIcon, CirclePlusIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { getCategories } from "../../../server/categories.fns";
-import {
-  getMonthlyBudgets,
-  updateExpectedIncome,
-} from "../../../server/budget.fns";
+import { getMonthlyBudgets, updateExpectedIncome } from "../../../server/budget.fns";
 import { getTransactions } from "../../../server/transactions.fns";
-import { getTags } from "../../../server/transactions.fns";
 import { useTimeTravel } from "../../hooks/useTimeTravel";
 import { isSameMonth, getMonthKey, centsToDollars } from "./categories.utils";
 import { useCategoryModal } from "./categories.hooks";
@@ -29,43 +25,30 @@ import { CategoryModal } from "./CategoryModal";
 
 type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number];
 type LoadedTransaction = Awaited<ReturnType<typeof getTransactions>>[number];
-type LoadedMonthlyBudget = Awaited<
-  ReturnType<typeof getMonthlyBudgets>
->[number];
-type LoadedTag = Awaited<ReturnType<typeof getTags>>[number];
+type LoadedMonthlyBudget = Awaited<ReturnType<typeof getMonthlyBudgets>>[number];
 
 export function CategoriesScreen({
   groups,
   transactions,
   budgets,
-  tags,
 }: {
   groups: LoadedGroup[];
   transactions: LoadedTransaction[];
   budgets: LoadedMonthlyBudget[];
-  tags: LoadedTag[];
 }) {
   const router = useRouter();
   const { viewDate } = useTimeTravel();
   const refresh = useCallback(() => router.invalidate(), [router]);
-  const {
-    modal,
-    setModal,
-    deletingId,
-    closeModal,
-    handleModalSuccess,
-    handleDelete,
-  } = useCategoryModal(refresh);
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(
-    groups[0]?.id ?? null,
-  );
+  const { modal, setModal, deletingId, closeModal, handleModalSuccess, handleDelete } =
+    useCategoryModal(refresh);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(groups[0]?.id ?? null);
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(
-    () => new Set(),
-  );
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set());
   const [detailOpen, setDetailOpen] = useState(false);
   const [incomeInput, setIncomeInput] = useState("");
   const [savingIncome, setSavingIncome] = useState(false);
+
+  // (Reverted: modal auto-open logic removed for stability)
 
   const monthKey = useMemo(() => getMonthKey(viewDate), [viewDate]);
   const monthlyBudget = useMemo<LoadedMonthlyBudget | null>(
@@ -82,9 +65,7 @@ export function CategoriesScreen({
       ),
     [monthlyBudget],
   );
-  const expectedIncome = centsToDollars(
-    monthlyBudget?.expectedIncomeCents ?? 0,
-  );
+  const expectedIncome = centsToDollars(monthlyBudget?.expectedIncomeCents ?? 0);
 
   useEffect(() => {
     setIncomeInput(expectedIncome ? String(expectedIncome) : "");
@@ -118,13 +99,14 @@ export function CategoriesScreen({
     [transactions, viewDate],
   );
   const budgetedMonthTransactions = useMemo(
-    () => monthAllTransactions.filter((tx) => !tx.isInternalTransfer),
+    () => monthAllTransactions.filter((tx) => tx.transactionType !== "transfer"),
     [monthAllTransactions],
   );
   const monthTransactions = useMemo(
     () =>
       budgetedMonthTransactions.filter(
         (tx) =>
+          tx.transactionType === "regular" &&
           tx.amount > 0 &&
           (!tx.categoryId || !incomeCategoryIds.has(tx.categoryId)),
       ),
@@ -135,7 +117,7 @@ export function CategoriesScreen({
       budgetedMonthTransactions
         .filter(
           (tx) =>
-            tx.amount < 0 ||
+            tx.transactionType === "income" ||
             (tx.categoryId && incomeCategoryIds.has(tx.categoryId)),
         )
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
@@ -166,8 +148,7 @@ export function CategoriesScreen({
         const children = group.children
           .map((child) => {
             const metrics = categoryMetrics.get(child.id);
-            const allocationAmount =
-              allocationByCategoryId.get(child.id) ?? child.budgetAmount;
+            const allocationAmount = allocationByCategoryId.get(child.id) ?? child.budgetAmount;
             return {
               ...child,
               allocationAmount,
@@ -176,11 +157,7 @@ export function CategoriesScreen({
               transactions: metrics?.transactions ?? [],
             };
           })
-          .sort((a, b) =>
-            b.spent !== a.spent
-              ? b.spent - a.spent
-              : a.name.localeCompare(b.name),
-          );
+          .sort((a, b) => (b.spent !== a.spent ? b.spent - a.spent : a.name.localeCompare(b.name)));
         const spent = children.reduce((s, c) => s + c.spent, 0);
         const budget = children.reduce((s, c) => s + c.allocationAmount, 0);
         return {
@@ -196,17 +173,14 @@ export function CategoriesScreen({
   );
 
   const totals = useMemo(() => {
-    const expenseGroups = derivedGroups.filter(
-      (g) => g.name.toLowerCase() !== "income",
-    );
+    const expenseGroups = derivedGroups.filter((g) => g.name.toLowerCase() !== "income");
     const totalSpent = expenseGroups.reduce((s, g) => s + g.spent, 0);
     const totalBudget = expenseGroups.reduce((s, g) => s + g.budget, 0);
     return {
       totalSpent,
       totalBudget,
       remainingToAssignCents:
-        (monthlyBudget?.expectedIncomeCents ?? 0) -
-        Math.round(totalBudget * 100),
+        (monthlyBudget?.expectedIncomeCents ?? 0) - Math.round(totalBudget * 100),
     };
   }, [derivedGroups, monthlyBudget]);
 
@@ -241,16 +215,12 @@ export function CategoriesScreen({
   useEffect(() => {
     if (!selectedChildId) return;
     const selectedGroup = derivedGroups.find((g) => g.id === selectedGroupId);
-    if (!selectedGroup?.children.some((c) => c.id === selectedChildId))
-      setSelectedChildId(null);
+    if (!selectedGroup?.children.some((c) => c.id === selectedChildId)) setSelectedChildId(null);
   }, [derivedGroups, selectedChildId, selectedGroupId]);
 
   const selectedGroup =
-    derivedGroups.find((g) => g.id === selectedGroupId) ??
-    derivedGroups[0] ??
-    null;
-  const selectedChild =
-    selectedGroup?.children.find((c) => c.id === selectedChildId) ?? null;
+    derivedGroups.find((g) => g.id === selectedGroupId) ?? derivedGroups[0] ?? null;
+  const selectedChild = selectedGroup?.children.find((c) => c.id === selectedChildId) ?? null;
   const monthLabel = new Date(viewDate).toLocaleDateString("en-US", {
     month: "short",
   });
@@ -258,11 +228,7 @@ export function CategoriesScreen({
   const selectedGroupChartData = useMemo(() => {
     if (!selectedGroup) return [];
     const monthDate = new Date(viewDate);
-    const daysInMonth = new Date(
-      monthDate.getFullYear(),
-      monthDate.getMonth() + 1,
-      0,
-    ).getDate();
+    const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
     const catIds = new Set(selectedGroup.children.map((c) => c.id));
     const dailySpent = new Map<number, number>();
     monthTransactions.forEach((tx) => {
@@ -283,20 +249,14 @@ export function CategoriesScreen({
   const selectedChildChartData = useMemo(() => {
     if (!selectedChild) return [];
     const monthDate = new Date(viewDate);
-    const daysInMonth = new Date(
-      monthDate.getFullYear(),
-      monthDate.getMonth() + 1,
-      0,
-    ).getDate();
+    const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
     const dailySpent = new Map<number, number>();
     selectedChild.transactions.forEach((tx) => {
       const day = new Date(tx.date).getDate();
       dailySpent.set(day, (dailySpent.get(day) ?? 0) + tx.amount);
     });
     const dailyBudget =
-      selectedChild.allocationAmount > 0
-        ? selectedChild.allocationAmount / daysInMonth
-        : 0;
+      selectedChild.allocationAmount > 0 ? selectedChild.allocationAmount / daysInMonth : 0;
     return Array.from({ length: daysInMonth }, (_, idx) => {
       const day = idx + 1;
       return {
@@ -308,9 +268,7 @@ export function CategoriesScreen({
     });
   }, [selectedChild, viewDate]);
 
-  const chartData = selectedChild
-    ? selectedChildChartData
-    : selectedGroupChartData;
+  const chartData = selectedChild ? selectedChildChartData : selectedGroupChartData;
 
   const selectedTransactions = useMemo(() => {
     if (!selectedGroup) return [];
@@ -318,9 +276,7 @@ export function CategoriesScreen({
       return monthTransactions
         .filter((tx) => tx.categoryId === selectedChild.id)
         .slice()
-        .sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-        );
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     const groupCatIds = new Set(selectedGroup.children.map((c) => c.id));
     return monthTransactions
@@ -414,9 +370,13 @@ export function CategoriesScreen({
     };
   }, [selectedChild, selectedGroup, selectedTransactions]);
 
+  useEffect(() => {
+    console.log("allocationByCategoryId:", allocationByCategoryId);
+  }, [allocationByCategoryId]);
+
   return (
     <div className="mx-auto flex w-full max-w-none flex-col gap-5 pb-20">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
         <div className="min-w-0 justify-self-start">
           <h1 className="text-2xl font-bold tracking-tight">Categories</h1>
           <p className="mt-0.5 text-sm text-default-400">
@@ -424,10 +384,10 @@ export function CategoriesScreen({
             {groups.reduce((s, g) => s + g.children.length, 0)} categories
           </p>
         </div>
-        <div className="justify-self-center">
+        <div className="min-w-0 justify-self-stretch sm:justify-self-center">
           <MonthControls transactions={transactions} />
         </div>
-        <div className="flex items-center gap-3 justify-self-end">
+        <div className="flex items-center gap-3 justify-self-start sm:justify-self-end">
           <Dropdown>
             <DropdownTrigger className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_16px_color-mix(in_oklch,var(--color-accent)_45%,transparent)] transition-all hover:brightness-95 hover:shadow-[0_0_22px_color-mix(in_oklch,var(--color-accent)_60%,transparent)] active:scale-95">
               <CirclePlusIcon size={14} />
@@ -435,10 +395,7 @@ export function CategoriesScreen({
             </DropdownTrigger>
             <DropdownPopover>
               <DropdownMenu aria-label="Create actions">
-                <DropdownItem
-                  key="new-group"
-                  onAction={() => setModal({ mode: "create-group" })}
-                >
+                <DropdownItem key="new-group" onAction={() => setModal({ mode: "create-group" })}>
                   <div className="flex items-center gap-2">
                     <PlusIcon size={13} />
                     <span>New Group</span>
@@ -488,15 +445,10 @@ export function CategoriesScreen({
             <div className="flex flex-col gap-1">
               <p className="font-semibold">No categories yet</p>
               <p className="text-sm text-default-400 max-w-xs">
-                Create a group to start organizing your spending and setting
-                budgets.
+                Create a group to start organizing your spending and setting budgets.
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onPress={() => setModal({ mode: "create-group" })}
-            >
+            <Button variant="primary" size="sm" onPress={() => setModal({ mode: "create-group" })}>
               <PlusIcon size={15} /> New Group
             </Button>
           </CardContent>
@@ -521,7 +473,6 @@ export function CategoriesScreen({
             <CategoryDetailPanel
               selected={detailSelected}
               selectedGroups={groups}
-              tags={tags}
               viewDate={viewDate}
               monthLabel={monthLabel}
               chartData={chartData}
@@ -560,7 +511,17 @@ export function CategoriesScreen({
       {modal ? (
         <CategoryModal
           modal={modal}
-          onClose={closeModal}
+          onClose={() => {
+            closeModal();
+            // If we navigated here directly, go back to /categories
+            if (
+              ["/categories/new-group", "/categories/new-category"].includes(
+                router.state.location.pathname,
+              )
+            ) {
+              router.navigate({ to: "/categories" });
+            }
+          }}
           onSuccess={handleModalSuccess}
         />
       ) : null}

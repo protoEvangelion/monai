@@ -1,41 +1,47 @@
-import { createServerFn } from '@tanstack/react-start'
-import { getAuthOrDevAuth } from '../lib/devAuth'
-import { transactions, plaidItems, categories, tags, transactionTags } from '../db/schema'
-import { eq, desc, inArray, and, asc } from 'drizzle-orm'
+import { createServerFn } from "@tanstack/react-start";
+import { getAuthOrDevAuth } from "../lib/devAuth";
+import { transactions, plaidItems, categories } from "../db/schema";
+import { eq, desc, inArray, and } from "drizzle-orm";
 
-async function getUserAccountIds(db: typeof import('../db').db, userId: string) {
+type TransactionType = "regular" | "income" | "transfer";
+
+async function getUserAccountIds(db: typeof import("../db").db, userId: string) {
   const userPlaidItems = await db.query.plaidItems.findMany({
     where: eq(plaidItems.userId, userId),
     with: { accounts: true },
-  })
+  });
 
-  return userPlaidItems.flatMap(item => item.accounts.map(acc => acc.id))
+  return userPlaidItems.flatMap((item) => item.accounts.map((acc) => acc.id));
 }
 
-async function assertTransactionsOwned(db: typeof import('../db').db, userId: string, ids: number[]) {
-  if (ids.length === 0) return []
+async function assertTransactionsOwned(
+  db: typeof import("../db").db,
+  userId: string,
+  ids: number[],
+) {
+  if (ids.length === 0) return [];
 
-  const accountIds = await getUserAccountIds(db, userId)
-  if (accountIds.length === 0) return []
+  const accountIds = await getUserAccountIds(db, userId);
+  if (accountIds.length === 0) return [];
 
   const owned = await db.query.transactions.findMany({
     where: and(inArray(transactions.id, ids), inArray(transactions.accountId, accountIds)),
     columns: { id: true },
-  })
-  const ownedIds = owned.map(tx => tx.id)
-  if (ownedIds.length !== new Set(ids).size) throw new Error('Transaction not found')
-  return ownedIds
+  });
+  const ownedIds = owned.map((tx) => tx.id);
+  if (ownedIds.length !== new Set(ids).size) throw new Error("Transaction not found");
+  return ownedIds;
 }
 
 export const getTransactions = createServerFn().handler(async () => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
 
-  const { db } = await import('../db')
+  const { db } = await import("../db");
 
-  const accountIds = await getUserAccountIds(db, userId)
+  const accountIds = await getUserAccountIds(db, userId);
 
-  if (accountIds.length === 0) return []
+  if (accountIds.length === 0) return [];
 
   const allTransactions = await db.query.transactions.findMany({
     where: inArray(transactions.accountId, accountIds),
@@ -43,194 +49,198 @@ export const getTransactions = createServerFn().handler(async () => {
     with: {
       account: true,
       category: true,
-      tags: {
-        with: {
-          tag: true,
-        },
-      },
-    }
-  })
+    },
+  });
 
-  return allTransactions
-})
+  return allTransactions;
+});
 
 export const markTransactionsReviewed = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { ids } = (ctx as any).data as { ids: number[] }
-  if (!ids.length) return
+  const { ids } = (ctx as any).data as { ids: number[] };
+  if (!ids.length) return;
 
-  const { db } = await import('../db')
+  const { db } = await import("../db");
 
-  const accountIds = await getUserAccountIds(db, userId)
+  const accountIds = await getUserAccountIds(db, userId);
 
   await db
     .update(transactions)
     .set({ isReviewed: true })
-    .where(and(inArray(transactions.id, ids), inArray(transactions.accountId, accountIds)))
-})
+    .where(and(inArray(transactions.id, ids), inArray(transactions.accountId, accountIds)));
+});
 
 export const updateTransactionCategory = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { id, categoryId } = (ctx as any).data as { id: number; categoryId: number | null }
+  const { id, categoryId } = (ctx as any).data as { id: number; categoryId: number | null };
 
-  const { db } = await import('../db')
+  const { db } = await import("../db");
 
-  const accountIds = await getUserAccountIds(db, userId)
+  const accountIds = await getUserAccountIds(db, userId);
 
   if (categoryId !== null) {
-    const cat = await db.query.categories.findFirst({ where: eq(categories.id, categoryId) })
-    if (!cat || cat.userId !== userId) throw new Error('Category not found')
+    const cat = await db.query.categories.findFirst({ where: eq(categories.id, categoryId) });
+    if (!cat || cat.userId !== userId) throw new Error("Category not found");
   }
 
   await db
     .update(transactions)
-    .set({ categoryId })
-    .where(and(eq(transactions.id, id), inArray(transactions.accountId, accountIds)))
-})
+    .set({ categoryId, transactionType: "regular" })
+    .where(and(eq(transactions.id, id), inArray(transactions.accountId, accountIds)));
+});
 
-export const getTags = createServerFn().handler(async () => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
-
-  const { db } = await import('../db')
-
-  return db.query.tags.findMany({
-    where: eq(tags.userId, userId),
-    orderBy: [asc(tags.name)],
-  })
-})
-
-export const createTag = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
+export const createManualTransaction = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { name, color } = (ctx as any).data as { name: string; color: string }
-  const trimmedName = name.trim()
-  if (!trimmedName) throw new Error('Tag name is required')
+  const { accountId, categoryId, merchantName, amount, date, note, transactionType } = (ctx as any)
+    .data as {
+    accountId: number;
+    categoryId: number | null;
+    merchantName: string;
+    amount: number;
+    date: string;
+    note?: string | null;
+    transactionType?: "regular" | "income" | "transfer";
+  };
+  const type = transactionType ?? "regular";
 
-  const { db } = await import('../db')
+  const trimmedName = merchantName.trim();
+  if (!trimmedName) throw new Error("Name is required");
+  if (!Number.isFinite(amount) || amount === 0) throw new Error("Amount is required");
 
-  const existing = await db.query.tags.findFirst({
-    where: and(eq(tags.userId, userId), eq(tags.name, trimmedName)),
-  })
-  if (existing) return existing
+  const { db } = await import("../db");
+  const accountIds = await getUserAccountIds(db, userId);
+  if (!accountIds.includes(accountId)) throw new Error("Account not found");
+
+  if (categoryId !== null) {
+    const cat = await db.query.categories.findFirst({ where: eq(categories.id, categoryId) });
+    if (!cat || cat.userId !== userId || cat.parentId === null)
+      throw new Error("Category not found");
+  }
 
   const [created] = await db
-    .insert(tags)
-    .values({ userId, name: trimmedName, color })
-    .returning()
+    .insert(transactions)
+    .values({
+      accountId,
+      categoryId: type === "regular" ? categoryId : null,
+      name: trimmedName,
+      merchantName: trimmedName,
+      amount,
+      date: new Date(date),
+      note: note?.trim() || null,
+      isReviewed: true,
+      transactionType: type,
+    })
+    .returning();
 
-  return created
-})
+  return created;
+});
 
 export const setTransactionsInternalTransfer = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { ids, isInternalTransfer } = (ctx as any).data as { ids: number[]; isInternalTransfer: boolean }
-  if (!ids.length) return
+  const { ids, isInternalTransfer } = (ctx as any).data as {
+    ids: number[];
+    isInternalTransfer: boolean;
+  };
+  if (!ids.length) return;
 
-  const { db } = await import('../db')
-  const ownedIds = await assertTransactionsOwned(db, userId, ids)
-  if (!ownedIds.length) return
+  const { db } = await import("../db");
+  const ownedIds = await assertTransactionsOwned(db, userId, ids);
+  if (!ownedIds.length) return;
 
   await db
     .update(transactions)
-    .set({ isInternalTransfer })
-    .where(inArray(transactions.id, ownedIds))
-})
+    .set({
+      transactionType: isInternalTransfer ? "transfer" : "regular",
+      ...(isInternalTransfer ? { categoryId: null } : {}),
+    })
+    .where(inArray(transactions.id, ownedIds));
+});
+
+export const setTransactionType = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { id, transactionType } = (ctx as any).data as {
+    id: number;
+    transactionType: TransactionType;
+  };
+  if (!["regular", "income", "transfer"].includes(transactionType)) {
+    throw new Error("Invalid transaction type");
+  }
+
+  const { db } = await import("../db");
+  const ownedIds = await assertTransactionsOwned(db, userId, [id]);
+  if (!ownedIds.length) return;
+
+  await db
+    .update(transactions)
+    .set({
+      transactionType,
+      ...(transactionType === "regular" ? {} : { categoryId: null }),
+    })
+    .where(eq(transactions.id, id));
+});
+
+export const setTransactionsType = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { ids, transactionType } = (ctx as any).data as {
+    ids: number[];
+    transactionType: TransactionType;
+  };
+  if (!ids.length) return;
+  if (!["regular", "income", "transfer"].includes(transactionType)) {
+    throw new Error("Invalid transaction type");
+  }
+
+  const { db } = await import("../db");
+  const ownedIds = await assertTransactionsOwned(db, userId, ids);
+  if (!ownedIds.length) return;
+
+  await db
+    .update(transactions)
+    .set({
+      transactionType,
+      ...(transactionType === "regular" ? {} : { categoryId: null }),
+    })
+    .where(inArray(transactions.id, ownedIds));
+});
 
 export const updateTransactionsCategory = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { ids, categoryId } = (ctx as any).data as { ids: number[]; categoryId: number | null }
-  if (!ids.length) return
+  const { ids, categoryId } = (ctx as any).data as { ids: number[]; categoryId: number | null };
+  if (!ids.length) return;
 
-  const { db } = await import('../db')
-  const ownedIds = await assertTransactionsOwned(db, userId, ids)
-  if (!ownedIds.length) return
+  const { db } = await import("../db");
+  const ownedIds = await assertTransactionsOwned(db, userId, ids);
+  if (!ownedIds.length) return;
 
   if (categoryId !== null) {
-    const cat = await db.query.categories.findFirst({ where: eq(categories.id, categoryId) })
-    if (!cat || cat.userId !== userId || cat.parentId === null) throw new Error('Category not found')
+    const cat = await db.query.categories.findFirst({ where: eq(categories.id, categoryId) });
+    if (!cat || cat.userId !== userId || cat.parentId === null)
+      throw new Error("Category not found");
   }
 
   await db
     .update(transactions)
-    .set({ categoryId })
-    .where(inArray(transactions.id, ownedIds))
-})
-
-export const setTransactionTags = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { transactionId, tagIds } = (ctx as any).data as { transactionId: number; tagIds: number[] }
-
-  const { db } = await import('../db')
-  const ownedIds = await assertTransactionsOwned(db, userId, [transactionId])
-  if (!ownedIds.length) return
-
-  const uniqueTagIds = [...new Set(tagIds)]
-  if (uniqueTagIds.length) {
-    const ownedTags = await db.query.tags.findMany({
-      where: and(eq(tags.userId, userId), inArray(tags.id, uniqueTagIds)),
-      columns: { id: true },
-    })
-    if (ownedTags.length !== uniqueTagIds.length) throw new Error('Tag not found')
-  }
-
-  await db.delete(transactionTags).where(eq(transactionTags.transactionId, transactionId))
-
-  if (uniqueTagIds.length) {
-    await db
-      .insert(transactionTags)
-      .values(uniqueTagIds.map(tagId => ({ transactionId, tagId })))
-      .onConflictDoNothing()
-  }
-})
-
-export const setTagForTransactions = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth()
-  if (!userId) throw new Error('Unauthorized')
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { transactionIds, tagId, selected } = (ctx as any).data as {
-    transactionIds: number[]
-    tagId: number
-    selected: boolean
-  }
-  if (!transactionIds.length) return
-
-  const { db } = await import('../db')
-  const ownedIds = await assertTransactionsOwned(db, userId, transactionIds)
-  if (!ownedIds.length) return
-
-  const tag = await db.query.tags.findFirst({
-    where: and(eq(tags.userId, userId), eq(tags.id, tagId)),
-  })
-  if (!tag) throw new Error('Tag not found')
-
-  if (!selected) {
-    await db
-      .delete(transactionTags)
-      .where(and(inArray(transactionTags.transactionId, ownedIds), eq(transactionTags.tagId, tagId)))
-    return
-  }
-
-  await db
-    .insert(transactionTags)
-    .values(ownedIds.map(transactionId => ({ transactionId, tagId })))
-    .onConflictDoNothing()
-})
+    .set({ categoryId, transactionType: "regular" })
+    .where(inArray(transactions.id, ownedIds));
+});

@@ -10,14 +10,28 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransactionsRouteImport } from './routes/transactions'
+import { Route as RecurringsRouteImport } from './routes/recurrings'
+import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as CategoriesNewGroupRouteImport } from './routes/categories.new-group'
+import { Route as CategoriesNewCategoryRouteImport } from './routes/categories.new-category'
 
 const TransactionsRoute = TransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecurringsRoute = RecurringsRouteImport.update({
+  id: '/recurrings',
+  path: '/recurrings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvestmentsRoute = InvestmentsRouteImport.update({
+  id: '/investments',
+  path: '/investments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriesRoute = CategoriesRouteImport.update({
@@ -40,47 +54,93 @@ const SignInSplatRoute = SignInSplatRouteImport.update({
   path: '/sign-in/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CategoriesNewGroupRoute = CategoriesNewGroupRouteImport.update({
+  id: '/new-group',
+  path: '/new-group',
+  getParentRoute: () => CategoriesRoute,
+} as any)
+const CategoriesNewCategoryRoute = CategoriesNewCategoryRouteImport.update({
+  id: '/new-category',
+  path: '/new-category',
+  getParentRoute: () => CategoriesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
-  '/categories': typeof CategoriesRoute
+  '/categories': typeof CategoriesRouteWithChildren
+  '/investments': typeof InvestmentsRoute
+  '/recurrings': typeof RecurringsRoute
   '/transactions': typeof TransactionsRoute
+  '/categories/new-category': typeof CategoriesNewCategoryRoute
+  '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
-  '/categories': typeof CategoriesRoute
+  '/categories': typeof CategoriesRouteWithChildren
+  '/investments': typeof InvestmentsRoute
+  '/recurrings': typeof RecurringsRoute
   '/transactions': typeof TransactionsRoute
+  '/categories/new-category': typeof CategoriesNewCategoryRoute
+  '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
-  '/categories': typeof CategoriesRoute
+  '/categories': typeof CategoriesRouteWithChildren
+  '/investments': typeof InvestmentsRoute
+  '/recurrings': typeof RecurringsRoute
   '/transactions': typeof TransactionsRoute
+  '/categories/new-category': typeof CategoriesNewCategoryRoute
+  '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/accounts' | '/categories' | '/transactions' | '/sign-in/$'
+  fullPaths:
+    | '/'
+    | '/accounts'
+    | '/categories'
+    | '/investments'
+    | '/recurrings'
+    | '/transactions'
+    | '/categories/new-category'
+    | '/categories/new-group'
+    | '/sign-in/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/accounts' | '/categories' | '/transactions' | '/sign-in/$'
+  to:
+    | '/'
+    | '/accounts'
+    | '/categories'
+    | '/investments'
+    | '/recurrings'
+    | '/transactions'
+    | '/categories/new-category'
+    | '/categories/new-group'
+    | '/sign-in/$'
   id:
     | '__root__'
     | '/'
     | '/accounts'
     | '/categories'
+    | '/investments'
+    | '/recurrings'
     | '/transactions'
+    | '/categories/new-category'
+    | '/categories/new-group'
     | '/sign-in/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountsRoute: typeof AccountsRoute
-  CategoriesRoute: typeof CategoriesRoute
+  CategoriesRoute: typeof CategoriesRouteWithChildren
+  InvestmentsRoute: typeof InvestmentsRoute
+  RecurringsRoute: typeof RecurringsRoute
   TransactionsRoute: typeof TransactionsRoute
   SignInSplatRoute: typeof SignInSplatRoute
 }
@@ -92,6 +152,20 @@ declare module '@tanstack/react-router' {
       path: '/transactions'
       fullPath: '/transactions'
       preLoaderRoute: typeof TransactionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recurrings': {
+      id: '/recurrings'
+      path: '/recurrings'
+      fullPath: '/recurrings'
+      preLoaderRoute: typeof RecurringsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/investments': {
+      id: '/investments'
+      path: '/investments'
+      fullPath: '/investments'
+      preLoaderRoute: typeof InvestmentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/categories': {
@@ -122,13 +196,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignInSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/categories/new-group': {
+      id: '/categories/new-group'
+      path: '/new-group'
+      fullPath: '/categories/new-group'
+      preLoaderRoute: typeof CategoriesNewGroupRouteImport
+      parentRoute: typeof CategoriesRoute
+    }
+    '/categories/new-category': {
+      id: '/categories/new-category'
+      path: '/new-category'
+      fullPath: '/categories/new-category'
+      preLoaderRoute: typeof CategoriesNewCategoryRouteImport
+      parentRoute: typeof CategoriesRoute
+    }
   }
 }
+
+interface CategoriesRouteChildren {
+  CategoriesNewCategoryRoute: typeof CategoriesNewCategoryRoute
+  CategoriesNewGroupRoute: typeof CategoriesNewGroupRoute
+}
+
+const CategoriesRouteChildren: CategoriesRouteChildren = {
+  CategoriesNewCategoryRoute: CategoriesNewCategoryRoute,
+  CategoriesNewGroupRoute: CategoriesNewGroupRoute,
+}
+
+const CategoriesRouteWithChildren = CategoriesRoute._addFileChildren(
+  CategoriesRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
-  CategoriesRoute: CategoriesRoute,
+  CategoriesRoute: CategoriesRouteWithChildren,
+  InvestmentsRoute: InvestmentsRoute,
+  RecurringsRoute: RecurringsRoute,
   TransactionsRoute: TransactionsRoute,
   SignInSplatRoute: SignInSplatRoute,
 }

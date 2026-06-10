@@ -1,7 +1,12 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
-import { getAccounts, getConnections } from "../server/accounts.fns";
+import {
+  getAccounts,
+  getConnections,
+  getNetWorthHistory,
+} from "../server/accounts.fns";
+import { getTransactions } from "../server/transactions.fns";
 import { AccountsScreen } from "../ui/features/accounts/accounts.screen";
 
 const authStateFn = createServerFn().handler(async () => {
@@ -16,10 +21,20 @@ export const Route = createFileRoute("/accounts")({
   loader: async () => ({
     accounts: await getAccounts(),
     connections: await getConnections(),
+    transactions: await getTransactions(),
+    netWorthHistory: await getNetWorthHistory(),
   }),
 });
 
 function AccountsRoute() {
-  const { accounts, connections } = Route.useLoaderData();
-  return <AccountsScreen accounts={accounts} connections={connections} />;
+  const { accounts, connections, transactions, netWorthHistory } =
+    Route.useLoaderData();
+  return (
+    <AccountsScreen
+      accounts={accounts}
+      connections={connections}
+      transactions={transactions}
+      netWorthHistory={netWorthHistory}
+    />
+  );
 }

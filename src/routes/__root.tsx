@@ -1,16 +1,18 @@
-import { ClerkProvider } from "@clerk/tanstack-react-start";
+import { ClerkProvider, useAuth } from "@clerk/tanstack-react-start";
 import {
   HeadContent,
   Scripts,
   createRootRoute,
   useLocation,
+  useRouter,
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTheme } from "../ui/hooks/useTheme";
 import { AppHeader } from "../ui/layout/AppHeader";
 import { AppSidebar, type SidebarAccount } from "../ui/layout/AppSidebar";
+import { ToastViewport } from "../ui/shared/toast";
 import { getAccounts } from "../server/accounts.fns";
-import { autoSync } from "../server/plaid.sync.fns";
+import { autoSync, syncLatestTransactionsOnLogin } from "../server/plaid.sync.fns";
 
 import appCss from "../styles.css?url";
 
@@ -69,14 +71,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     const loadSidebarAccounts = async () => {
       try {
         const accounts = await getAccounts();
-        const grouped = accounts.reduce<Record<string, number>>(
-          (acc, account) => {
-            const type = account.type ?? "other";
-            acc[type] = (acc[type] ?? 0) + Number(account.currentBalance ?? 0);
-            return acc;
-          },
-          {},
-        );
+        const grouped = accounts.reduce<Record<string, number>>((acc, account) => {
+          const type = account.type ?? "other";
+          acc[type] = (acc[type] ?? 0) + Number(account.currentBalance ?? 0);
+          return acc;
+        }, {});
 
         const next = Object.entries(grouped)
           .map(([type, balance]) => ({
@@ -100,16 +99,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   }, [isAuthPage, location.pathname]);
 
   return (
-    <html
-      lang="en"
-      className={isDarkTheme ? "dark" : "light"}
-      data-theme={theme}
-    >
+    <html lang="en" className={isDarkTheme ? "dark" : "light"} data-theme={theme}>
       <head>
         <HeadContent />
       </head>
       <body className="antialiased selection:bg-primary/30">
         <ClerkProvider>
+          <LoginSyncEffect isAuthPage={isAuthPage} />
           <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
             {mounted ? (
               isAuthPage ? (
@@ -130,7 +126,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                 </div>
               ) : (
                 <>
-                  <aside className="z-10 hidden w-64 flex-col border-r border-divider/60 bg-background xl:flex">
+                  <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-divider/60 bg-background xl:flex">
                     <AppSidebar sidebarAccounts={sidebarAccounts} />
                   </aside>
 
@@ -151,11 +147,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                     </div>
                   ) : null}
 
-                  <div className="z-10 flex grow flex-col overflow-hidden">
-                    <AppHeader
-                      pageTitle=""
-                      onOpenSidebar={() => setSidebarOpen(true)}
-                    />
+                  <div className="z-10 flex min-w-0 grow flex-col overflow-hidden">
+                    <AppHeader pageTitle="" onOpenSidebar={() => setSidebarOpen(true)} />
 
                     <main className="grow overflow-y-auto bg-transparent p-6 xl:p-8">
                       <div className="mx-auto w-full">{children}</div>
@@ -165,9 +158,43 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               )
             ) : null}
           </div>
+          <ToastViewport />
         </ClerkProvider>
         <Scripts />
       </body>
     </html>
   );
+}
+
+function LoginSyncEffect({ isAuthPage }: { isAuthPage: boolean }) {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthPage || !isLoaded || !isSignedIn || !userId) return;
+
+    const syncKey = `monai:last-login-sync:${userId}`;
+    if (window.sessionStorage.getItem(syncKey) === "done") return;
+
+    let active = true;
+
+    const syncLatest = async () => {
+      try {
+        await syncLatestTransactionsOnLogin();
+        if (!active) return;
+        window.sessionStorage.setItem(syncKey, "done");
+        await router.invalidate();
+      } catch (error) {
+        console.error("Login sync error:", error);
+      }
+    };
+
+    void syncLatest();
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthPage, isLoaded, isSignedIn, router, userId]);
+
+  return null;
 }
