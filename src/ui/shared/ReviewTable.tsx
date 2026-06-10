@@ -26,8 +26,6 @@ import {
 } from "lucide-react";
 import {
   Button,
-  DateField,
-  DateRangePicker,
   Dropdown,
   DropdownItem,
   DropdownItemIndicator,
@@ -44,6 +42,9 @@ import {
   ModalFooter,
   ModalHeader,
   ModalHeading,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   SearchField,
   Select,
   RangeCalendar,
@@ -910,71 +911,63 @@ export function ReviewTable({
                   </div>
                 </Select.Popover>
               </Select>
-              <DateRangePicker
-                aria-label="Filter by date range"
-                value={
-                  dateFilter
-                    ? { start: parseDate(dateFilter.start), end: parseDate(dateFilter.end) }
-                    : null
-                }
-                onChange={(value) =>
-                  setDateFilter(
-                    value
-                      ? {
+              <div className="min-w-0">
+                <Popover>
+                  <div className="relative min-w-0">
+                    <PopoverTrigger>
+                      <button
+                        type="button"
+                        className="flex h-10 w-full items-center gap-2 rounded-xl border border-separator bg-background px-3 pr-10 text-left shadow-none transition-colors hover:bg-default"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                          {formatDateRangeLabel(dateFilter)}
+                        </span>
+                        <ChevronRightIcon size={14} className="rotate-90 text-default-400" />
+                      </button>
+                    </PopoverTrigger>
+                    {dateFilter ? (
+                      <button
+                        type="button"
+                        aria-label="Clear date filter"
+                        onClick={() => setDateFilter(null)}
+                        className="absolute right-9 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-default hover:text-foreground"
+                      >
+                        <XIcon size={13} />
+                      </button>
+                    ) : null}
+                  </div>
+                  <PopoverContent className="rounded-2xl border border-divider p-2 shadow-xl">
+                    <RangeCalendar
+                      aria-label="Choose transaction date range"
+                      value={
+                        dateFilter
+                          ? { start: parseDate(dateFilter.start), end: parseDate(dateFilter.end) }
+                          : undefined
+                      }
+                      onChange={(value) =>
+                        setDateFilter({
                           start: value.start.toString(),
                           end: value.end.toString(),
-                        }
-                      : null,
-                  )
-                }
-                className="min-w-0"
-              >
-                <div className="relative min-w-0">
-                  <DateField.Group
-                    fullWidth
-                    variant="secondary"
-                    className="h-10 rounded-xl border-separator bg-background shadow-none pr-10"
-                  >
-                    <DateField.Input>
-                      {(segment) => <DateField.Segment segment={segment} />}
-                    </DateField.Input>
-                    <DateRangePicker.RangeSeparator />
-                    <DateField.Input>
-                      {(segment) => <DateField.Segment segment={segment} />}
-                    </DateField.Input>
-                  </DateField.Group>
-                  {dateFilter ? (
-                    <button
-                      type="button"
-                      aria-label="Clear date filter"
-                      onClick={() => setDateFilter(null)}
-                      className="absolute right-9 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-default hover:text-foreground"
+                        })
+                      }
                     >
-                      <XIcon size={13} />
-                    </button>
-                  ) : null}
-                  <DateRangePicker.Trigger className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg hover:bg-default">
-                    <DateRangePicker.TriggerIndicator />
-                  </DateRangePicker.Trigger>
-                </div>
-                <DateRangePicker.Popover>
-                  <RangeCalendar aria-label="Choose transaction date range">
-                    <RangeCalendar.Header>
-                      <RangeCalendar.NavButton slot="previous" />
-                      <RangeCalendar.Heading />
-                      <RangeCalendar.NavButton slot="next" />
-                    </RangeCalendar.Header>
-                    <RangeCalendar.Grid>
-                      <RangeCalendar.GridHeader>
-                        {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
-                      </RangeCalendar.GridHeader>
-                      <RangeCalendar.GridBody>
-                        {(date) => <RangeCalendar.Cell date={date} />}
-                      </RangeCalendar.GridBody>
-                    </RangeCalendar.Grid>
-                  </RangeCalendar>
-                </DateRangePicker.Popover>
-              </DateRangePicker>
+                      <RangeCalendar.Header>
+                        <RangeCalendar.NavButton slot="previous" />
+                        <RangeCalendar.Heading />
+                        <RangeCalendar.NavButton slot="next" />
+                      </RangeCalendar.Header>
+                      <RangeCalendar.Grid>
+                        <RangeCalendar.GridHeader>
+                          {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                        </RangeCalendar.GridHeader>
+                        <RangeCalendar.GridBody>
+                          {(date) => <RangeCalendar.Cell date={date} />}
+                        </RangeCalendar.GridBody>
+                      </RangeCalendar.Grid>
+                    </RangeCalendar>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <Dropdown>
                 <DropdownTrigger className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-separator bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-default">
                   <Columns3Icon size={15} />
