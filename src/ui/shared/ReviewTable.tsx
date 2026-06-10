@@ -26,9 +26,8 @@ import {
 } from "lucide-react";
 import {
   Button,
-  Calendar,
   DateField,
-  DatePicker,
+  DateRangePicker,
   Dropdown,
   DropdownItem,
   DropdownItemIndicator,
@@ -47,6 +46,7 @@ import {
   ModalHeading,
   SearchField,
   Select,
+  RangeCalendar,
   Table,
 } from "@heroui/react";
 import { parseDate } from "@internationalized/date";
@@ -94,6 +94,7 @@ type ColumnMeta = {
 };
 
 const PAGE_SIZE = 100;
+type DateRangeFilter = { start: string; end: string } | null;
 
 const GROUP_COLORS = [
   "#f97316",
@@ -148,9 +149,10 @@ const reviewStatusFilterFn: FilterFn<Tx> = (row, _columnId, filterValue) => {
 };
 
 const dateFilterFn: FilterFn<Tx> = (row, _columnId, filterValue) => {
-  const value = String(filterValue ?? "");
-  if (!value) return true;
-  return dateInputValue(row.original.date) === value;
+  const value = filterValue as DateRangeFilter;
+  if (!value?.start || !value.end) return true;
+  const rowDate = dateInputValue(row.original.date);
+  return rowDate >= value.start && rowDate <= value.end;
 };
 
 function getErrorMessage(error: unknown) {
@@ -203,6 +205,18 @@ function transactionDisplayName(tx: Tx): string {
   return tx.name?.trim() || tx.merchantName;
 }
 
+function formatDateRangeLabel(value: DateRangeFilter) {
+  if (!value?.start || !value.end) return "All dates";
+  const start = new Date(`${value.start}T00:00:00`);
+  const end = new Date(`${value.end}T00:00:00`);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${formatter.format(start)} - ${formatter.format(end)}`;
+}
+
 export function ReviewTable({
   transactions,
   categories,
@@ -223,9 +237,10 @@ export function ReviewTable({
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: PAGE_SIZE });
   const [pickerTxId, setPickerTxId] = useState<number | null>(null);
   const [catSearch, setCatSearch] = useState("");
+  const [categorySearch, setCategorySearch] = useState("");
   const [tableSearch, setTableSearch] = useState(searchQuery);
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>(null);
   const [fallbackActionIds, setFallbackActionIds] = useState<number[]>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
     reviewStatus: false,
@@ -270,6 +285,11 @@ export function ReviewTable({
     ],
     [categoryOptions],
   );
+  const filteredCategoryFilterOptions = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) return categoryFilterOptions;
+    return categoryFilterOptions.filter((option) => option.label.toLowerCase().includes(query));
+  }, [categoryFilterOptions, categorySearch]);
   const selectedCategoryFilterLabel =
     categoryFilterOptions.find((option) => option.id === categoryFilter)?.label ?? "All categories";
 
@@ -853,75 +873,108 @@ export function ReviewTable({
                   <Select.Indicator />
                 </Select.Trigger>
                 <Select.Popover>
-                  <ListBox
-                    items={categoryFilterOptions}
-                    selectedKeys={[categoryFilter]}
-                    selectionMode="single"
-                    onSelectionChange={(keys) => {
-                      const [next] = Array.from(keys);
-                      if (next) setCategoryFilter(String(next));
-                    }}
-                    aria-label="Category filters"
-                  >
-                    {(option) => (
-                      <ListBox.Item id={option.id} textValue={option.label}>
-                        {option.label}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    )}
-                  </ListBox>
+                  <div className="flex max-h-[min(30rem,calc(100vh-4rem))] min-h-0 flex-col">
+                    <div className="border-b border-divider px-3 py-2">
+                      <SearchField
+                        aria-label="Search categories"
+                        value={categorySearch}
+                        onChange={setCategorySearch}
+                        variant="secondary"
+                        fullWidth
+                      >
+                        <SearchField.Group className="h-9 rounded-lg border-divider bg-background shadow-none">
+                          <SearchField.SearchIcon />
+                          <SearchField.Input placeholder="Search categories" />
+                          <SearchField.ClearButton />
+                        </SearchField.Group>
+                      </SearchField>
+                    </div>
+                    <ListBox
+                      items={filteredCategoryFilterOptions}
+                      selectedKeys={[categoryFilter]}
+                      selectionMode="single"
+                      onSelectionChange={(keys) => {
+                        const [next] = Array.from(keys);
+                        if (next) setCategoryFilter(String(next));
+                      }}
+                      aria-label="Category filters"
+                      className="min-h-0 flex-1"
+                    >
+                      {(option) => (
+                        <ListBox.Item id={option.id} textValue={option.label}>
+                          {option.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      )}
+                    </ListBox>
+                  </div>
                 </Select.Popover>
               </Select>
-              <DatePicker
-                aria-label="Filter by date"
-                value={dateFilter ? parseDate(dateFilter) : null}
-                onChange={(value) => setDateFilter(value?.toString() ?? "")}
+              <DateRangePicker
+                aria-label="Filter by date range"
+                value={
+                  dateFilter
+                    ? { start: parseDate(dateFilter.start), end: parseDate(dateFilter.end) }
+                    : null
+                }
+                onChange={(value) =>
+                  setDateFilter(
+                    value
+                      ? {
+                          start: value.start.toString(),
+                          end: value.end.toString(),
+                        }
+                      : null,
+                  )
+                }
                 className="min-w-0"
               >
-                <DateField.Group
-                  fullWidth
-                  variant="secondary"
-                  className="h-10 rounded-xl border-separator bg-background shadow-none"
-                >
-                  <DateField.Input>
-                    {(segment) => <DateField.Segment segment={segment} />}
-                  </DateField.Input>
+                <div className="relative min-w-0">
+                  <DateField.Group
+                    fullWidth
+                    variant="secondary"
+                    className="h-10 rounded-xl border-separator bg-background shadow-none pr-10"
+                  >
+                    <DateField.Input>
+                      {(segment) => <DateField.Segment segment={segment} />}
+                    </DateField.Input>
+                    <DateRangePicker.RangeSeparator />
+                    <DateField.Input>
+                      {(segment) => <DateField.Segment segment={segment} />}
+                    </DateField.Input>
+                  </DateField.Group>
                   {dateFilter ? (
-                    <DateField.Suffix>
-                      <button
-                        type="button"
-                        aria-label="Clear date filter"
-                        onClick={() => setDateFilter("")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-default hover:text-foreground"
-                      >
-                        <XIcon size={13} />
-                      </button>
-                    </DateField.Suffix>
+                    <button
+                      type="button"
+                      aria-label="Clear date filter"
+                      onClick={() => setDateFilter(null)}
+                      className="absolute right-9 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-default hover:text-foreground"
+                    >
+                      <XIcon size={13} />
+                    </button>
                   ) : null}
-                  <DateField.Suffix>
-                    <DatePicker.Trigger className="h-7 w-7 rounded-lg hover:bg-default">
-                      <DatePicker.TriggerIndicator />
-                    </DatePicker.Trigger>
-                  </DateField.Suffix>
-                </DateField.Group>
-                <DatePicker.Popover>
-                  <Calendar aria-label="Choose transaction date">
-                    <Calendar.Header>
-                      <Calendar.NavButton slot="previous" />
-                      <Calendar.Heading />
-                      <Calendar.NavButton slot="next" />
-                    </Calendar.Header>
-                    <Calendar.Grid>
-                      <Calendar.GridHeader>
-                        {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-                      </Calendar.GridHeader>
-                      <Calendar.GridBody>
-                        {(date) => <Calendar.Cell date={date} />}
-                      </Calendar.GridBody>
-                    </Calendar.Grid>
-                  </Calendar>
-                </DatePicker.Popover>
-              </DatePicker>
+                  <DateRangePicker.Trigger className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg hover:bg-default">
+                    <DateRangePicker.TriggerIndicator />
+                  </DateRangePicker.Trigger>
+                </div>
+                <DateRangePicker.Popover>
+                  <RangeCalendar aria-label="Choose transaction date range">
+                    <RangeCalendar.Header>
+                      <RangeCalendar.NavButton slot="previous" />
+                      <RangeCalendar.Heading />
+                      <RangeCalendar.NavButton slot="next" />
+                    </RangeCalendar.Header>
+                    <RangeCalendar.Grid>
+                      <RangeCalendar.GridHeader>
+                        {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                      </RangeCalendar.GridHeader>
+                      <RangeCalendar.GridBody>
+                        {(date) => <RangeCalendar.Cell date={date} />}
+                      </RangeCalendar.GridBody>
+                    </RangeCalendar.Grid>
+                  </RangeCalendar>
+                </DateRangePicker.Popover>
+              </DateRangePicker>
               <Dropdown>
                 <DropdownTrigger className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-separator bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-default">
                   <Columns3Icon size={15} />
