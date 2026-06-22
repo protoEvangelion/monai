@@ -240,6 +240,28 @@ export const updateTransactionsDate = createServerFn().handler(async (ctx) => {
     .where(inArray(transactions.id, ownedIds));
 });
 
+export const updateTransactionNote = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { id, note } = (ctx as any).data as { id: number; note: string };
+  if (!Number.isInteger(id)) throw new Error("Invalid transaction");
+  if (typeof note !== "string") throw new Error("Invalid note");
+
+  const trimmedNote = note.trim();
+  if (trimmedNote.length > 1_000) throw new Error("Note must be 1,000 characters or fewer");
+
+  const { db } = await import("../db");
+  const ownedIds = await assertTransactionsOwned(db, userId, [id]);
+  if (!ownedIds.length) return;
+
+  await db
+    .update(transactions)
+    .set({ note: trimmedNote || null })
+    .where(eq(transactions.id, id));
+});
+
 export const updateTransactionCategory = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();
   if (!userId) throw new Error("Unauthorized");

@@ -11,6 +11,7 @@ import { createTransactionColumns } from "./transactions.columns";
 import { CreateCategoryFromTransactionModal } from "./CreateCategoryFromTransactionModal";
 import { TransactionsDataGrid } from "./TransactionsDataGrid";
 import { TransactionSelectionToolbar } from "./TransactionSelectionToolbar";
+import { TransactionNoteModal } from "./TransactionNoteModal";
 import {
   DEFAULT_TRANSACTION_COLUMN_ORDER,
   DEFAULT_TRANSACTION_COLUMN_VISIBILITY,
@@ -49,6 +50,7 @@ export function ReviewTable({
   rowSelectionRef.current = rowSelection;
   const [selectAllPages, setSelectAllPages] = useState(false);
   const [pickerTxId, setPickerTxId] = useState<number | null>(null);
+  const [noteTransaction, setNoteTransaction] = useState<Tx | null>(null);
   const [catSearch, setCatSearch] = useState("");
   const [columnOrder, setColumnOrder] = useState(DEFAULT_TRANSACTION_COLUMN_ORDER);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
@@ -253,6 +255,7 @@ export function ReviewTable({
       ) : (
         <TransactionsDataGrid
           columnRenderKey={columns}
+          onOpenTransaction={setNoteTransaction}
           pageRows={pageRows}
           pagination={pagination}
           rowSelection={rowSelection}
@@ -293,6 +296,14 @@ export function ReviewTable({
         setNewCategoryName={categoryActions.setNewCategoryName}
         setNewCategoryParentId={categoryActions.setNewCategoryParentId}
       />
+
+      {noteTransaction ? (
+        <TransactionNoteModal
+          key={noteTransaction.id}
+          transaction={noteTransaction}
+          onClose={() => setNoteTransaction(null)}
+        />
+      ) : null}
     </div>
   );
 }

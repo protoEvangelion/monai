@@ -14,6 +14,7 @@ type TransactionsDataGridProps = {
     pageIndex: number;
     pageSize: number;
   };
+  onOpenTransaction: (transaction: Tx) => void;
   rowSelection: Record<string, boolean>;
   table: TanStackTable<Tx>;
   total: number;
@@ -21,6 +22,7 @@ type TransactionsDataGridProps = {
 
 export function TransactionsDataGrid({
   columnRenderKey,
+  onOpenTransaction,
   pageRows,
   pagination,
   rowSelection,
@@ -65,6 +67,7 @@ export function TransactionsDataGrid({
                 <TransactionDataRow
                   columnRenderKey={columnRenderKey}
                   key={row.id}
+                  onOpenTransaction={onOpenTransaction}
                   row={row}
                   selected={Boolean(rowSelection[row.id])}
                 />
@@ -106,9 +109,11 @@ export function TransactionsDataGrid({
 
 const TransactionDataRow = memo(
   function TransactionDataRow({
+    onOpenTransaction,
     row,
   }: {
     columnRenderKey: unknown;
+    onOpenTransaction: (transaction: Tx) => void;
     row: Row<Tx>;
     selected: boolean;
   }) {
@@ -116,7 +121,14 @@ const TransactionDataRow = memo(
       <tr
         id={row.id}
         data-testid={`transaction-row-${row.original.id}`}
-        className="transition-colors hover:bg-default/35"
+        onClick={(event) => {
+          const target = event.target as HTMLElement;
+          if (target.closest("button, input, select, textarea, a, [role='button'], [role='dialog']")) {
+            return;
+          }
+          onOpenTransaction(row.original);
+        }}
+        className="cursor-pointer transition-colors hover:bg-default/35"
       >
         {row.getVisibleCells().map((cell) => {
           const meta = cell.column.columnDef.meta as ColumnMeta | undefined;
@@ -139,5 +151,6 @@ const TransactionDataRow = memo(
     prev.row.id === next.row.id &&
     prev.row.original === next.row.original &&
     prev.selected === next.selected &&
+    prev.onOpenTransaction === next.onOpenTransaction &&
     prev.columnRenderKey === next.columnRenderKey,
 );
