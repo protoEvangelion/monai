@@ -40,24 +40,24 @@ function BulletMetric({
       : "on budget"
     : variant === "income"
       ? delta > 0
-        ? `${formatCurrency(delta, { maximumFractionDigits: 0 })} over plan`
-        : `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} remaining`
+        ? `${formatCurrency(delta)} over plan`
+        : `${formatCurrency(Math.abs(delta))} remaining`
       : isBad
-        ? `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} over`
-        : `${formatCurrency(delta, { maximumFractionDigits: 0 })} left`;
-  const actualCompactLabel = `${variant === "income" ? "Recv" : "Spent"} ${formatCurrency(actual, { maximumFractionDigits: 0 })}`;
-  const targetCompactLabel = `${variant === "income" ? "Plan" : "Budget"} ${formatCurrency(target, { maximumFractionDigits: 0 })}`;
+        ? `${formatCurrency(Math.abs(delta))} over`
+        : `${formatCurrency(delta)} left`;
+  const actualCompactLabel = `${variant === "income" ? "Recv" : "Spent"} ${formatCurrency(actual)}`;
+  const targetCompactLabel = `${variant === "income" ? "Plan" : "Budget"} ${formatCurrency(target)}`;
   const deltaCompactLabel = isComplete
     ? variant === "income"
       ? "on plan"
       : "on budget"
     : variant === "income"
       ? delta > 0
-        ? `${formatCurrency(delta, { maximumFractionDigits: 0 })} over`
-        : `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} rem`
+        ? `${formatCurrency(delta)} over`
+        : `${formatCurrency(Math.abs(delta))} rem`
       : isBad
-        ? `${formatCurrency(Math.abs(delta), { maximumFractionDigits: 0 })} over`
-        : `${formatCurrency(delta, { maximumFractionDigits: 0 })} left`;
+        ? `${formatCurrency(Math.abs(delta))} over`
+        : `${formatCurrency(delta)} left`;
 
   return (
     <div className="rounded-xl border border-divider/50 bg-background/55 p-3">
@@ -141,8 +141,8 @@ export function CategoryTopCard({
   const statusLabel = isBalanced
     ? "Balanced"
     : isOverAssigned
-      ? `${formatCurrency(remainingToAssign, { maximumFractionDigits: 0 })} overassigned`
-      : `${formatCurrency(remainingToAssign, { maximumFractionDigits: 0 })} left to assign`;
+      ? `${formatCurrency(remainingToAssign)} overassigned`
+      : `${formatCurrency(remainingToAssign)} left to assign`;
   const statusDetail = isBalanced
     ? "Every dollar assigned"
     : isOverAssigned
@@ -240,24 +240,16 @@ export function CategoryTopCard({
             <div className="min-w-0 grid gap-3">
               <BulletMetric
                 title="Income"
-                actualLabel={`Received ${formatCurrency(actualIncome, {
-                  maximumFractionDigits: 0,
-                })}`}
-                targetLabel={`Planned ${formatCurrency(expectedIncome, {
-                  maximumFractionDigits: 0,
-                })}`}
+                actualLabel={`Received ${formatCurrency(actualIncome)}`}
+                targetLabel={`Planned ${formatCurrency(expectedIncome)}`}
                 actual={actualIncome}
                 target={expectedIncome}
                 variant="income"
               />
               <BulletMetric
                 title="Budget"
-                actualLabel={`Spent ${formatCurrency(totalSpent, {
-                  maximumFractionDigits: 0,
-                })}`}
-                targetLabel={`Budgeted ${formatCurrency(totalBudget, {
-                  maximumFractionDigits: 0,
-                })}`}
+                actualLabel={`Spent ${formatCurrency(totalSpent)}`}
+                targetLabel={`Budgeted ${formatCurrency(totalBudget)}`}
                 actual={totalSpent}
                 target={totalBudget}
                 variant="spending"
@@ -269,9 +261,7 @@ export function CategoryTopCard({
                     realityBalance < 0 ? "text-danger" : "text-success"
                   }
                 >
-                  {formatCurrency(realityBalance, {
-                    maximumFractionDigits: 0,
-                  })}
+                  {formatCurrency(realityBalance)}
                 </span>
               </div>
             </div>

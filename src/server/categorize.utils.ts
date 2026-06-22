@@ -1,5 +1,10 @@
 import { categories } from "../db/schema";
 import { eq } from "drizzle-orm";
+import {
+  CODEX_MODEL_LABEL,
+  CODEX_PROVIDER_LABEL,
+  runCodexCategorizerCli,
+} from "../services/codexCli";
 
 export type Category = { id: number; name: string; parentId: number | null };
 export type Transaction = {
@@ -9,9 +14,6 @@ export type Transaction = {
   note: string | null;
 };
 export type BatchResult = { byTransactionId: Map<number, string>; model: string };
-
-export const COPILOT_CATEGORIZER_MODEL = process.env.COPILOT_CATEGORIZER_MODEL ?? "gpt-5.4-mini";
-const COPILOT_CLI_PATH = process.env.COPILOT_CLI_PATH ?? "copilot";
 
 export function isCatchAllCategory(name: string): boolean {
   const key = name.toLowerCase();
@@ -84,6 +86,18 @@ export function parseTransactionCategoryMap(raw: string): Map<number, string> {
 
   const map = new Map<number, string>();
 
+  if (Array.isArray(parsed.categories)) {
+    for (const item of parsed.categories) {
+      if (!item || typeof item !== "object") continue;
+      const candidate = item as Record<string, unknown>;
+      const transactionId = Number(candidate.transactionId);
+      const category = candidate.category;
+      if (!Number.isInteger(transactionId) || typeof category !== "string") continue;
+      map.set(transactionId, category);
+    }
+    return map;
+  }
+
   for (const [transactionId, category] of Object.entries(parsed)) {
     const id = Number(transactionId);
     if (!Number.isInteger(id) || typeof category !== "string") continue;
@@ -149,42 +163,30 @@ function repairWrappedJsonStrings(json: string) {
   return repaired;
 }
 
-async function runCopilotCategorizer(prompt: string) {
-  const [{ execFile }, { promisify }] = await Promise.all([
-    import("node:child_process"),
-    import("node:util"),
-  ]);
-  const execFileAsync = promisify(execFile);
-  const { stdout, stderr } = await execFileAsync(
-    COPILOT_CLI_PATH,
-    [
-      "--model",
-      COPILOT_CATEGORIZER_MODEL,
-      "-p",
-      prompt,
-      "--silent",
-      "--no-color",
-      "--stream",
-      "off",
-      "--allow-all-tools",
-      "--disable-builtin-mcps",
-      "--deny-tool=shell",
-      "--deny-tool=read",
-      "--deny-tool=write",
-      "--no-custom-instructions",
-      "--no-ask-user",
-    ],
-    {
-      timeout: Number(process.env.COPILOT_CATEGORIZER_TIMEOUT_MS ?? 90_000),
-      maxBuffer: 1024 * 1024 * 4,
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
+async function runCodexCategorizer(prompt: string) {
+  return runCodexCategorizerCli({
+    prompt,
+    schema: {
+      type: "object",
+      properties: {
+        categories: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              transactionId: { type: "number" },
+              category: { type: "string" },
+            },
+            required: ["transactionId", "category"],
+            additionalProperties: false,
+          },
+        },
       },
+      required: ["categories"],
+      additionalProperties: false,
     },
-  );
-
-  return `${stdout}\n${stderr}`.trim();
+    tempPrefix: "monai-codex-categorizer-",
+  });
 }
 
 function previewBlock(value: string, maxLength: number) {
@@ -198,36 +200,30 @@ function previewBlock(value: string, maxLength: number) {
 function logCategorizeRequest({
   model,
   rowCount,
-  categoryNames,
-  transactionRows,
+  categoryCount,
 }: {
   model: string;
   rowCount: number;
-  categoryNames: string[];
-  transactionRows: string[];
+  categoryCount: number;
 }) {
   console.log(
     [
       "[categorize] batch request",
-      "  provider: copilot-cli",
+      `  provider: ${CODEX_PROVIDER_LABEL}`,
       `  model: ${model}`,
-      `  categories: ${categoryNames.length}`,
-      ...categoryNames.map((name) => `    - ${name}`),
+      `  categories: ${categoryCount}`,
       `  transactionRows: ${rowCount}`,
-      ...transactionRows.map((row) => `    - ${row}`),
     ].join("\n"),
   );
 }
 
-function logCategorizeResponse({ model, raw }: { model: string; raw: string }) {
-  const formattedRaw = formatRawCategorizerResponse(raw);
+function logCategorizeResponse({ model, rowCount }: { model: string; rowCount: number }) {
   console.log(
     [
       "[categorize] batch response",
-      "  provider: copilot-cli",
+      `  provider: ${CODEX_PROVIDER_LABEL}`,
       `  model: ${model}`,
-      "  raw:",
-      previewBlock(formattedRaw, 4_000),
+      `  categorizedRows: ${rowCount}`,
     ].join("\n"),
   );
 }
@@ -267,25 +263,21 @@ export async function categorizeBatch(
   }));
 
   const line1 =
-    'Classify each transaction into exactly one value from the provided category list. When note is present, use it as receipt/order context for the merchant. Use "Transfer" for internal account transfers, savings/checking transfers, credit-card payments, and other balance movements that should have no budget category. Use "Income" for payroll, deposits, interest, reimbursements, refunds, and other money received that should have no expense category. Return only a valid JSON object where each key is the exact transaction id as a string and each value is the exact category name. Do not include markdown, bullets, explanation, or line breaks inside JSON strings. Example output: {"123":"Restaurants","124":"Transfer","125":"Income"}';
+    'Classify each transaction into exactly one value from the provided category list. When note is present, use it as receipt/order context for the merchant. Use "Transfer" for internal account transfers, savings/checking transfers, credit-card payments, and other balance movements that should have no budget category. Use "Income" for payroll, deposits, interest, reimbursements, refunds, and other money received that should have no expense category. Return only valid JSON in this exact shape: {"categories":[{"transactionId":123,"category":"Restaurants"},{"transactionId":124,"category":"Transfer"},{"transactionId":125,"category":"Income"}]}. Each transactionId must be the exact numeric transaction id. Each category must be one exact category name from the category list. Do not include markdown, bullets, explanation, or line breaks inside JSON strings.';
   const line2 = `Categories: ${JSON.stringify(categoryOptions)} Transactions: ${JSON.stringify(transactionRows)}`;
   const prompt = `${line1}\n${line2}`;
 
   logCategorizeRequest({
-    model: COPILOT_CATEGORIZER_MODEL,
+    model: CODEX_MODEL_LABEL,
     rowCount: batch.length,
-    categoryNames: categoryOptions,
-    transactionRows: transactionRows.map((tx) =>
-      [tx.id, tx.amount, tx.merchant, "note" in tx ? tx.note : null]
-        .filter((value) => value != null && value !== "")
-        .join(" | "),
-    ),
+    categoryCount: categoryOptions.length,
   });
-  const raw = await runCopilotCategorizer(prompt);
-  logCategorizeResponse({ model: COPILOT_CATEGORIZER_MODEL, raw });
+  const raw = await runCodexCategorizer(prompt);
+  const byTransactionId = parseTransactionCategoryMap(raw);
+  logCategorizeResponse({ model: CODEX_MODEL_LABEL, rowCount: byTransactionId.size });
   return {
-    byTransactionId: parseTransactionCategoryMap(raw),
-    model: COPILOT_CATEGORIZER_MODEL,
+    byTransactionId,
+    model: CODEX_MODEL_LABEL,
   };
 }
 

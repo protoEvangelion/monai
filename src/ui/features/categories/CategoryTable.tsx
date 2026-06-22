@@ -110,7 +110,7 @@ export function CategoryTable({
           <span
             className={`block text-right ${row.original.kind === "group" ? "text-base font-semibold text-foreground" : "text-sm font-semibold text-default-700"}`}
           >
-            {formatCurrency(getValue(), { maximumFractionDigits: 0 })}
+            {formatCurrency(getValue())}
           </span>
         ),
       }),
@@ -130,7 +130,7 @@ export function CategoryTable({
           <span
             className={`block text-left ${row.original.kind === "group" ? "text-base font-semibold text-foreground" : "text-sm font-semibold text-foreground"}`}
           >
-            {formatCurrency(getValue(), { maximumFractionDigits: 0 })}
+            {formatCurrency(getValue())}
           </span>
         ),
       }),

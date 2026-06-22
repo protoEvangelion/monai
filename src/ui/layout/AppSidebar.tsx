@@ -17,7 +17,7 @@ import {
 import HeaderUser from "../integrations/clerk/header-user";
 import { formatCurrency } from "../../lib/format";
 import { useState } from "react";
-import { AppSettingsModal } from "../shared/AppSettingsModal";
+import { AppSettingsModal } from "../features/settings/AppSettingsModal";
 
 export type SidebarAccount = {
   type: string;
@@ -215,9 +215,7 @@ export function AppSidebar({
                             </span>
                           </div>
                           <span className="text-sm font-semibold tabular-nums text-default-500">
-                            {formatCurrency(acc.balance, {
-                              maximumFractionDigits: 0,
-                            })}
+                            {formatCurrency(acc.balance)}
                           </span>
                         </div>
                       ))

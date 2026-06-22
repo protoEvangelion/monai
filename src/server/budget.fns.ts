@@ -13,6 +13,64 @@ function toCents(value: number) {
   return Math.max(0, Math.round((Number.isFinite(value) ? value : 0) * 100))
 }
 
+function currentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function previousMonthKey(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const previous = new Date(year, monthNumber - 2, 1)
+  return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`
+}
+
+async function copyPreviousMonthPlan(
+  db: typeof import('../db').db,
+  userId: string,
+  createdBudgetId: number,
+  month: string,
+) {
+  const previousBudget = await db.query.monthlyBudgets.findFirst({
+    where: and(
+      eq(monthlyBudgets.userId, userId),
+      eq(monthlyBudgets.month, previousMonthKey(month)),
+    ),
+    with: { allocations: true },
+  })
+
+  if (!previousBudget) return
+
+  await db
+    .update(monthlyBudgets)
+    .set({
+      expectedIncomeCents: previousBudget.expectedIncomeCents,
+      updatedAt: new Date(),
+    })
+    .where(eq(monthlyBudgets.id, createdBudgetId))
+
+  const previousAllocationByCategoryId = new Map(
+    previousBudget.allocations.map((allocation) => [
+      allocation.categoryId,
+      allocation.amountCents,
+    ]),
+  )
+  const childCategories = await db.query.categories.findMany({
+    where: eq(categories.userId, userId),
+  })
+  const allocationRows = childCategories
+    .filter((category) => category.parentId !== null)
+    .map((category) => ({
+      monthlyBudgetId: createdBudgetId,
+      categoryId: category.id,
+      amountCents:
+        previousAllocationByCategoryId.get(category.id) ?? toCents(category.budgetAmount),
+    }))
+
+  if (allocationRows.length) {
+    await db.insert(monthlyBudgetAllocations).values(allocationRows)
+  }
+}
+
 async function ensureMonthlyBudget(db: typeof import('../db').db, userId: string, month: string) {
   const existing = await db.query.monthlyBudgets.findFirst({
     where: and(eq(monthlyBudgets.userId, userId), eq(monthlyBudgets.month, month)),
@@ -25,6 +83,8 @@ async function ensureMonthlyBudget(db: typeof import('../db').db, userId: string
     .values({ userId, month })
     .returning()
 
+  await copyPreviousMonthPlan(db, userId, created.id, month)
+
   return created
 }
 
@@ -33,6 +93,7 @@ export const getMonthlyBudgets = createServerFn().handler(async () => {
   if (!userId) throw new Error('Unauthorized')
 
   const { db } = await import('../db')
+  await ensureMonthlyBudget(db, userId, currentMonthKey())
 
   return db.query.monthlyBudgets.findMany({
     where: eq(monthlyBudgets.userId, userId),
@@ -89,12 +150,6 @@ export const updateMonthlyAllocation = createServerFn().handler(async (ctx) => {
     eq(monthlyBudgetAllocations.monthlyBudgetId, budget.id),
     eq(monthlyBudgetAllocations.categoryId, categoryId),
   )
-
-  if (amountCents === 0) {
-    await db.delete(monthlyBudgetAllocations).where(where)
-    await db.update(monthlyBudgets).set({ updatedAt: new Date() }).where(eq(monthlyBudgets.id, budget.id))
-    return
-  }
 
   const existing = await db.query.monthlyBudgetAllocations.findFirst({ where })
 

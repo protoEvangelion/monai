@@ -12,10 +12,12 @@ import {
 import { formatCurrency } from "../../../lib/format";
 
 type ChartDatum = {
-  day: number;
+  budget: number;
+  isSelectedMonth: boolean;
   label: string;
+  month: string;
+  shortLabel: string;
   spent: number;
-  budget?: number;
 };
 
 export function SpendingChart({
@@ -49,14 +51,14 @@ export function SpendingChart({
   return (
     <div
       ref={containerRef}
-      className="h-36 w-full min-w-0 overflow-hidden rounded-2xl border border-divider/40 bg-default-50"
+      className="h-56 w-full min-w-0 overflow-hidden rounded-2xl border border-divider/40 bg-default-50"
     >
       {size.width > 0 && size.height > 0 ? (
         <ComposedChart
           width={size.width}
           height={size.height}
           data={data}
-          margin={{ top: 8, right: 12, left: 12, bottom: 8 }}
+          margin={{ top: 12, right: 16, left: 12, bottom: 12 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -64,10 +66,13 @@ export function SpendingChart({
             vertical={false}
           />
           <XAxis
-            dataKey="label"
+            dataKey="shortLabel"
             axisLine={false}
             tickLine={false}
-            interval={3}
+            interval={0}
+            minTickGap={4}
+            tick={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
+            tickMargin={8}
           />
           <YAxis hide />
           <ChartTooltip
@@ -76,23 +81,41 @@ export function SpendingChart({
                 typeof value === "number" ? value : Number(value ?? 0);
               return [
                 formatCurrency(numericValue),
-                name === "spent" ? "Spent" : "Budget / day",
+                name === "spent" ? "Spent" : "Budget level",
               ];
             }}
-            labelFormatter={(label) => `Day ${label}`}
+            labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""}
+            contentStyle={{
+              backgroundColor: "var(--background)",
+              border: "1px solid var(--color-divider)",
+              borderRadius: 12,
+              boxShadow: "0 12px 30px rgb(0 0 0 / 0.14)",
+              color: "var(--foreground)",
+            }}
           />
           <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
             {data.map((entry) => (
-              <Cell key={`spent-${entry.day}`} fill="#22c55e" />
+              <Cell
+                key={`spent-${entry.month}`}
+                fill={
+                  entry.spent > entry.budget && entry.budget > 0
+                    ? "#ef4444"
+                    : entry.spent > 0
+                      ? "#22c55e"
+                      : "#94a3b8"
+                }
+                opacity={entry.isSelectedMonth ? 1 : 0.82}
+              />
             ))}
           </Bar>
           {showBudgetLine ? (
             <Line
               type="monotone"
               dataKey="budget"
-              stroke="#7dd3fc"
-              strokeWidth={2}
+              stroke="#60a5fa"
+              strokeWidth={2.5}
               dot={false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: "#60a5fa" }}
             />
           ) : null}
         </ComposedChart>

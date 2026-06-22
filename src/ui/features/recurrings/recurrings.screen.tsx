@@ -58,7 +58,7 @@ export function RecurringsScreen({ transactions }: { transactions: TransactionsD
           <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-3xl border border-divider/60 bg-content1 p-8">
             <div className="text-center">
               <div className="text-3xl font-black">
-                {formatCurrency(upcomingTotal, { maximumFractionDigits: 0 })}
+                {formatCurrency(upcomingTotal)}
               </div>
               <div className="mt-1 text-sm font-semibold text-default-400">left to pay</div>
             </div>
@@ -67,7 +67,7 @@ export function RecurringsScreen({ transactions }: { transactions: TransactionsD
             </div>
             <div className="text-center">
               <div className="text-3xl font-black">
-                {formatCurrency(0, { maximumFractionDigits: 0 })}
+                {formatCurrency(0)}
               </div>
               <div className="mt-1 text-sm font-semibold text-default-400">paid so far</div>
             </div>

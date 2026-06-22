@@ -1,9 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
-import { transactions, plaidItems, categories } from "../db/schema";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { transactions, plaidItems, categories, accounts } from "../db/schema";
+import { eq, desc, inArray, and, gte, lte, like, or, sql, type SQL } from "drizzle-orm";
 
 type TransactionType = "regular" | "income" | "transfer";
+export type TransactionReviewStatus = "all" | "not-reviewed" | "reviewed";
+export type TransactionsPageQuery = {
+  amountMax?: string;
+  amountMin?: string;
+  categoryFilter?: string;
+  dateEnd?: string;
+  dateStart?: string;
+  pageIndex?: number;
+  pageSize?: number;
+  reviewStatus?: TransactionReviewStatus;
+  search?: string;
+};
 
 async function getUserAccountIds(db: typeof import("../db").db, userId: string) {
   const userPlaidItems = await db.query.plaidItems.findMany({
@@ -55,6 +67,122 @@ export const getTransactions = createServerFn().handler(async () => {
   return allTransactions;
 });
 
+function normalizeTransactionsPageQuery(query: TransactionsPageQuery = {}) {
+  const pageSize = Math.min(Math.max(Number(query.pageSize) || 100, 1), 250);
+  return {
+    amountMax: query.amountMax?.trim() ?? "",
+    amountMin: query.amountMin?.trim() ?? "",
+    categoryFilter: query.categoryFilter ?? "all",
+    dateEnd: query.dateEnd?.trim() ?? "",
+    dateStart: query.dateStart?.trim() ?? "",
+    pageIndex: Math.max(Number(query.pageIndex) || 0, 0),
+    pageSize,
+    reviewStatus: query.reviewStatus ?? "all",
+    search: query.search?.trim() ?? "",
+  };
+}
+
+function dateBoundary(value: string, endOfDay = false) {
+  return new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+}
+
+function transactionPageWhere({
+  accountIds,
+  query,
+}: {
+  accountIds: number[];
+  query: ReturnType<typeof normalizeTransactionsPageQuery>;
+}) {
+  const conditions: (SQL | undefined)[] = [inArray(transactions.accountId, accountIds)];
+
+  if (query.reviewStatus === "not-reviewed") conditions.push(eq(transactions.isReviewed, false));
+  if (query.reviewStatus === "reviewed") conditions.push(eq(transactions.isReviewed, true));
+
+  if (query.categoryFilter === "income") conditions.push(eq(transactions.transactionType, "income"));
+  else if (query.categoryFilter === "transfer")
+    conditions.push(eq(transactions.transactionType, "transfer"));
+  else if (query.categoryFilter === "uncategorized") {
+    conditions.push(and(eq(transactions.transactionType, "regular"), sql`${transactions.categoryId} IS NULL`));
+  } else if (query.categoryFilter.startsWith("cat:")) {
+    const categoryId = Number(query.categoryFilter.slice(4));
+    if (Number.isFinite(categoryId)) {
+      conditions.push(and(eq(transactions.transactionType, "regular"), eq(transactions.categoryId, categoryId)));
+    }
+  }
+
+  if (query.dateStart) conditions.push(gte(transactions.date, dateBoundary(query.dateStart)));
+  if (query.dateEnd) conditions.push(lte(transactions.date, dateBoundary(query.dateEnd, true)));
+
+  const min = query.amountMin ? Number(query.amountMin) : null;
+  const max = query.amountMax ? Number(query.amountMax) : null;
+  if (min !== null && Number.isFinite(min)) conditions.push(sql`abs(${transactions.amount}) >= ${min}`);
+  if (max !== null && Number.isFinite(max)) conditions.push(sql`abs(${transactions.amount}) <= ${max}`);
+
+  if (query.search) {
+    const pattern = `%${query.search}%`;
+    const typeMatches: SQL[] = [];
+    for (const type of ["regular", "income", "transfer"] as const) {
+      if (type.includes(query.search.toLowerCase())) {
+        typeMatches.push(eq(transactions.transactionType, type));
+      }
+    }
+    conditions.push(
+      or(
+        like(transactions.name, pattern),
+        like(transactions.merchantName, pattern),
+        like(transactions.location, pattern),
+        like(transactions.note, pattern),
+        like(categories.name, pattern),
+        ...typeMatches,
+      ),
+    );
+  }
+
+  return and(...conditions);
+}
+
+export const getTransactionsPage = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const query = normalizeTransactionsPageQuery(((ctx as any).data ?? {}) as TransactionsPageQuery);
+  const { db } = await import("../db");
+  const accountIds = await getUserAccountIds(db, userId);
+
+  if (accountIds.length === 0) {
+    return { rows: [], pageIndex: query.pageIndex, pageSize: query.pageSize, total: 0 };
+  }
+
+  const where = transactionPageWhere({ accountIds, query });
+  const [{ total }] = await db
+    .select({ total: sql<number>`cast(count(*) as integer)` })
+    .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(where);
+
+  const rows = await db
+    .select({
+      account: accounts,
+      category: categories,
+      tx: transactions,
+    })
+    .from(transactions)
+    .leftJoin(accounts, eq(transactions.accountId, accounts.id))
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(where)
+    .orderBy(desc(transactions.date), desc(transactions.id))
+    .limit(query.pageSize)
+    .offset(query.pageIndex * query.pageSize);
+
+  return {
+    rows: rows.map(({ account, category, tx }) => ({ ...tx, account, category })),
+    pageIndex: query.pageIndex,
+    pageSize: query.pageSize,
+    total,
+  };
+});
+
 export const markTransactionsReviewed = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();
   if (!userId) throw new Error("Unauthorized");
@@ -71,6 +199,45 @@ export const markTransactionsReviewed = createServerFn().handler(async (ctx) => 
     .update(transactions)
     .set({ isReviewed: true })
     .where(and(inArray(transactions.id, ids), inArray(transactions.accountId, accountIds)));
+});
+
+export const setTransactionsReviewed = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { ids, isReviewed } = (ctx as any).data as { ids: number[]; isReviewed: boolean };
+  if (!ids.length) return;
+
+  const { db } = await import("../db");
+  const ownedIds = await assertTransactionsOwned(db, userId, ids);
+  if (!ownedIds.length) return;
+
+  await db
+    .update(transactions)
+    .set({ isReviewed })
+    .where(inArray(transactions.id, ownedIds));
+});
+
+export const updateTransactionsDate = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { ids, date } = (ctx as any).data as { ids: number[]; date: string };
+  if (!ids.length) return;
+
+  const parsedDate = dateBoundary(date);
+  if (Number.isNaN(parsedDate.getTime())) throw new Error("Invalid date");
+
+  const { db } = await import("../db");
+  const ownedIds = await assertTransactionsOwned(db, userId, ids);
+  if (!ownedIds.length) return;
+
+  await db
+    .update(transactions)
+    .set({ date: parsedDate })
+    .where(inArray(transactions.id, ownedIds));
 });
 
 export const updateTransactionCategory = createServerFn().handler(async (ctx) => {

@@ -13,11 +13,11 @@ export function MonthlyBudgetInput({
   value: number;
   onSaved: () => void;
 }) {
-  const [draft, setDraft] = useState(String(value || ""));
+  const [draft, setDraft] = useState(String(value));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraft(String(value || ""));
+    setDraft(String(value));
   }, [value]);
 
   const save = async () => {

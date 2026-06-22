@@ -8,9 +8,17 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { getCategories } from "../../../server/categories.fns";
 
-type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number];
+export type CategoryPickerGroup = {
+  id: number;
+  name: string;
+  icon: string | null;
+  children: {
+    id: number;
+    name: string;
+    icon: string | null;
+  }[];
+};
 type TransactionType = "regular" | "income" | "transfer";
 
 export function CategoryActionPicker({
@@ -20,13 +28,15 @@ export function CategoryActionPicker({
   onChange,
   onTypeChange,
   ariaLabel,
+  triggerClassName,
 }: {
-  categories: LoadedGroup[];
+  categories: CategoryPickerGroup[];
   selectedCategoryId: number | null;
   selectedTransactionType?: TransactionType;
   onChange: (categoryId: number | null) => void;
   onTypeChange?: (transactionType: "income" | "transfer") => void;
   ariaLabel: string;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -56,7 +66,10 @@ export function CategoryActionPicker({
         <button
           type="button"
           aria-label={ariaLabel}
-          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-divider/50 bg-background text-default-600 transition-colors hover:border-primary/40 hover:text-primary"
+          className={
+            triggerClassName ??
+            "flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-divider/50 bg-background text-default-600 transition-colors hover:border-primary/40 hover:text-primary"
+          }
         >
           <PieChartIcon size={15} />
         </button>

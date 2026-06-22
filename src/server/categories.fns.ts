@@ -1,7 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
-import { categories, transactions, accounts, plaidItems } from "../db/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import {
+  accounts,
+  categories,
+  monthlyBudgetAllocations,
+  plaidItems,
+  transactions,
+} from "../db/schema";
+import { eq, inArray, sql } from "drizzle-orm";
 import { seedDefaultCategories } from "./categories.seed";
 
 export const getCategoriesWithSpending = createServerFn().handler(async () => {
@@ -104,11 +110,12 @@ export const updateCategory = createServerFn().handler(async (ctx) => {
   const { db } = await import("../db");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { id, name, icon, budgetAmount } = (ctx as any).data as {
+  const { id, name, icon, budgetAmount, parentId } = (ctx as any).data as {
     id: number;
     name: string;
     icon: string;
     budgetAmount: number;
+    parentId?: number | null;
   };
 
   const cat = await db.query.categories.findFirst({
@@ -116,9 +123,26 @@ export const updateCategory = createServerFn().handler(async (ctx) => {
   });
   if (!cat || cat.userId !== userId) throw new Error("Not found");
 
+  if (cat.parentId !== null) {
+    if (typeof parentId !== "number") throw new Error("Group is required");
+    if (parentId === id) throw new Error("Category cannot belong to itself");
+
+    const parent = await db.query.categories.findFirst({
+      where: eq(categories.id, parentId),
+    });
+    if (!parent || parent.userId !== userId || parent.parentId !== null) {
+      throw new Error("Group not found");
+    }
+  }
+
   await db
     .update(categories)
-    .set({ name, icon, budgetAmount })
+    .set({
+      name,
+      icon,
+      budgetAmount,
+      ...(cat.parentId !== null ? { parentId } : {}),
+    })
     .where(eq(categories.id, id));
 });
 
@@ -143,12 +167,18 @@ export const deleteCategory = createServerFn().handler(async (ctx) => {
       .update(transactions)
       .set({ categoryId: null })
       .where(inArray(transactions.categoryId, childIds));
+    await db
+      .delete(monthlyBudgetAllocations)
+      .where(inArray(monthlyBudgetAllocations.categoryId, childIds));
     await db.delete(categories).where(inArray(categories.id, childIds));
   } else {
     await db
       .update(transactions)
       .set({ categoryId: null })
       .where(eq(transactions.categoryId, id));
+    await db
+      .delete(monthlyBudgetAllocations)
+      .where(eq(monthlyBudgetAllocations.categoryId, id));
   }
 
   await db.delete(categories).where(eq(categories.id, id));

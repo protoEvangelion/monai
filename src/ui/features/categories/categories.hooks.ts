@@ -20,6 +20,7 @@ export type ModalState =
         name: string;
         icon: string | null;
         budgetAmount: number;
+        parentId: number | null;
       };
     };
 

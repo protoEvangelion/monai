@@ -6,7 +6,7 @@ import {
   ChevronsLeftIcon,
   ChevronsRightIcon,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useTimeTravel } from "../../hooks/useTimeTravel";
 import { shiftMonth } from "./categories.utils";
 
@@ -22,9 +22,16 @@ export function MonthControls({
     year: "numeric",
   });
   const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const isCurrentMonth =
     current.getFullYear() === now.getFullYear() &&
     current.getMonth() === now.getMonth();
+  const isAfterCurrentMonth =
+    new Date(current.getFullYear(), current.getMonth(), 1) > currentMonthStart;
+
+  useEffect(() => {
+    if (isAfterCurrentMonth) resetToCurrentMonth();
+  }, [isAfterCurrentMonth, resetToCurrentMonth]);
 
   const earliestDate = useMemo(() => {
     if (!transactions.length) return null;
@@ -75,6 +82,7 @@ export function MonthControls({
         size="sm"
         variant="ghost"
         aria-label="Next month"
+        isDisabled={isCurrentMonth || isAfterCurrentMonth}
         onPress={() => setViewDate(shiftMonth(viewDate, 1))}
       >
         <ChevronRightIcon size={16} />

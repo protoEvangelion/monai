@@ -25,7 +25,7 @@ Use an LLM to assign categories to transactions after sync, without using hardco
 ## Prompt Contract (Simple)
 Send one super simple prompt:
 
-`We are going to give you a list of transactions & categories. Return valid json where key is transaction name & value is category. Example output: {"mcdonalds blah":"restaurants","texico gas": "gas"}`
+`We are going to give you a list of transactions & categories. Return valid json with a categories array. Example output: {"categories":[{"transactionId":123,"category":"Restaurants"},{"transactionId":124,"category":"Gas"}]}`
 
 Categories sent to model: user's leaf categories only (no parent groups, no catch-all categories like Other/Misc/General/Uncategorized).
 
@@ -33,17 +33,16 @@ Categories sent to model: user's leaf categories only (no parent groups, no catc
 - Model must return one category per transaction.
 - Returned category names must be from the provided category list.
 - Null/empty category is not allowed.
-- Output must be valid JSON where key = transaction name and value = category name.
+- Output must be valid JSON where each item has `transactionId` and `category`.
 - If model output is malformed or invalid, fallback logic assigns a valid existing category.
 
-## Model Selection (OpenRouter Free)
-Primary models (in fallback order):
-1. `openai/gpt-oss-20b:free`
-2. `google/gemma-3-12b-it:free`
-3. `meta-llama/llama-3.3-70b-instruct:free`
-4. `qwen/qwen3-next-80b-a3b-instruct:free`
+## Model Selection (Codex CLI)
+Categorization runs through `codex exec` in a read-only sandbox.
 
-Override via env: `OPENROUTER_CATEGORIZER_MODEL`
+Environment overrides:
+- `CODEX_CLI_PATH`: path to the Codex CLI binary. Defaults to `codex`.
+- `CODEX_CATEGORIZER_MODEL`: optional model override. If omitted, Codex uses its configured default model.
+- `CODEX_CATEGORIZER_TIMEOUT_MS`: optional process timeout. Defaults to `90000`.
 
 ## Constraints
 - No merchant-specific hardcoded rules.
@@ -131,4 +130,3 @@ Format: `[categorize] { txId: ..., merchant: ..., categoryId: ..., reason: "mode
 - Auto-review workflow.
 - Budget adjustments.
 - Rule-based merchant mapping.
-

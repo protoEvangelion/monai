@@ -1,43 +1,26 @@
 import { useMemo, useState } from "react";
 import {
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-  Tooltip as ChartTooltip,
-} from "recharts";
-import {
-  BarChart3Icon,
   ChevronRightIcon,
-  Layers3Icon,
   MoreHorizontalIcon,
   SettingsIcon,
   TrendingUpIcon,
   XIcon,
 } from "lucide-react";
 import { formatCurrency } from "../../../lib/format";
-import { getAccounts, getNetWorthHistory } from "../../../server/accounts.fns";
+import { getAccounts } from "../../../server/accounts.fns";
 import { getTransactions } from "../../../server/transactions.fns";
 
 type AccountsData = Awaited<ReturnType<typeof getAccounts>>;
 type TransactionsData = Awaited<ReturnType<typeof getTransactions>>;
-type NetWorthData = Awaited<ReturnType<typeof getNetWorthHistory>>;
 
 const ranges = ["1W", "1M", "3M", "YTD", "1Y", "ALL"];
-
-const demoHoldings = [
-  { ticker: "VTI", name: "Total Stock Market ETF", price: 302.41, change: 1.42 },
-  { ticker: "VXUS", name: "International Stock ETF", price: 67.18, change: 0.28 },
-  { ticker: "BND", name: "Total Bond Market ETF", price: 73.52, change: -0.11 },
-];
 
 export function InvestmentsScreen({
   accounts,
   transactions,
-  netWorthHistory,
 }: {
   accounts: AccountsData;
   transactions: TransactionsData;
-  netWorthHistory: NetWorthData;
 }) {
   const investmentAccounts = useMemo(
     () => accounts.filter((account) => account.type === "investment"),
@@ -58,17 +41,6 @@ export function InvestmentsScreen({
   const investmentTransactions = selectedAccount
     ? transactions.filter((tx) => tx.accountId === selectedAccount.id)
     : [];
-  const chartData = netWorthHistory.map((point, index) => {
-    const progress =
-      netWorthHistory.length > 1 ? index / (netWorthHistory.length - 1) : 1;
-    return {
-      ...point,
-      value:
-        totalBalance > 0
-          ? Math.max(0, Math.round(totalBalance * (0.88 + progress * 0.16)))
-          : 0,
-    };
-  });
 
   return (
     <div className="flex min-h-[calc(100vh-8rem)] gap-0 overflow-hidden rounded-3xl border border-divider/60 bg-background/70 shadow-sm">
@@ -92,43 +64,24 @@ export function InvestmentsScreen({
                   Total balance
                 </div>
                 <div className="mt-1 text-3xl font-black tracking-tight">
-                  {formatCurrency(totalBalance, { maximumFractionDigits: 0 })}
+                  {formatCurrency(totalBalance)}
                 </div>
-                <div className="mt-2 inline-flex rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
-                  ↗ 2.32%
+                <div className="mt-2 inline-flex rounded-full bg-content2 px-2.5 py-1 text-xs font-bold text-default-500">
+                  Current linked balance
                 </div>
               </div>
               <div className="text-xs font-semibold text-default-400">
                 730-day history
               </div>
             </div>
-            <div className="mt-4 h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="investmentFill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#17c964" stopOpacity={0.22} />
-                      <stop offset="100%" stopColor="#17c964" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <ChartTooltip
-                    content={({ payload }) =>
-                      payload?.length ? (
-                        <div className="rounded-xl border border-divider bg-background px-3 py-2 text-xs shadow-lg">
-                          {formatCurrency(Number(payload[0].value ?? 0))}
-                        </div>
-                      ) : null
-                    }
-                  />
-                  <Area
-                    dataKey="value"
-                    type="monotone"
-                    stroke="#17c964"
-                    strokeWidth={3}
-                    fill="url(#investmentFill)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="mt-4 flex h-48 items-center justify-center rounded-2xl border border-dashed border-divider/70 bg-background/50 px-6 text-center">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Balance history pending</p>
+                <p className="mt-2 max-w-md text-sm text-default-400">
+                  Investment-specific historical balances are not exposed to this screen yet.
+                  Showing current linked balances avoids implying fake performance.
+                </p>
+              </div>
             </div>
             <div className="mt-2 flex justify-center gap-2">
               {ranges.map((range) => (
@@ -154,7 +107,7 @@ export function InvestmentsScreen({
                 <TrendingUpIcon size={15} /> Accounts
               </h2>
               <span className="text-xs font-bold uppercase tracking-wide text-default-400">
-                1W balance change
+                current balance
               </span>
             </div>
             <div className="overflow-hidden rounded-2xl border border-divider/60 bg-content1">
@@ -180,9 +133,6 @@ export function InvestmentsScreen({
                         Synced from linked account
                       </div>
                     </div>
-                    <div className="rounded-full bg-success/15 px-2 py-1 text-xs font-bold text-success">
-                      ↗ 2.33%
-                    </div>
                     <div className="w-28 text-right text-sm font-bold">
                       {formatCurrency(account.currentBalance)}
                     </div>
@@ -200,64 +150,19 @@ export function InvestmentsScreen({
           <section>
             <div className="mb-2 flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-sm font-bold">
-                <Layers3Icon size={15} /> Allocation
+                Portfolio details
               </h2>
               <span className="text-xs font-bold uppercase tracking-wide text-default-400">
-                by percentage
+                from linked providers
               </span>
             </div>
-            <div className="rounded-2xl border border-divider/60 bg-content1 p-4">
-              <div className="mb-2 flex justify-between text-sm">
-                <span>Equities</span>
-                <span className="font-bold">82%</span>
-              </div>
-              <div className="h-2 rounded-full bg-content2">
-                <div className="h-full w-[82%] rounded-full bg-primary" />
-              </div>
-              <div className="mt-4 mb-2 flex justify-between text-sm">
-                <span>Bonds and cash</span>
-                <span className="font-bold">18%</span>
-              </div>
-              <div className="h-2 rounded-full bg-content2">
-                <div className="h-full w-[18%] rounded-full bg-success" />
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-bold">
-                <BarChart3Icon size={15} /> Holdings
-              </h2>
-              <span className="text-xs font-bold uppercase tracking-wide text-default-400">
-                last price
-              </span>
-            </div>
-            <div className="overflow-hidden rounded-2xl border border-divider/60 bg-content1">
-              {demoHoldings.map((holding) => (
-                <div
-                  key={holding.ticker}
-                  className="grid grid-cols-[5rem_minmax(0,1fr)_6rem_6rem] items-center gap-3 border-b border-divider/40 px-4 py-3 last:border-b-0"
-                >
-                  <span className="text-sm font-bold text-default-500">
-                    {holding.ticker}
-                  </span>
-                  <span className="truncate text-sm">{holding.name}</span>
-                  <span
-                    className={[
-                      "rounded-full px-2 py-1 text-center text-xs font-bold",
-                      holding.change >= 0
-                        ? "bg-success/15 text-success"
-                        : "bg-danger/15 text-danger",
-                    ].join(" ")}
-                  >
-                    {holding.change >= 0 ? "↗" : "↘"} {Math.abs(holding.change)}%
-                  </span>
-                  <span className="text-right text-sm font-bold">
-                    {formatCurrency(holding.price)}
-                  </span>
-                </div>
-              ))}
+            <div className="rounded-2xl border border-divider/60 bg-content1 px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-foreground">Holdings are not imported yet</p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-default-400">
+                Monai is currently showing investment account balances and activity. Individual
+                securities, allocation, and performance should stay hidden until those fields are
+                available from the data provider.
+              </p>
             </div>
           </section>
         </div>
@@ -285,21 +190,13 @@ export function InvestmentsScreen({
                   </div>
                 </div>
                 <div className="rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
-                  ↗ 2.33%
+                  Synced
                 </div>
               </div>
               <div className="mt-5 h-32 rounded-2xl bg-success/5 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <Area
-                      dataKey="value"
-                      type="monotone"
-                      stroke="#17c964"
-                      strokeWidth={2.5}
-                      fill="#17c96422"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-success/20 text-center text-xs text-default-400">
+                  Account balance history unavailable
+                </div>
               </div>
             </div>
             <div className="border-t border-divider/60 p-5">

@@ -1,7 +1,6 @@
-import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
 import { useRouter } from "@tanstack/react-router";
-import { Loader2Icon, PencilIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Loader2Icon, XIcon } from "lucide-react";
+import { useState } from "react";
 import {
   Modal,
   ModalBackdrop,
@@ -13,6 +12,14 @@ import {
   Input,
 } from "@heroui/react";
 import { createCategory, updateCategory } from "../../../server/categories.fns";
+import { CategoryBudgetField } from "./CategoryBudgetField";
+import { CategoryEmojiPicker } from "./CategoryEmojiPicker";
+type CategoryGroupOption = {
+  id: number;
+  name: string;
+  icon: string | null;
+};
+
 type ModalState =
   | { mode: "create-group" }
   | { mode: "create-child"; parentId: number; parentName: string }
@@ -32,11 +39,13 @@ type ModalState =
         name: string;
         icon: string | null;
         budgetAmount: number;
+        parentId: number | null;
       };
     };
 
 export function CategoryModal(props: {
   modal?: ModalState;
+  groups?: CategoryGroupOption[];
   onClose?: () => void;
   onSuccess?: () => void;
   mode?: "group" | "category";
@@ -68,47 +77,17 @@ export function CategoryModal(props: {
   const isEdit = existing !== null;
 
   const [icon, setIcon] = useState(existing?.icon ?? "");
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [openPickerAbove, setOpenPickerAbove] = useState(false);
-  const iconBtnRef = useRef<HTMLButtonElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(existing?.name ?? "");
   const [budget, setBudget] = useState(existing?.budgetAmount ? String(existing.budgetAmount) : "");
+  const [selectedParentId, setSelectedParentId] = useState<number | null>(() => {
+    if (isGroup) return null;
+    if (props.modal?.mode === "edit-child") return props.modal.category.parentId;
+    if (typeof parentId === "number") return parentId;
+    return props.groups?.[0]?.id ?? null;
+  });
   const [saving, setSaving] = useState(false);
   const numericBudget = Math.max(0, Number(budget) || 0);
   const sliderMax = Math.max(2000, Math.ceil(numericBudget / 500) * 500);
-
-  useEffect(() => {
-    if (!showEmojiPicker) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        pickerRef.current &&
-        !pickerRef.current.contains(event.target as Node) &&
-        iconBtnRef.current &&
-        !iconBtnRef.current.contains(event.target as Node)
-      ) {
-        setShowEmojiPicker(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside, true);
-    return () => document.removeEventListener("mousedown", handleClickOutside, true);
-  }, [showEmojiPicker]);
-
-  const toggleEmojiPicker = () => {
-    if (showEmojiPicker) {
-      setShowEmojiPicker(false);
-      return;
-    }
-    const rect = iconBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      const pickerHeight = 360;
-      const gap = 8;
-      const spaceBelow = window.innerHeight - rect.bottom - gap;
-      const spaceAbove = rect.top - gap;
-      setOpenPickerAbove(spaceBelow < pickerHeight && spaceAbove > spaceBelow);
-    }
-    setShowEmojiPicker(true);
-  };
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -122,6 +101,7 @@ export function CategoryModal(props: {
             name: name.trim(),
             icon: icon.trim() || (isGroup ? "📁" : "📌"),
             budgetAmount: isGroup ? 0 : parseFloat(budget) || 0,
+            parentId: isGroup ? null : selectedParentId,
           },
         });
       } else {
@@ -131,7 +111,7 @@ export function CategoryModal(props: {
             name: name.trim(),
             icon: icon.trim() || (isGroup ? "📁" : "📌"),
             budgetAmount: isGroup ? 0 : parseFloat(budget) || 0,
-            parentId: !isGroup && parentId ? parentId : null,
+            parentId: !isGroup ? selectedParentId : null,
           },
         });
       }
@@ -178,41 +158,7 @@ export function CategoryModal(props: {
 
             <ModalBody className="px-5 py-4 flex flex-col gap-4 overflow-visible">
               <div className="flex gap-2">
-                <div className="flex flex-col gap-1">
-                  <label className="sr-only">Icon</label>
-                  <div className="relative">
-                    <button
-                      ref={iconBtnRef}
-                      type="button"
-                      onClick={toggleEmojiPicker}
-                      className="group w-14 h-10 relative flex items-center justify-center rounded-xl border border-default-200 bg-default-100 hover:bg-default-200 text-2xl transition-colors cursor-pointer"
-                      aria-label="Choose emoji"
-                    >
-                      <span>{icon || (isGroup ? "📁" : "📌")}</span>
-                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-                        <PencilIcon size={14} className="text-white" />
-                      </span>
-                    </button>
-                    {showEmojiPicker && (
-                      <div
-                        ref={pickerRef}
-                        className={`absolute left-0 z-50 ${openPickerAbove ? "bottom-full mb-2" : "top-full mt-2"}`}
-                      >
-                        <EmojiPicker
-                          theme={Theme.AUTO}
-                          width={320}
-                          height={340}
-                          onEmojiClick={(event: EmojiClickData) => {
-                            setIcon(event.emoji);
-                            setShowEmojiPicker(false);
-                          }}
-                          lazyLoadEmojis
-                          searchPlaceholder="Search emoji…"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <CategoryEmojiPicker icon={icon} isGroup={isGroup} onIconChange={setIcon} />
                 <div className="flex flex-col gap-1 flex-1">
                   <label className="sr-only">Name</label>
                   <Input
@@ -227,42 +173,40 @@ export function CategoryModal(props: {
               </div>
 
               {!isGroup && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-default-400 font-medium">
-                    Default Budget <span className="text-default-300">(optional)</span>
-                  </label>
-                  <div className="rounded-2xl border border-divider/50 bg-default-50/70 px-3 py-3">
-                    <input
-                      aria-label="Monthly budget slider"
-                      type="range"
-                      min={0}
-                      max={sliderMax}
-                      step={25}
-                      value={numericBudget}
-                      onChange={(event) => setBudget(event.target.value)}
-                      className="budget-slider mb-3 w-full cursor-pointer"
-                    />
-                    <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-default-400">
-                      <span>$0</span>
-                      <span className="rounded-md bg-default-100 px-2 py-0.5 text-default-600">
-                        ${numericBudget.toLocaleString()}
-                      </span>
-                      <span>${sliderMax.toLocaleString()}</span>
+                <>
+                  {props.groups?.length ? (
+                    <div className="grid gap-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+                        Group
+                      </label>
+                      <select
+                        aria-label="Group"
+                        value={selectedParentId ? String(selectedParentId) : ""}
+                        onChange={(event) => {
+                          const next = Number(event.target.value);
+                          if (Number.isFinite(next)) setSelectedParentId(next);
+                        }}
+                        className="h-11 w-full rounded-xl border border-divider bg-background px-3 text-sm font-semibold text-foreground outline-none transition-colors focus:border-primary"
+                      >
+                        <option value="" disabled>
+                          Choose group
+                        </option>
+                        {props.groups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.icon ? `${group.icon} ` : ""}
+                            {group.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="flex justify-center">
-                      <input
-                        aria-label="Monthly budget"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={budget}
-                        onChange={(event) => setBudget(event.target.value)}
-                        placeholder="0"
-                        className="w-40 rounded-xl border border-default-200 bg-default-100 px-3 py-2 text-center text-foreground outline-none transition-colors focus:border-primary"
-                      />
-                    </div>
-                  </div>
-                </div>
+                  ) : null}
+                  <CategoryBudgetField
+                    budget={budget}
+                    numericBudget={numericBudget}
+                    onBudgetChange={setBudget}
+                    sliderMax={sliderMax}
+                  />
+                </>
               )}
             </ModalBody>
 
@@ -286,7 +230,7 @@ export function CategoryModal(props: {
                 size="sm"
                 className="flex-1"
                 onPress={handleSave}
-                isDisabled={saving || !name.trim()}
+                isDisabled={saving || !name.trim() || (!isGroup && !selectedParentId)}
               >
                 {saving ? <Loader2Icon size={14} className="animate-spin" /> : null}
                 {saving ? "Saving…" : isEdit ? "Save Changes" : "Create"}

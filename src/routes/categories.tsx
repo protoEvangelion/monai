@@ -11,9 +11,26 @@ const authStateFn = createServerFn().handler(async () => {
   if (!isAuthenticated) throw redirect({ to: "/sign-in/$" });
 });
 
+type CategoriesSearch = {
+  category?: string;
+};
+
+function categorySearchParam(value: unknown) {
+  return typeof value === "string" && /^(child|group)-\d+$/.test(value) ? value : undefined;
+}
+
+function cleanCategoriesSearch(search: CategoriesSearch): CategoriesSearch {
+  return {
+    category: categorySearchParam(search.category),
+  };
+}
+
 export const Route = createFileRoute("/categories")({
   component: CategoriesRoute,
   beforeLoad: async () => await authStateFn(),
+  validateSearch: (search: Record<string, unknown>): CategoriesSearch => ({
+    category: categorySearchParam(search.category),
+  }),
   loader: async () => {
     const [groups, transactions, budgets] = await Promise.all([
       getCategories(),
@@ -26,5 +43,21 @@ export const Route = createFileRoute("/categories")({
 
 function CategoriesRoute() {
   const { groups, transactions, budgets } = Route.useLoaderData();
-  return <CategoriesScreen groups={groups} transactions={transactions} budgets={budgets} />;
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+
+  return (
+    <CategoriesScreen
+      groups={groups}
+      transactions={transactions}
+      budgets={budgets}
+      selectedCategoryKey={search.category}
+      onSelectedCategoryKeyChange={(category) =>
+        navigate({
+          replace: true,
+          search: (prev) => cleanCategoriesSearch({ ...prev, category }),
+        })
+      }
+    />
+  );
 }

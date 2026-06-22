@@ -12,7 +12,7 @@
 |---|---|
 | 📊 **Dashboard** | Net worth chart, budget progress, top categories at a glance |
 | 🔄 **Transaction Review** | Pulse-animated queue of transactions begging for your attention |
-| 🤖 **AI Categorization** | OpenRouter + Gemma auto-tags your merchants so you don't have to |
+| 🤖 **AI Categorization** | Codex CLI auto-tags your merchants so you don't have to |
 | ⏳ **Time Travel** | Jump to any past month to audit your past-self's spending crimes |
 | 🏦 **Account Groups** | Credit, Depository, Investment, Loan, Real Estate — all in one place |
 | 🔐 **Auth** | Clerk-powered, zero config |
@@ -31,7 +31,7 @@ UI           →  HeroUI v3 + Tailwind CSS v4
 State        →  TanStack Query (server) · Zustand (client)
 Charts       →  Recharts
 Animation    →  Framer Motion
-AI           →  OpenRouter → google/gemma-7b-it:free
+AI           →  Codex CLI
 Deploy       →  Vercel (Nitro)
 Linting      →  oxlint
 TypeScript   →  @typescript/native-preview (tsgo) 🚀
@@ -56,7 +56,8 @@ cp .env.example .env.local
 | Variable | Where to get it |
 |---|---|
 | `VITE_CLERK_PUBLISHABLE_KEY` | [clerk.com](https://clerk.com) → your app → API Keys |
-| `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) → Keys |
+| `CODEX_CLI_PATH` | Optional path to Codex CLI. Defaults to `codex` |
+| `CODEX_CATEGORIZER_MODEL` | Optional Codex model override |
 
 ### 3. Set up the database
 
@@ -132,9 +133,9 @@ historical_balances → daily snapshots for net worth chart
 
 ## 🤖 AI Auto-Categorization
 
-Monai ships an OpenRouter integration that feeds merchant names into `google/gemma-7b-it:free` and maps them to your custom category tree. No cloud sync required — your data stays local.
+Monai shells out to `codex exec` in a read-only sandbox for categorization and maps transactions to your custom category tree.
 
-Set `OPENROUTER_API_KEY` in `.env.local` and it just works.
+Install and log in to Codex CLI, then optionally set `CODEX_CLI_PATH`, `CODEX_CATEGORIZER_MODEL`, or `CODEX_CATEGORIZER_TIMEOUT_MS` in `.env.local`.
 
 ---
 

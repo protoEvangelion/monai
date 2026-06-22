@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
 import { plaidItems, accounts, transactions, historicalBalances } from "../db/schema";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import {
   plaidPost,
   isMissingPlaidItemError,
@@ -15,18 +15,238 @@ const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const AI_CATEGORIZE_MAX_TRANSACTIONS = 100;
 const syncInFlight = new Set<number>();
 
+type TransactionMetadataCarryover = {
+  accountId: number;
+  amount: number;
+  categoryId: number | null;
+  date: Date | string;
+  isReviewed: boolean;
+  merchantName: string;
+  name: string | null;
+  note: string | null;
+  plaidTransactionId: string | null;
+  transactionType: "regular" | "income" | "transfer";
+};
+
+function plaidTransactionDate(tx: any) {
+  return new Date(tx.authorized_date ?? tx.date);
+}
+
+function plaidTransactionDateTime(tx: any) {
+  const value = tx.authorized_datetime ?? tx.datetime;
+  return value ? new Date(value) : null;
+}
+
 function plaidTransactionFields(tx: any, accountId: number) {
   return {
     accountId,
     plaidTransactionId: tx.transaction_id,
     amount: tx.amount,
-    date: new Date(tx.date),
-    datetime: tx.datetime ? new Date(tx.datetime) : null,
+    date: plaidTransactionDate(tx),
+    datetime: plaidTransactionDateTime(tx),
     name: tx.name,
     merchantName: tx.merchant_name ?? tx.name,
     location: tx.location?.address ?? null,
     isRecurring: tx.recurring_transaction_id != null,
   };
+}
+
+function plaidTransactionId(value: any) {
+  if (typeof value === "string") return value.trim();
+  return String(value?.transaction_id ?? "").trim();
+}
+
+function postedPendingTransactionId(value: any) {
+  if (value?.pending) return "";
+  return String(value?.pending_transaction_id ?? "").trim();
+}
+
+function pendingReplacement(value: any) {
+  const pendingId = postedPendingTransactionId(value);
+  const postedId = plaidTransactionId(value);
+  if (!pendingId || !postedId) return null;
+  return { pendingId, postedId };
+}
+
+function cents(value: number) {
+  return Math.round(value * 100);
+}
+
+function normalizedTransactionName(value: string | null | undefined) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function hasUserMetadata(row: TransactionMetadataCarryover) {
+  return Boolean(
+    row.categoryId !== null ||
+      row.isReviewed ||
+      row.note ||
+      row.transactionType !== "regular",
+  );
+}
+
+function metadataMatchesPlaidTransaction(
+  metadata: TransactionMetadataCarryover,
+  tx: any,
+  accountId: number,
+) {
+  if (metadata.accountId !== accountId) return false;
+  if (cents(metadata.amount) !== cents(Number(tx.amount))) return false;
+
+  const metadataDate = new Date(metadata.date).getTime();
+  const txDate = plaidTransactionDate(tx).getTime();
+  if (Number.isNaN(metadataDate) || Number.isNaN(txDate)) return false;
+  if (Math.abs(metadataDate - txDate) > 4 * 24 * 60 * 60 * 1000) return false;
+
+  const metadataNames = [
+    normalizedTransactionName(metadata.merchantName),
+    normalizedTransactionName(metadata.name),
+  ].filter(Boolean);
+  const txNames = [
+    normalizedTransactionName(tx.merchant_name),
+    normalizedTransactionName(tx.name),
+  ].filter(Boolean);
+
+  return metadataNames.some((metadataName) => txNames.includes(metadataName));
+}
+
+function metadataDateDistance(metadata: TransactionMetadataCarryover, tx: any) {
+  return Math.abs(new Date(metadata.date).getTime() - plaidTransactionDate(tx).getTime());
+}
+
+function findMetadataCarryover({
+  accountId,
+  metadataRows,
+  tx,
+}: {
+  accountId: number;
+  metadataRows: TransactionMetadataCarryover[];
+  tx: any;
+}) {
+  const pendingId = postedPendingTransactionId(tx);
+  const directMatch = pendingId
+    ? metadataRows.find((metadata) => metadata.plaidTransactionId === pendingId)
+    : undefined;
+  if (directMatch && hasUserMetadata(directMatch)) return directMatch;
+
+  return metadataRows
+    .filter(hasUserMetadata)
+    .filter((metadata) => metadataMatchesPlaidTransaction(metadata, tx, accountId))
+    .sort((a, b) => metadataDateDistance(a, tx) - metadataDateDistance(b, tx))[0];
+}
+
+async function getPlaidTransactionMetadata(
+  db: typeof import("../db").db,
+  plaidTransactionIds: string[],
+) {
+  const uniqueIds = [...new Set(plaidTransactionIds.filter(Boolean))];
+  if (!uniqueIds.length) return [];
+
+  return db.query.transactions.findMany({
+    where: inArray(transactions.plaidTransactionId, uniqueIds),
+  });
+}
+
+async function deletePlaidTransactions(db: typeof import("../db").db, plaidTransactionIds: string[]) {
+  const uniqueIds = [...new Set(plaidTransactionIds.filter(Boolean))];
+  if (!uniqueIds.length) return 0;
+
+  const deleted = await db
+    .delete(transactions)
+    .where(inArray(transactions.plaidTransactionId, uniqueIds))
+    .returning({ id: transactions.id });
+
+  return deleted.length;
+}
+
+async function mergePendingMetadataIntoPosted(
+  db: typeof import("../db").db,
+  pendingId: number,
+  postedId: number,
+) {
+  const [pending, posted] = await Promise.all([
+    db.query.transactions.findFirst({ where: eq(transactions.id, pendingId) }),
+    db.query.transactions.findFirst({ where: eq(transactions.id, postedId) }),
+  ]);
+
+  if (!pending || !posted) return;
+
+  await db
+    .update(transactions)
+    .set({
+      categoryId: posted.categoryId ?? pending.categoryId,
+      isReviewed: posted.isReviewed || pending.isReviewed,
+      note: posted.note ?? pending.note,
+      transactionType:
+        posted.transactionType === "regular" && pending.transactionType !== "regular"
+          ? pending.transactionType
+          : posted.transactionType,
+    })
+    .where(eq(transactions.id, postedId));
+}
+
+async function replacePendingTransactions(
+  db: typeof import("../db").db,
+  replacements: { pendingId: string; postedId: string }[],
+) {
+  let replacedCount = 0;
+
+  for (const replacement of replacements) {
+    const [pending, posted] = await Promise.all([
+      db.query.transactions.findFirst({
+        where: eq(transactions.plaidTransactionId, replacement.pendingId),
+      }),
+      db.query.transactions.findFirst({
+        where: eq(transactions.plaidTransactionId, replacement.postedId),
+      }),
+    ]);
+
+    if (!pending || !posted) continue;
+
+    await mergePendingMetadataIntoPosted(db, pending.id, posted.id);
+    await db.delete(transactions).where(eq(transactions.id, pending.id));
+    replacedCount += 1;
+  }
+
+  return replacedCount;
+}
+
+async function cleanupLikelyPendingDuplicates(db: typeof import("../db").db, itemId: number) {
+  const duplicateRows = await db.all<{ pending_id: number; posted_id: number }>(sql`
+    select pending.id as pending_id, posted.id as posted_id
+    from transactions pending
+    join transactions posted
+      on posted.account_id = pending.account_id
+     and lower(posted.merchant_name) = lower(pending.merchant_name)
+     and round(abs(posted.amount), 2) = round(abs(pending.amount), 2)
+     and posted.id <> pending.id
+     and posted.datetime is not null
+     and pending.datetime is null
+     and posted.date >= pending.date
+     and posted.date <= pending.date + (4 * 24 * 60 * 60)
+    join accounts account
+      on account.id = pending.account_id
+    where account.plaid_item_id = ${itemId}
+  `);
+  const pairs = Array.from(
+    new Map(duplicateRows.map((row) => [row.pending_id, row.posted_id])).entries(),
+  );
+
+  if (!pairs.length) return 0;
+
+  for (const [pendingId, postedId] of pairs) {
+    await mergePendingMetadataIntoPosted(db, pendingId, postedId);
+  }
+
+  const deleted = await db
+    .delete(transactions)
+    .where(inArray(transactions.id, pairs.map(([pendingId]) => pendingId)))
+    .returning({ id: transactions.id });
+
+  return deleted.length;
 }
 
 export async function syncTransactions(
@@ -45,7 +265,7 @@ export async function syncTransactions(
   let cursor = fullHistory ? undefined : (item?.cursor ?? undefined);
   let hasMore = true;
   let addedCount = 0;
-  let loggedPlaidTransactionSample = false;
+  const metadataCarryovers: TransactionMetadataCarryover[] = [];
 
   const dbAccounts = await db.query.accounts.findMany({
     where: eq(accounts.plaidItemId, itemId),
@@ -59,28 +279,46 @@ export async function syncTransactions(
         ...(cursor ? { cursor } : {}),
       });
 
-      if (!loggedPlaidTransactionSample) {
-        const sampleTx = page.added?.[0] ?? page.modified?.[0];
-        if (sampleTx) {
-          console.log(
-            "Plaid transaction sample:",
-            JSON.stringify(sampleTx, null, 2),
-          );
-          loggedPlaidTransactionSample = true;
-        }
+      const removedPlaidTransactionIds = (page.removed ?? []).map(plaidTransactionId);
+      const stalePendingPlaidTransactionIds = [...(page.added ?? []), ...(page.modified ?? [])]
+        .filter((tx: any) => tx.pending)
+        .map(plaidTransactionId);
+      const pageMetadataCarryovers = await getPlaidTransactionMetadata(db, [
+        ...removedPlaidTransactionIds,
+        ...stalePendingPlaidTransactionIds,
+      ]);
+      metadataCarryovers.push(...pageMetadataCarryovers);
+
+      const removedCount = await deletePlaidTransactions(db, removedPlaidTransactionIds);
+      if (removedCount > 0) {
+        console.log(`Removed ${removedCount} deleted Plaid transactions for item ${itemId}`);
+      }
+
+      const stalePendingCount = await deletePlaidTransactions(db, stalePendingPlaidTransactionIds);
+      if (stalePendingCount > 0) {
+        console.log(`Removed ${stalePendingCount} pending transactions for item ${itemId}`);
       }
 
       const inserted = await Promise.all(
         page.added
           .filter((tx: any) => accountMap.has(tx.account_id))
+          .filter((tx: any) => !tx.pending)
           .map((tx: any) => {
-            const values = plaidTransactionFields(tx, accountMap.get(tx.account_id)!);
+            const accountId = accountMap.get(tx.account_id)!;
+            const values = plaidTransactionFields(tx, accountId);
+            const metadata = findMetadataCarryover({
+              accountId,
+              metadataRows: metadataCarryovers,
+              tx,
+            });
             return db
               .insert(transactions)
               .values({
                 ...values,
-                isReviewed: false,
-                transactionType: "regular",
+                categoryId: metadata?.categoryId ?? null,
+                isReviewed: metadata?.isReviewed ?? false,
+                note: metadata?.note ?? null,
+                transactionType: metadata?.transactionType ?? "regular",
               })
               .onConflictDoUpdate({
                 target: transactions.plaidTransactionId,
@@ -93,6 +331,7 @@ export async function syncTransactions(
       await Promise.all(
         page.modified
           .filter((tx: any) => accountMap.has(tx.account_id))
+          .filter((tx: any) => !tx.pending)
           .map((tx: any) =>
             db
               .update(transactions)
@@ -101,18 +340,32 @@ export async function syncTransactions(
           ),
       );
 
+      const pendingReplacementCount = await replacePendingTransactions(
+        db,
+        [...(page.added ?? []), ...(page.modified ?? [])]
+          .map(pendingReplacement)
+          .filter((replacement): replacement is { pendingId: string; postedId: string } =>
+            Boolean(replacement),
+          ),
+      );
+      if (pendingReplacementCount > 0) {
+        console.log(
+          `Replaced ${pendingReplacementCount} pending transactions with posted transactions for item ${itemId}`,
+        );
+      }
+
       cursor = page.next_cursor;
       hasMore = page.has_more;
 
       await db.update(plaidItems).set({ cursor }).where(eq(plaidItems.id, itemId));
     }
 
-    if (!loggedPlaidTransactionSample) {
-      console.log("Plaid transaction sample: no added or modified transactions returned");
-    }
-
     console.log(`Sync completed for item ${itemId}. Total added: ${addedCount}`);
     await db.update(plaidItems).set({ lastSyncedAt: new Date() }).where(eq(plaidItems.id, itemId));
+    const cleanupCount = await cleanupLikelyPendingDuplicates(db, itemId);
+    if (cleanupCount > 0) {
+      console.log(`Cleaned up ${cleanupCount} likely pending duplicate transactions for item ${itemId}`);
+    }
     if (categorizeAfterSync) {
       await categorizeTransactions(userId, itemId);
     }

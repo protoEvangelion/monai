@@ -7,13 +7,29 @@ interface TimeTravelState {
   resetToCurrentMonth: () => void
 }
 
+function currentMonthStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), 1)
+}
+
+function clampToCurrentMonth(date: string) {
+  const requested = new Date(date)
+  const current = currentMonthStart()
+
+  if (Number.isNaN(requested.getTime()) || requested > current) {
+    return current.toISOString()
+  }
+
+  return new Date(requested.getFullYear(), requested.getMonth(), 1).toISOString()
+}
+
 export const useTimeTravel = create<TimeTravelState>()(
   persist(
     (set) => ({
-      viewDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
-      setViewDate: (date: string) => set({ viewDate: date }),
-      resetToCurrentMonth: () => set({ 
-        viewDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString() 
+      viewDate: currentMonthStart().toISOString(),
+      setViewDate: (date: string) => set({ viewDate: clampToCurrentMonth(date) }),
+      resetToCurrentMonth: () => set({
+        viewDate: currentMonthStart().toISOString()
       }),
     }),
     {

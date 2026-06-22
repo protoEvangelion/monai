@@ -1,4 +1,6 @@
 import { ClerkProvider, useAuth } from "@clerk/tanstack-react-start";
+import { TanStackDevtools } from "@tanstack/react-devtools";
+import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import {
   HeadContent,
   Scripts,
@@ -6,10 +8,12 @@ import {
   useLocation,
   useRouter,
 } from "@tanstack/react-router";
+import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect, useState } from "react";
 import { useTheme } from "../ui/hooks/useTheme";
 import { AppHeader } from "../ui/layout/AppHeader";
 import { AppSidebar, type SidebarAccount } from "../ui/layout/AppSidebar";
+import TanstackQueryProvider from "../ui/integrations/tanstack-query/root-provider";
 import { ToastViewport } from "../ui/shared/toast";
 import { getAccounts } from "../server/accounts.fns";
 import { autoSync, syncLatestTransactionsOnLogin } from "../server/plaid.sync.fns";
@@ -104,65 +108,116 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="antialiased selection:bg-primary/30">
-        <ClerkProvider>
-          <LoginSyncEffect isAuthPage={isAuthPage} />
-          <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
-            {mounted ? (
-              isAuthPage ? (
-                <div className="z-10 flex grow items-center justify-center p-4">
-                  <div className="w-full max-w-md">
-                    <div className="mb-8 flex flex-col items-center gap-6 text-center">
-                      <div className="animate-gradient-x bg-linear-to-r from-primary via-secondary to-primary bg-clip-text text-5xl font-black tracking-tighter text-transparent">
-                        MONAI
+        <TanstackQueryProvider>
+          <ClerkProvider>
+            <LoginSyncEffect isAuthPage={isAuthPage} />
+            <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
+              {mounted ? (
+                isAuthPage ? (
+                  <div className="z-10 flex grow items-center justify-center p-4">
+                    <div className="w-full max-w-md">
+                      <div className="mb-8 flex flex-col items-center gap-6 text-center">
+                        <div className="animate-gradient-x bg-linear-to-r from-primary via-secondary to-primary bg-clip-text text-5xl font-black tracking-tighter text-transparent">
+                          MONAI
+                        </div>
+                        <p className="text-default-500 text-lg font-medium">
+                          Your premium, local-first financial command center.
+                        </p>
                       </div>
-                      <p className="text-default-500 text-lg font-medium">
-                        Your premium, local-first financial command center.
-                      </p>
-                    </div>
-                    <div className="rounded-3xl border border-divider/50 bg-background p-8 shadow-2xl">
-                      {children}
+                      <div className="rounded-3xl border border-divider/50 bg-background p-8 shadow-2xl">
+                        {children}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <>
-                  <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-divider/60 bg-background xl:flex">
-                    <AppSidebar sidebarAccounts={sidebarAccounts} />
-                  </aside>
+                ) : (
+                  <>
+                    <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-divider/60 bg-background xl:flex">
+                      <AppSidebar sidebarAccounts={sidebarAccounts} />
+                    </aside>
 
-                  {sidebarOpen ? (
-                    <div className="fixed inset-0 z-50 xl:hidden">
-                      <button
-                        type="button"
-                        aria-label="Close sidebar"
-                        className="absolute inset-0 bg-black/45"
-                        onClick={() => setSidebarOpen(false)}
-                      />
-                      <aside className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-divider/60 bg-background shadow-2xl">
-                        <AppSidebar
-                          sidebarAccounts={sidebarAccounts}
-                          onClose={() => setSidebarOpen(false)}
+                    {sidebarOpen ? (
+                      <div className="fixed inset-0 z-50 xl:hidden">
+                        <button
+                          type="button"
+                          aria-label="Close sidebar"
+                          className="absolute inset-0 bg-black/45"
+                          onClick={() => setSidebarOpen(false)}
                         />
-                      </aside>
+                        <aside className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-divider/60 bg-background shadow-2xl">
+                          <AppSidebar
+                            sidebarAccounts={sidebarAccounts}
+                            onClose={() => setSidebarOpen(false)}
+                          />
+                        </aside>
+                      </div>
+                    ) : null}
+
+                    <div className="z-10 flex min-w-0 grow flex-col overflow-hidden">
+                      <AppHeader pageTitle="" onOpenSidebar={() => setSidebarOpen(true)} />
+
+                      <main className="grow overflow-y-auto bg-transparent p-6 xl:p-8">
+                        <div className="mx-auto w-full">{children}</div>
+                      </main>
                     </div>
-                  ) : null}
-
-                  <div className="z-10 flex min-w-0 grow flex-col overflow-hidden">
-                    <AppHeader pageTitle="" onOpenSidebar={() => setSidebarOpen(true)} />
-
-                    <main className="grow overflow-y-auto bg-transparent p-6 xl:p-8">
-                      <div className="mx-auto w-full">{children}</div>
-                    </main>
-                  </div>
-                </>
-              )
-            ) : null}
-          </div>
-          <ToastViewport />
-        </ClerkProvider>
+                  </>
+                )
+              ) : null}
+            </div>
+            <ToastViewport />
+            {import.meta.env.DEV ? <TanStackDevtoolsHost /> : null}
+          </ClerkProvider>
+        </TanstackQueryProvider>
         <Scripts />
       </body>
     </html>
+  );
+}
+
+function TanStackDevtoolsHost() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const key = "tanstack_devtools_settings";
+    const saved = window.localStorage.getItem(key);
+    let settings: Record<string, unknown> = {};
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          settings = parsed;
+        }
+      } catch {
+        settings = {};
+      }
+    }
+
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...settings,
+        position: "bottom-left",
+      }),
+    );
+    setReady(true);
+  }, []);
+
+  if (!ready) return null;
+
+  return (
+    <TanStackDevtools
+      config={{ position: "bottom-left" }}
+      plugins={[
+        {
+          name: "TanStack Query",
+          render: <ReactQueryDevtoolsPanel />,
+        },
+        {
+          name: "TanStack Router",
+          render: <TanStackRouterDevtoolsPanel />,
+        },
+      ]}
+    />
   );
 }
 
