@@ -38,12 +38,6 @@ const config = defineConfig({
   customLogger: logger,
   server: { port: 3000 },
   resolve: { tsconfigPaths: true },
-  optimizeDeps: {
-    exclude: ['better-sqlite3'],
-  },
-  ssr: {
-    external: ['better-sqlite3'],
-  },
   plugins: [
     devtools(),
     nitro({ preset: 'vercel' }),

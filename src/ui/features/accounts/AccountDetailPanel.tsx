@@ -1,17 +1,24 @@
 import { Loader2Icon, MoreHorizontalIcon, Trash2Icon, XIcon } from "lucide-react";
 import { formatCurrency } from "../../../lib/format";
 import { ACCOUNT_TYPE_CONFIG } from "./accounts.config";
+import { HomeValueEditor } from "./HomeValueEditor";
 import type { AccountsData, TransactionsData } from "./accounts.types";
+
+function isManualRealEstate(account: AccountsData[number]) {
+  return account.type === "real_estate" && !account.plaidAccountId && !account.plaidItemId;
+}
 
 export function AccountDetailPanel({
   accountTransactions,
   isDeleting,
   onDeleteAccount,
+  onUpdateHomeAsset,
   selectedAccount,
 }: {
   accountTransactions: TransactionsData;
   isDeleting: number | null;
   onDeleteAccount: (accountId: number) => void;
+  onUpdateHomeAsset?: (input: { id: number; name: string; value: number }) => Promise<void>;
   selectedAccount: AccountsData[number] | null;
 }) {
   return (
@@ -46,48 +53,70 @@ export function AccountDetailPanel({
                   {formatCurrency(selectedAccount.currentBalance)}
                 </div>
                 <div className="mt-1 text-xs text-default-400">
-                  Imported balance plus historical snapshots
+                  {isManualRealEstate(selectedAccount)
+                    ? "Manual home estimate"
+                    : "Imported balance plus historical snapshots"}
                 </div>
               </div>
               <div className="rounded-full bg-content2 px-2.5 py-1 text-xs font-bold text-default-500">
                 Current
               </div>
             </div>
-            <div className="mt-5 h-32 rounded-2xl bg-default-50 p-2">
-              <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-divider/70 text-center text-xs text-default-400">
-                Account-specific balance chart pending
+            {isManualRealEstate(selectedAccount) && onUpdateHomeAsset ? (
+              <HomeValueEditor
+                name={selectedAccount.name}
+                value={selectedAccount.currentBalance}
+                onSave={({ name, value }) =>
+                  onUpdateHomeAsset({ id: selectedAccount.id, name, value })
+                }
+              />
+            ) : (
+              <div className="mt-5 h-32 rounded-2xl bg-default-50 p-2">
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-divider/70 text-center text-xs text-default-400">
+                  Account-specific balance chart pending
+                </div>
               </div>
-            </div>
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            <h3 className="mb-3 text-sm font-bold">Transactions</h3>
-            {accountTransactions.slice(0, 18).map((tx) => (
-              <div
-                key={tx.id}
-                className="flex items-center justify-between border-b border-divider/40 py-3 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{tx.merchantName}</div>
-                  <div className="text-xs text-default-400">
-                    {new Date(tx.date).toLocaleDateString()}
+            <h3 className="mb-3 text-sm font-bold">
+              {isManualRealEstate(selectedAccount) ? "Notes" : "Transactions"}
+            </h3>
+            {isManualRealEstate(selectedAccount) ? (
+              <div className="py-8 text-center text-sm text-default-400">
+                Home assets don&apos;t have bank transactions. Update the estimate anytime.
+              </div>
+            ) : (
+              <>
+                {accountTransactions.slice(0, 18).map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between border-b border-divider/40 py-3 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{tx.merchantName}</div>
+                      <div className="text-xs text-default-400">
+                        {new Date(tx.date).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div
+                      className={[
+                        "text-sm font-bold",
+                        tx.amount < 0 ? "text-success" : "text-foreground",
+                      ].join(" ")}
+                    >
+                      {tx.amount < 0 ? "+" : ""}
+                      {formatCurrency(Math.abs(tx.amount))}
+                    </div>
                   </div>
-                </div>
-                <div
-                  className={[
-                    "text-sm font-bold",
-                    tx.amount < 0 ? "text-success" : "text-foreground",
-                  ].join(" ")}
-                >
-                  {tx.amount < 0 ? "+" : ""}
-                  {formatCurrency(Math.abs(tx.amount))}
-                </div>
-              </div>
-            ))}
-            {accountTransactions.length === 0 ? (
-              <div className="py-12 text-center text-sm text-default-400">
-                No transactions for this account yet.
-              </div>
-            ) : null}
+                ))}
+                {accountTransactions.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-default-400">
+                    No transactions for this account yet.
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       ) : (

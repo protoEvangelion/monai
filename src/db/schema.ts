@@ -17,6 +17,7 @@ export const accounts = sqliteTable("accounts", {
   name: text().notNull(),
   type: text().notNull(), // cash, credit, investment, loan, real_estate
   currentBalance: real("current_balance").notNull().default(0),
+  userId: text("user_id"), // set for manual (non-Plaid) accounts
   plaidItemId: integer("plaid_item_id").references(() => plaidItems.id),
   plaidAccountId: text("plaid_account_id").unique(),
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),

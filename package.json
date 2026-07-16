@@ -16,7 +16,6 @@
     "deploy": "vercel --prod",
     "lint": "oxlint",
     "format": "oxfmt .",
-    "amazon:notes": "tsx scripts/import-amazon-notes.ts",
     "typecheck": "tsgo --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -30,6 +29,10 @@
     "@faker-js/faker": "^10.3.0",
     "@heroui/react": "^3.0.3",
     "@heroui/styles": "^3.0.3",
+    "@mantine/core": "^7",
+    "@mantine/dates": "^7",
+    "@mantine/hooks": "^7",
+    "@tabler/icons-react": "^3.44.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/match-sorter-utils": "latest",
     "@tanstack/react-devtools": "latest",
@@ -42,13 +45,19 @@
     "@tanstack/react-start": "latest",
     "@tanstack/react-table": "latest",
     "@tanstack/router-plugin": "^1.132.0",
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^12.11.1",
+    "clsx": "^2.1.1",
+    "dayjs": "^1.11.21",
     "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.2",
     "emoji-picker-react": "^4.19.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.545.0",
+    "mantine-react-table": "^2.0.0-beta.9",
     "nitro": "^3.0.260415-beta",
+    "postcss": "^8.5.16",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-plaid-link": "^4.1.1",
@@ -87,5 +96,8 @@
       "lightningcss",
       "better-sqlite3"
     ]
-  }
+  },
+  "trustedDependencies": [
+    "better-sqlite3"
+  ]
 }

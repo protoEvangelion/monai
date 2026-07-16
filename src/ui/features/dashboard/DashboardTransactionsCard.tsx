@@ -27,8 +27,8 @@ export function DashboardTransactionsCard({
           View all <ChevronRightIcon size={14} />
         </Link>
       </div>
-      <div className="min-h-0 flex-1">
-        <ReviewTable transactions={reviewTransactions} categories={categories} />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <ReviewTable transactions={reviewTransactions} categories={categories} variant="dashboard" />
       </div>
     </div>
   );

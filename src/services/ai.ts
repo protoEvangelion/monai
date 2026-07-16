@@ -1,24 +1,12 @@
-import { runCodexCategorizerCli } from "./codexCli";
+import { runCursorCategorizerCli } from "./cursorCli";
 
 function parseCategoryId(raw: string) {
   const match = raw.match(/\b\d+\b/);
   return match ? Number(match[0]) : null;
 }
 
-async function runCodexCategorizer(prompt: string) {
-  return runCodexCategorizerCli({
-    maxBuffer: 1024 * 1024,
-    prompt,
-    schema: {
-      type: "object",
-      properties: {
-        categoryId: { type: "number" },
-      },
-      required: ["categoryId"],
-      additionalProperties: false,
-    },
-    tempPrefix: "monai-codex-merchant-",
-  });
+async function runCursorCategorizer(prompt: string) {
+  return runCursorCategorizerCli({ prompt });
 }
 
 export async function categorizeMerchant(
@@ -35,5 +23,5 @@ export async function categorizeMerchant(
     `Merchant: ${merchantName}`,
   ].join("\n");
 
-  return parseCategoryId(await runCodexCategorizer(prompt));
+  return parseCategoryId(await runCursorCategorizer(prompt));
 }

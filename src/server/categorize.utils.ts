@@ -1,10 +1,10 @@
 import { categories } from "../db/schema";
 import { eq } from "drizzle-orm";
 import {
-  CODEX_MODEL_LABEL,
-  CODEX_PROVIDER_LABEL,
-  runCodexCategorizerCli,
-} from "../services/codexCli";
+  CURSOR_MODEL_LABEL,
+  CURSOR_PROVIDER_LABEL,
+  runCursorCategorizerCli,
+} from "../services/cursorCli";
 
 export type Category = { id: number; name: string; parentId: number | null };
 export type Transaction = {
@@ -163,30 +163,8 @@ function repairWrappedJsonStrings(json: string) {
   return repaired;
 }
 
-async function runCodexCategorizer(prompt: string) {
-  return runCodexCategorizerCli({
-    prompt,
-    schema: {
-      type: "object",
-      properties: {
-        categories: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              transactionId: { type: "number" },
-              category: { type: "string" },
-            },
-            required: ["transactionId", "category"],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ["categories"],
-      additionalProperties: false,
-    },
-    tempPrefix: "monai-codex-categorizer-",
-  });
+async function runCursorCategorizer(prompt: string) {
+  return runCursorCategorizerCli({ prompt });
 }
 
 function previewBlock(value: string, maxLength: number) {
@@ -209,7 +187,7 @@ function logCategorizeRequest({
   console.log(
     [
       "[categorize] batch request",
-      `  provider: ${CODEX_PROVIDER_LABEL}`,
+      `  provider: ${CURSOR_PROVIDER_LABEL}`,
       `  model: ${model}`,
       `  categories: ${categoryCount}`,
       `  transactionRows: ${rowCount}`,
@@ -221,7 +199,7 @@ function logCategorizeResponse({ model, rowCount }: { model: string; rowCount: n
   console.log(
     [
       "[categorize] batch response",
-      `  provider: ${CODEX_PROVIDER_LABEL}`,
+      `  provider: ${CURSOR_PROVIDER_LABEL}`,
       `  model: ${model}`,
       `  categorizedRows: ${rowCount}`,
     ].join("\n"),
@@ -268,16 +246,16 @@ export async function categorizeBatch(
   const prompt = `${line1}\n${line2}`;
 
   logCategorizeRequest({
-    model: CODEX_MODEL_LABEL,
+    model: CURSOR_MODEL_LABEL,
     rowCount: batch.length,
     categoryCount: categoryOptions.length,
   });
-  const raw = await runCodexCategorizer(prompt);
+  const raw = await runCursorCategorizer(prompt);
   const byTransactionId = parseTransactionCategoryMap(raw);
-  logCategorizeResponse({ model: CODEX_MODEL_LABEL, rowCount: byTransactionId.size });
+  logCategorizeResponse({ model: CURSOR_MODEL_LABEL, rowCount: byTransactionId.size });
   return {
     byTransactionId,
-    model: CODEX_MODEL_LABEL,
+    model: CURSOR_MODEL_LABEL,
   };
 }
 

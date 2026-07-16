@@ -7,16 +7,15 @@ import {
 } from "@heroui/react";
 import { Loader2Icon, MoreVerticalIcon, RepeatIcon } from "lucide-react";
 import { getCategories } from "../../../server/categories.fns";
-import { getTransactions } from "../../../server/transactions.fns";
 import {
   FloatingSelectionToolbar,
   FloatingSelectionToolbarButton,
   floatingSelectionButtonClass,
 } from "../../shared/FloatingSelectionToolbar";
+import type { Tx } from "../transactions/transactions.types";
 import { CategoryActionPicker } from "./CategoryActionPicker";
 
 type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number];
-type LoadedTransaction = Awaited<ReturnType<typeof getTransactions>>[number];
 
 export function CategoryTransactionsBulkBar({
   allSelectedAreInternal,
@@ -37,7 +36,7 @@ export function CategoryTransactionsBulkBar({
   onSetTransactionType: (ids: number[], transactionType: "income" | "transfer") => void;
   saving: boolean;
   selectedGroups: LoadedGroup[];
-  selectedTransactions: LoadedTransaction[];
+  selectedTransactions: Array<{ id: number; transactionType: Tx["transactionType"]; categoryId?: number | null }>;
 }) {
   if (selectedTransactions.length === 0) return null;
 

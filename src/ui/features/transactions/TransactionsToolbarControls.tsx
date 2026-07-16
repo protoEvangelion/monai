@@ -12,7 +12,8 @@ import { parseDate } from "@internationalized/date";
 import { ChevronRightIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AmountRangeFilter, DateRangeFilter } from "./transactions.types";
-import { formatAmountRangeLabel, formatDateRangeLabel } from "./transactions.utils";
+import { encodeCategoryFilter, formatAmountRangeLabel, formatDateRangeLabel } from "./transactions.utils";
+import { StyledCheckbox } from "./transactions.controls";
 
 export type CategoryFilterOption = {
   id: string;
@@ -50,7 +51,7 @@ export function ToolbarSearchField({
       value={draft}
       onChange={setDraft}
       variant="secondary"
-      className="min-w-[16rem] shrink-0"
+      className="min-w-0 flex-1 sm:max-w-md"
     >
       <SearchField.Group>
         <SearchField.SearchIcon />
@@ -62,35 +63,43 @@ export function ToolbarSearchField({
 }
 
 export function CategoryFilterSelect({
-  categoryFilter,
+  categoryFilterKey,
   categorySearch,
+  excludeCategory,
   filteredCategoryFilterOptions,
+  onCategoryExcludeChange,
   onCategoryFilterChange,
   onCategorySearchChange,
   selectedCategoryFilterLabel,
 }: {
-  categoryFilter: string;
+  categoryFilterKey: string;
   categorySearch: string;
+  excludeCategory: boolean;
   filteredCategoryFilterOptions: CategoryFilterOption[];
+  onCategoryExcludeChange: (exclude: boolean) => void;
   onCategoryFilterChange: (value: string) => void;
   onCategorySearchChange: (value: string) => void;
   selectedCategoryFilterLabel: string;
 }) {
+  const handleSelectionChange = (key: string) => {
+    onCategoryFilterChange(encodeCategoryFilter(key, excludeCategory && key !== "all"));
+  };
+
   return (
     <Select
       aria-label="Filter by category"
-      selectedKey={categoryFilter}
-      onSelectionChange={(key) => onCategoryFilterChange(String(key ?? "all"))}
+      selectedKey={categoryFilterKey}
+      onSelectionChange={(key) => handleSelectionChange(String(key ?? "all"))}
       variant="secondary"
-      className="min-w-[13rem] shrink-0"
+      className="min-w-0 w-full sm:min-w-[13rem] sm:w-auto sm:shrink-0"
     >
       <Select.Trigger>
         <Select.Value>{selectedCategoryFilterLabel}</Select.Value>
         <Select.Indicator />
       </Select.Trigger>
       <Select.Popover>
-        <div className="flex max-h-[min(30rem,calc(100vh-4rem))] min-h-0 flex-col">
-          <div className="border-b border-divider px-3 py-2">
+        <div className="flex max-h-[min(30rem,calc(100vh-4rem))] min-h-0 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-divider px-3 py-2">
             <SearchField
               aria-label="Search categories"
               value={categorySearch}
@@ -105,16 +114,24 @@ export function CategoryFilterSelect({
               </SearchField.Group>
             </SearchField>
           </div>
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-divider px-3 py-2 text-sm text-default-600">
+            <StyledCheckbox
+              checked={excludeCategory}
+              onChange={onCategoryExcludeChange}
+              aria-label="Exclude selected category"
+            />
+            Exclude category
+          </label>
           <ListBox
             items={filteredCategoryFilterOptions}
-            selectedKeys={[categoryFilter]}
+            selectedKeys={[categoryFilterKey]}
             selectionMode="single"
             onSelectionChange={(keys) => {
               const [next] = Array.from(keys);
-              if (next) onCategoryFilterChange(String(next));
+              if (next) handleSelectionChange(String(next));
             }}
             aria-label="Category filters"
-            className="min-h-0 flex-1"
+            className="min-h-0 flex-1 overflow-y-auto"
           >
             {(option) => (
               <ListBox.Item id={option.id} textValue={option.label}>
@@ -137,7 +154,7 @@ export function DateRangeFilterButton({
   onDateFilterChange: (value: DateRangeFilter) => void;
 }) {
   return (
-    <div className="min-w-[11rem] shrink-0">
+    <div className="min-w-0 w-full sm:min-w-[11rem] sm:w-auto sm:shrink-0">
       <Popover>
         <div className="relative">
           <PopoverTrigger>
@@ -219,7 +236,7 @@ export function AmountRangeFilterButton({
   };
 
   return (
-    <div className="min-w-[10rem] shrink-0">
+    <div className="min-w-0 w-full sm:min-w-[10rem] sm:w-auto sm:shrink-0">
       <Popover>
         <div className="relative">
           <PopoverTrigger>

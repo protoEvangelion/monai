@@ -20,6 +20,26 @@ type ChartDatum = {
   spent: number;
 };
 
+function SpendingChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: ChartDatum }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const datum = payload[0]?.payload;
+  if (!datum) return null;
+
+  return (
+    <div className="rounded-xl border border-divider bg-background px-3 py-2 text-sm text-foreground shadow-lg">
+      <p className="mb-1.5 font-semibold">{datum.label}</p>
+      <p className="text-[#60a5fa]">Budget level : {formatCurrency(datum.budget)}</p>
+      <p className="text-foreground">Spent : {formatCurrency(datum.spent)}</p>
+    </div>
+  );
+}
+
 export function SpendingChart({
   data,
   showBudgetLine,
@@ -75,25 +95,8 @@ export function SpendingChart({
             tickMargin={8}
           />
           <YAxis hide />
-          <ChartTooltip
-            formatter={(value, name) => {
-              const numericValue =
-                typeof value === "number" ? value : Number(value ?? 0);
-              return [
-                formatCurrency(numericValue),
-                name === "spent" ? "Spent" : "Budget level",
-              ];
-            }}
-            labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""}
-            contentStyle={{
-              backgroundColor: "var(--background)",
-              border: "1px solid var(--color-divider)",
-              borderRadius: 12,
-              boxShadow: "0 12px 30px rgb(0 0 0 / 0.14)",
-              color: "var(--foreground)",
-            }}
-          />
-          <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
+          <ChartTooltip content={<SpendingChartTooltip />} />
+          <Bar dataKey="spent" name="Spent" radius={[4, 4, 0, 0]}>
             {data.map((entry) => (
               <Cell
                 key={`spent-${entry.month}`}
@@ -112,6 +115,7 @@ export function SpendingChart({
             <Line
               type="monotone"
               dataKey="budget"
+              name="Budget level"
               stroke="#60a5fa"
               strokeWidth={2.5}
               dot={false}

@@ -1,7 +1,26 @@
 
 @import "tailwindcss";
 @import "@heroui/styles";
+@import "@mantine/core/styles.css";
+@import "@mantine/dates/styles.css";
+@import "mantine-react-table/styles.css";
 @import "./ui/themes/ocean.css" layer(theme);
+
+.mrt-table-paper .mantine-Checkbox-root,
+.mrt-table-paper .mantine-Checkbox-input {
+  cursor: pointer;
+}
+
+.mrt-table-paper .mrt-table-head-cell {
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  vertical-align: top !important;
+}
+
+.mrt-table-paper .mrt-table-head-cell-content {
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+}
 
 @source "../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
 

@@ -57,7 +57,7 @@ export function AppHeader({
   };
 
   return (
-    <header className="h-16 border-b border-divider/70 flex items-center justify-between px-4 xl:px-8 bg-content1/70 backdrop-blur-xl sticky top-0 z-40">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between border-b border-divider/70 bg-content1/70 px-4 backdrop-blur-xl xl:px-8">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
@@ -71,13 +71,13 @@ export function AppHeader({
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex h-full items-center gap-3">
         <Button
           variant="secondary"
           size="sm"
           onPress={handleSync}
           isDisabled={isSyncing}
-          className="rounded-full"
+          className="h-9 shrink-0 rounded-full px-4"
           aria-label="Sync transactions"
         >
           <RefreshCwIcon size={15} className={isSyncing ? "animate-spin" : ""} />
@@ -85,7 +85,7 @@ export function AppHeader({
         </Button>
         <Dropdown>
           <DropdownTrigger
-            className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-full px-3 text-sm hover:bg-white/10"
+            className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full px-3 text-sm hover:bg-white/10"
             aria-label="Theme palette"
           >
             {paletteLabel}
@@ -122,7 +122,7 @@ export function AppHeader({
           isIconOnly
           size="sm"
           onPress={toggleTheme}
-          className="rounded-full"
+          className="h-9 w-9 shrink-0 rounded-full"
           aria-label="Toggle theme"
         >
           {isDarkTheme ? <SunIcon size={17} /> : <MoonIcon size={17} />}

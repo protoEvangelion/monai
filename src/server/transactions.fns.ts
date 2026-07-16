@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
 import { transactions, plaidItems, categories, accounts } from "../db/schema";
-import { eq, desc, inArray, and, gte, lte, like, or, sql, type SQL } from "drizzle-orm";
+import { eq, desc, inArray, and, gte, lte, like, not, or, sql, type SQL } from "drizzle-orm";
+import { parseCategoryFilter } from "../ui/features/transactions/transactions.utils";
 
 type TransactionType = "regular" | "income" | "transfer";
 export type TransactionReviewStatus = "all" | "not-reviewed" | "reviewed";
@@ -86,6 +87,32 @@ function dateBoundary(value: string, endOfDay = false) {
   return new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
 }
 
+function categoryFilterSql(categoryFilter: string): SQL | undefined {
+  const { isExclude, key } = parseCategoryFilter(categoryFilter);
+  if (key === "all") return undefined;
+
+  let includeCondition: SQL | undefined;
+  if (key === "income") includeCondition = eq(transactions.transactionType, "income");
+  else if (key === "transfer") includeCondition = eq(transactions.transactionType, "transfer");
+  else if (key === "uncategorized") {
+    includeCondition = and(
+      eq(transactions.transactionType, "regular"),
+      sql`${transactions.categoryId} IS NULL`,
+    );
+  } else if (key.startsWith("cat:")) {
+    const categoryId = Number(key.slice(4));
+    if (Number.isFinite(categoryId)) {
+      includeCondition = and(
+        eq(transactions.transactionType, "regular"),
+        eq(transactions.categoryId, categoryId),
+      );
+    }
+  }
+
+  if (!includeCondition) return undefined;
+  return isExclude ? not(includeCondition) : includeCondition;
+}
+
 function transactionPageWhere({
   accountIds,
   query,
@@ -98,17 +125,8 @@ function transactionPageWhere({
   if (query.reviewStatus === "not-reviewed") conditions.push(eq(transactions.isReviewed, false));
   if (query.reviewStatus === "reviewed") conditions.push(eq(transactions.isReviewed, true));
 
-  if (query.categoryFilter === "income") conditions.push(eq(transactions.transactionType, "income"));
-  else if (query.categoryFilter === "transfer")
-    conditions.push(eq(transactions.transactionType, "transfer"));
-  else if (query.categoryFilter === "uncategorized") {
-    conditions.push(and(eq(transactions.transactionType, "regular"), sql`${transactions.categoryId} IS NULL`));
-  } else if (query.categoryFilter.startsWith("cat:")) {
-    const categoryId = Number(query.categoryFilter.slice(4));
-    if (Number.isFinite(categoryId)) {
-      conditions.push(and(eq(transactions.transactionType, "regular"), eq(transactions.categoryId, categoryId)));
-    }
-  }
+  const categoryFilterCondition = categoryFilterSql(query.categoryFilter);
+  if (categoryFilterCondition) conditions.push(categoryFilterCondition);
 
   if (query.dateStart) conditions.push(gte(transactions.date, dateBoundary(query.dateStart)));
   if (query.dateEnd) conditions.push(lte(transactions.date, dateBoundary(query.dateEnd, true)));

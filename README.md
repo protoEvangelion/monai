@@ -12,7 +12,7 @@
 |---|---|
 | 📊 **Dashboard** | Net worth chart, budget progress, top categories at a glance |
 | 🔄 **Transaction Review** | Pulse-animated queue of transactions begging for your attention |
-| 🤖 **AI Categorization** | Codex CLI auto-tags your merchants so you don't have to |
+| 🤖 **AI Categorization** | Cursor CLI auto-tags your merchants so you don't have to |
 | ⏳ **Time Travel** | Jump to any past month to audit your past-self's spending crimes |
 | 🏦 **Account Groups** | Credit, Depository, Investment, Loan, Real Estate — all in one place |
 | 🔐 **Auth** | Clerk-powered, zero config |
@@ -31,7 +31,7 @@ UI           →  HeroUI v3 + Tailwind CSS v4
 State        →  TanStack Query (server) · Zustand (client)
 Charts       →  Recharts
 Animation    →  Framer Motion
-AI           →  Codex CLI
+AI           →  Cursor CLI
 Deploy       →  Vercel (Nitro)
 Linting      →  oxlint
 TypeScript   →  @typescript/native-preview (tsgo) 🚀
@@ -56,8 +56,9 @@ cp .env.example .env.local
 | Variable | Where to get it |
 |---|---|
 | `VITE_CLERK_PUBLISHABLE_KEY` | [clerk.com](https://clerk.com) → your app → API Keys |
-| `CODEX_CLI_PATH` | Optional path to Codex CLI. Defaults to `codex` |
-| `CODEX_CATEGORIZER_MODEL` | Optional Codex model override |
+| `CURSOR_API_KEY` | Optional Cursor API key (or run `agent login`) |
+| `CURSOR_CLI_PATH` | Optional path to Cursor Agent CLI. Defaults to `agent` |
+| `CURSOR_CATEGORIZER_MODEL` | Optional Cursor model override |
 
 ### 3. Set up the database
 
@@ -133,9 +134,9 @@ historical_balances → daily snapshots for net worth chart
 
 ## 🤖 AI Auto-Categorization
 
-Monai shells out to `codex exec` in a read-only sandbox for categorization and maps transactions to your custom category tree.
+Monai shells out to `agent -p --mode ask` in a read-only sandbox for categorization and maps transactions to your custom category tree.
 
-Install and log in to Codex CLI, then optionally set `CODEX_CLI_PATH`, `CODEX_CATEGORIZER_MODEL`, or `CODEX_CATEGORIZER_TIMEOUT_MS` in `.env.local`.
+Install Cursor Agent CLI (`curl https://cursor.com/install -fsS | bash`), then run `agent login` or set `CURSOR_API_KEY`. Optionally set `CURSOR_CLI_PATH`, `CURSOR_CATEGORIZER_MODEL`, or `CURSOR_CATEGORIZER_TIMEOUT_MS` in `.env.local`.
 
 ---
 

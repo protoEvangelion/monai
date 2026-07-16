@@ -30,26 +30,28 @@ export function TransactionsScreen({
   transactionsPage: TransactionsPageData;
 }) {
   return (
-    <div className="rounded-3xl border border-divider/60 bg-background/70 shadow-sm">
-      <div className="flex h-14 items-center border-b border-divider/60 bg-background/90 px-6 backdrop-blur-xl">
+    <div className="flex max-h-[calc(100dvh-7.5rem)] min-h-[28rem] flex-col overflow-hidden rounded-3xl border border-divider/60 bg-background shadow-sm">
+      <div className="flex h-14 shrink-0 items-center border-b border-divider/60 bg-background/90 px-6 backdrop-blur-xl">
         <h1 className="text-lg font-bold">Transactions</h1>
       </div>
 
-      <ReviewTable
-        transactions={transactionsPage.rows}
-        categories={categories}
-        showAll
-        serverState={{
-          amountFilter: amountFilterFromQuery(query),
-          categoryFilter: query.categoryFilter ?? "all",
-          dateFilter: dateFilterFromQuery(query),
-          onQueryChange,
-          pageIndex: transactionsPage.pageIndex,
-          pageSize: transactionsPage.pageSize,
-          search: query.search ?? "",
-          total: transactionsPage.total,
-        }}
-      />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ReviewTable
+          transactions={transactionsPage.rows}
+          categories={categories}
+          showAll
+          serverState={{
+            amountFilter: amountFilterFromQuery(query),
+            categoryFilter: query.categoryFilter ?? "all",
+            dateFilter: dateFilterFromQuery(query),
+            onQueryChange,
+            pageIndex: transactionsPage.pageIndex,
+            pageSize: transactionsPage.pageSize,
+            search: query.search ?? "",
+            total: transactionsPage.total,
+          }}
+        />
+      </div>
     </div>
   );
 }

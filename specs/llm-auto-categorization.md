@@ -36,13 +36,14 @@ Categories sent to model: user's leaf categories only (no parent groups, no catc
 - Output must be valid JSON where each item has `transactionId` and `category`.
 - If model output is malformed or invalid, fallback logic assigns a valid existing category.
 
-## Model Selection (Codex CLI)
-Categorization runs through `codex exec` in a read-only sandbox.
+## Model Selection (Cursor CLI)
+Categorization runs through `agent -p --mode ask --sandbox enabled` in read-only mode.
 
 Environment overrides:
-- `CODEX_CLI_PATH`: path to the Codex CLI binary. Defaults to `codex`.
-- `CODEX_CATEGORIZER_MODEL`: optional model override. If omitted, Codex uses its configured default model.
-- `CODEX_CATEGORIZER_TIMEOUT_MS`: optional process timeout. Defaults to `90000`.
+- `CURSOR_CLI_PATH`: path to the Cursor Agent CLI binary. Defaults to `agent`.
+- `CURSOR_CATEGORIZER_MODEL`: optional model override. If omitted, Cursor uses its configured default model.
+- `CURSOR_CATEGORIZER_TIMEOUT_MS`: optional process timeout. Defaults to `90000`.
+- `CURSOR_API_KEY`: optional API key. Otherwise run `agent login`.
 
 ## Constraints
 - No merchant-specific hardcoded rules.

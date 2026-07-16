@@ -115,7 +115,7 @@ export function useDashboardMetrics({
     const lastDay = isCurrentMonth ? today.getDate() : daysInMonth;
 
     const totalAssets = accounts
-      .filter((account) => ["cash", "investment"].includes(account.type))
+      .filter((account) => !["credit", "loan"].includes(account.type))
       .reduce((sum, account) => sum + account.currentBalance, 0);
     const totalDebts = accounts
       .filter((account) => ["credit", "loan"].includes(account.type))
@@ -127,7 +127,7 @@ export function useDashboardMetrics({
       (acc, tx) => {
         const day = new Date(tx.date).getDate();
         const accountType = accountTypeById.get(tx.accountId);
-        if (accountType === "cash" || accountType === "investment") {
+        if (accountType && !["credit", "loan"].includes(accountType)) {
           acc.dailyAssetDelta[day] = (acc.dailyAssetDelta[day] || 0) - tx.amount;
         }
         if (accountType === "credit" || accountType === "loan") {

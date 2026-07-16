@@ -64,7 +64,7 @@ export function TransactionsColumnSettings({
   return (
     <Popover>
       <PopoverTrigger>
-        <Button variant="secondary" className="shrink-0 gap-2">
+        <Button variant="secondary" className="h-9 w-full shrink-0 gap-2 sm:w-auto">
           <Columns3Icon size={15} />
           Columns
         </Button>

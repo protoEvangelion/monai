@@ -176,6 +176,7 @@ export function useCategoriesViewModel({
       validIds.forEach((id) => {
         if (!prev.has(id)) next.add(id);
       });
+      if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev;
       return next;
     });
   }, [derivedGroups]);

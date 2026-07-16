@@ -34,8 +34,8 @@ export function TransactionsDataGrid({
   const end = Math.min((pagination.pageIndex + 1) * pagination.pageSize, total);
 
   return (
-    <>
-      <div className="overflow-hidden border-y border-separator/30">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-auto border-y border-separator/30">
         <div className="overflow-x-auto">
           <table aria-label="Transactions" className="w-full min-w-[960px] table-fixed border-collapse">
             <thead className="bg-background/70">
@@ -77,7 +77,7 @@ export function TransactionsDataGrid({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-separator/30 px-4 py-3 sm:px-6">
+      <div className="flex shrink-0 items-center justify-between border-t border-separator/30 px-4 py-3 sm:px-6">
         <span className="text-xs font-medium text-default-400">
           {start} - {end} of {total}
         </span>
@@ -103,7 +103,7 @@ export function TransactionsDataGrid({
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

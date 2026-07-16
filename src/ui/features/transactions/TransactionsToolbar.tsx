@@ -13,11 +13,13 @@ import { TransactionsColumnSettings } from "./TransactionsColumnSettings";
 export function TransactionsToolbar({
   allSelected,
   amountFilter,
-  categoryFilter,
+  categoryFilterKey,
   categorySearch,
   dateFilter,
+  excludeCategory,
   filteredCategoryFilterOptions,
   onAmountFilterChange,
+  onCategoryExcludeChange,
   onCategoryFilterChange,
   onCategorySearchChange,
   onColumnOrderChange,
@@ -35,11 +37,13 @@ export function TransactionsToolbar({
 }: {
   allSelected: boolean;
   amountFilter: AmountRangeFilter;
-  categoryFilter: string;
+  categoryFilterKey: string;
   categorySearch: string;
   dateFilter: DateRangeFilter;
+  excludeCategory: boolean;
   filteredCategoryFilterOptions: CategoryFilterOption[];
   onAmountFilterChange: (value: AmountRangeFilter) => void;
+  onCategoryExcludeChange: (exclude: boolean) => void;
   onCategoryFilterChange: (value: string) => void;
   onCategorySearchChange: (value: string) => void;
   onColumnOrderChange: (ids: string[]) => void;
@@ -56,8 +60,8 @@ export function TransactionsToolbar({
   visibleOptionalColumnIds: string[];
 }) {
   return (
-    <div className="flex min-w-max items-center justify-between gap-4 p-1">
-      <div className="flex min-w-[18rem] flex-1 items-center gap-2">
+    <div className="flex shrink-0 flex-col gap-2 border-b border-divider/30 px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div className="flex min-w-0 items-center gap-2">
         <label className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-divider/60 bg-default-50/70 text-foreground transition-colors hover:bg-default">
           <StyledCheckbox
             checked={selectAllPages || allSelected}
@@ -68,11 +72,13 @@ export function TransactionsToolbar({
         <ToolbarSearchField value={tableSearch} onChange={onTableSearchChange} />
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         <CategoryFilterSelect
-          categoryFilter={categoryFilter}
+          categoryFilterKey={categoryFilterKey}
           categorySearch={categorySearch}
+          excludeCategory={excludeCategory}
           filteredCategoryFilterOptions={filteredCategoryFilterOptions}
+          onCategoryExcludeChange={onCategoryExcludeChange}
           onCategoryFilterChange={onCategoryFilterChange}
           onCategorySearchChange={onCategorySearchChange}
           selectedCategoryFilterLabel={selectedCategoryFilterLabel}

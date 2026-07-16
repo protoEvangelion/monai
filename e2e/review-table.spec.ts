@@ -1,60 +1,70 @@
 import { test, expect } from "@playwright/test";
+import {
+  expectAICategorizeButton,
+  expectNoSelection,
+  expectSelectionCount,
+  fillNameFilter,
+  selectAllTransactions,
+  selectCategoryFilter,
+  showAllColumns,
+  toggleOptionalColumns,
+  waitForReviewTable,
+} from "./helpers/review-table";
 
 /**
- * ReviewTable E2E tests.
+ * ReviewTable E2E tests (Mantine React Table).
  *
- * "dashboard" tests the review-mode table (showAll=false) — AI Categorize +
- * Mark Reviewed buttons are visible here.
- *
- * "transactions" tests the full history table (showAll=true) — AI Categorize
- * remains visible, Mark Reviewed is hidden, and filters still work.
+ * "dashboard" tests review-mode (showAll=false).
+ * "transactions" tests full history (showAll=true).
  */
 
 test.describe("ReviewTable", () => {
-  // ─── Transactions page (showAll) ────────────────────────────────────────
   test.describe("transactions", () => {
     test.beforeEach(async ({ page }) => {
       await page.goto("/transactions");
-      await page.waitForSelector('[aria-label="Select transactions"]', { timeout: 15_000 });
+      await waitForReviewTable(page);
     });
 
-    test("renders select-all checkbox and label", async ({ page }) => {
+    test("renders select-all checkbox", async ({ page }) => {
       await expect(page.getByRole("checkbox", { name: "Select transactions" })).toBeVisible();
-      await expect(page.getByText("Select first 100")).toBeVisible();
     });
 
-    test("AI action is visible and Mark Reviewed is hidden", async ({ page }) => {
+    test("AI action appears after selection and Mark Reviewed stays hidden", async ({ page }) => {
+      await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeHidden();
+      await selectAllTransactions(page);
       await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Mark Reviewed/ })).toBeHidden();
+      await expect(page.getByRole("button", { name: /Mark Reviewed|Mark reviewed/i })).toBeHidden();
     });
 
     test("selecting all transactions updates the label", async ({ page }) => {
-      await page.getByRole("checkbox", { name: "Select transactions" }).click();
-      await expect(page.getByText(/selected/)).toBeVisible();
+      await selectAllTransactions(page);
+      await expectSelectionCount(page, 6);
     });
 
     test("clicking select-all twice clears selection", async ({ page }) => {
       const cb = page.getByRole("checkbox", { name: "Select transactions" });
       await cb.click();
-      await expect(page.getByText(/selected/)).toBeVisible();
+      await expectSelectionCount(page, 6);
       await cb.click();
-      await expect(page.getByText("Select first 100")).toBeVisible();
+      await expectNoSelection(page);
     });
 
     test("non-regular rows show type instead of category", async ({ page }) => {
-      await page.getByPlaceholder("Search").fill("Online Transfer");
+      await fillNameFilter(page, "Online Transfer");
       const transferRow = page.getByTestId("transaction-row-4");
       await expect(transferRow).toContainText("Transfer");
       await expect(transferRow).not.toContainText("Groceries");
 
-      await page.getByPlaceholder("Search").fill("Payroll");
+      await fillNameFilter(page, "Payroll");
       const incomeRow = page.getByTestId("transaction-row-5");
       await expect(incomeRow).toContainText("Income");
       await expect(incomeRow).not.toContainText("Groceries");
     });
 
-    test("shows transaction notes", async ({ page }) => {
-      await expect(page.getByTestId("transaction-row-1")).toContainText("Weekly groceries");
+    test("shows transaction notes when note column is visible", async ({ page }) => {
+      await toggleOptionalColumns(page, ["Note"]);
+      await expect(page.getByRole("columnheader", { name: "Note" })).toBeVisible();
+      await expect(page.getByTestId("transaction-note-1")).toHaveValue("Weekly groceries");
     });
 
     test("shows date as a column", async ({ page }) => {
@@ -69,74 +79,75 @@ test.describe("ReviewTable", () => {
       await expect(page.getByRole("columnheader", { name: "Datetime" })).toBeHidden();
       await expect(page.getByRole("columnheader", { name: "Location" })).toBeHidden();
 
-      await page.getByText("Columns", { exact: true }).click();
-      await page.getByLabel("Merchant", { exact: true }).check();
-      await page.getByLabel("Datetime", { exact: true }).check();
-      await page.getByLabel("Location", { exact: true }).check();
+      await showAllColumns(page);
 
       await expect(page.getByRole("columnheader", { name: "Merchant" })).toBeVisible();
       await expect(page.getByRole("columnheader", { name: "Datetime" })).toBeVisible();
       await expect(page.getByRole("columnheader", { name: "Location" })).toBeVisible();
     });
 
-    test("search, category filter, and date filter narrow table rows", async ({ page }) => {
-      await page.getByPlaceholder("Search").fill("Whole");
+    test("name and category filters narrow table rows", async ({ page }) => {
+      await fillNameFilter(page, "Whole");
       await expect(page.getByTestId("transaction-row-1")).toBeVisible();
       await expect(page.getByTestId("transaction-row-2")).toBeHidden();
 
-      await page.getByPlaceholder("Search").clear();
-      await page.getByRole("combobox").selectOption("income");
+      await fillNameFilter(page, "");
+      await selectCategoryFilter(page, "Income");
       await expect(page.getByTestId("transaction-row-5")).toBeVisible();
       await expect(page.getByTestId("transaction-row-1")).toBeHidden();
 
-      await page.getByRole("combobox").selectOption("cat:2");
+      await selectCategoryFilter(page, /Groceries/);
       await expect(page.getByTestId("transaction-row-1")).toBeVisible();
       await expect(page.getByTestId("transaction-row-5")).toBeHidden();
-
-      const rowDate = await page
-        .getByTestId("transaction-row-1")
-        .getByTestId("transaction-date")
-        .getAttribute("data-date");
-      await page.getByLabel("Date", { exact: true }).fill(rowDate ?? "");
-      await expect(page.getByTestId("transaction-row-1")).toBeVisible();
-      await expect(page.getByTestId("transaction-row-2")).toBeHidden();
     });
 
     test("shows reviewed transactions on the full transactions page", async ({ page }) => {
-      await page.getByPlaceholder("Search").fill("Reviewed Coffee");
+      await fillNameFilter(page, "Reviewed Coffee");
       await expect(page.getByTestId("transaction-row-6")).toBeVisible();
     });
 
-    test("clicking a transaction row selects it", async ({ page }) => {
-      // Use aria-label prefix that excludes the select-all ("Select transactions")
+    test("clicking a row checkbox selects it", async ({ page }) => {
       const rowCheckboxes = page.getByRole("checkbox", { name: /^Select transaction \w/ });
       const count = await rowCheckboxes.count();
       if (count === 0) test.skip();
 
       await rowCheckboxes.first().click();
       await expect(rowCheckboxes.first()).toBeChecked();
-      await expect(page.getByText(/^1 selected$/)).toBeVisible();
+      await expectSelectionCount(page, 1);
+    });
+
+    test("note column supports inline editing", async ({ page }) => {
+      await toggleOptionalColumns(page, ["Note"]);
+      const noteInput = page.getByTestId("transaction-note-1");
+      await expect(noteInput).toHaveValue("Weekly groceries");
+      await noteInput.fill("Updated grocery note");
+      await noteInput.blur();
+      await expect(noteInput).toHaveValue("Updated grocery note");
+      await noteInput.fill("Weekly groceries");
+      await noteInput.blur();
+      await expect(noteInput).toHaveValue("Weekly groceries");
     });
   });
 
-  // ─── Dashboard page (review mode, showAll=false) ─────────────────────────
   test.describe("dashboard", () => {
     test.beforeEach(async ({ page }) => {
       await page.goto("/");
-      await page.waitForSelector('[aria-label="Select transactions"]', { timeout: 15_000 });
+      await waitForReviewTable(page);
     });
 
-    test("renders select-all checkbox and label", async ({ page }) => {
+    test("renders select-all checkbox", async ({ page }) => {
       await expect(page.getByRole("checkbox", { name: "Select transactions" })).toBeVisible();
-      await expect(page.getByText("Select all")).toBeVisible();
     });
 
-    test("AI Categorize button is visible", async ({ page }) => {
+    test("AI Categorize button appears after selection", async ({ page }) => {
+      await selectAllTransactions(page);
       await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeVisible();
     });
 
-    test("shows transaction notes", async ({ page }) => {
-      await expect(page.getByText("Weekly groceries")).toBeVisible();
+    test("shows transaction notes when note column is visible", async ({ page }) => {
+      await toggleOptionalColumns(page, ["Note"]);
+      await expect(page.getByRole("columnheader", { name: "Note" })).toBeVisible();
+      await expect(page.getByTestId("transaction-note-1")).toHaveValue("Weekly groceries");
     });
 
     test("auto-applies the not reviewed filter", async ({ page }) => {
@@ -160,33 +171,34 @@ test.describe("ReviewTable", () => {
       expect(text.indexOf("Food")).toBeGreaterThan(text.indexOf("Transfer"));
     });
 
-    test("Mark Reviewed button is visible", async ({ page }) => {
-      await expect(page.getByRole("button", { name: /Mark Reviewed/ })).toBeVisible();
+    test("Mark Reviewed button appears after selection", async ({ page }) => {
+      await selectAllTransactions(page);
+      await expect(page.getByRole("button", { name: /Mark Reviewed|Mark reviewed/i })).toBeVisible();
     });
 
     test("selecting all updates label and shows counts on buttons", async ({ page }) => {
-      await page.getByRole("checkbox", { name: "Select transactions" }).click();
-      await expect(page.getByText(/selected/)).toBeVisible();
-      await expect(page.getByRole("button", { name: /AI Categorize \(\d+\)/ })).toBeVisible();
+      await selectAllTransactions(page);
+      await expectSelectionCount(page, 5);
+      await expectAICategorizeButton(page, 5);
     });
 
     test("clicking select-all twice clears selection", async ({ page }) => {
       const cb = page.getByRole("checkbox", { name: "Select transactions" });
       await cb.click();
-      await expect(page.getByText(/selected/)).toBeVisible();
+      await expectSelectionCount(page, 5);
       await cb.click();
-      await expect(page.getByText("Select all")).toBeVisible();
+      await expectNoSelection(page);
     });
 
-    test("clicking a transaction row selects it and updates button labels", async ({ page }) => {
+    test("clicking a row checkbox selects it and updates button labels", async ({ page }) => {
       const rowCheckboxes = page.getByRole("checkbox", { name: /^Select transaction \w/ });
       const count = await rowCheckboxes.count();
       if (count === 0) test.skip();
 
       await rowCheckboxes.first().click();
       await expect(rowCheckboxes.first()).toBeChecked();
-      await expect(page.getByText(/^1 selected$/)).toBeVisible();
-      await expect(page.getByRole("button", { name: /AI Categorize \(1\)/ })).toBeVisible();
+      await expectSelectionCount(page, 1);
+      await expectAICategorizeButton(page, 1);
     });
   });
 });

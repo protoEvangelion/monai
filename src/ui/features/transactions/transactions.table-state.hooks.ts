@@ -5,7 +5,7 @@ import type {
   DateRangeFilter,
   TransactionTableServerState,
 } from "./transactions.types";
-import { PAGE_SIZE } from "./transactions.utils";
+import { encodeCategoryFilter, PAGE_SIZE, parseCategoryFilter } from "./transactions.utils";
 
 export function useTransactionTableState({
   searchQuery,
@@ -96,6 +96,11 @@ export function useTransactionTableState({
     serverState?.onQueryChange({ categoryFilter: value, pageIndex: 0 });
   };
 
+  const handleCategoryExcludeChange = (exclude: boolean) => {
+    const { key } = parseCategoryFilter(categoryFilter);
+    handleCategoryFilterChange(encodeCategoryFilter(key, exclude && key !== "all"));
+  };
+
   const handleDateFilterChange = (value: DateRangeFilter) => {
     setDateFilter(value);
     serverState?.onQueryChange({
@@ -112,6 +117,7 @@ export function useTransactionTableState({
     dateFilter,
     debouncedTableSearch,
     handleAmountFilterChange,
+    handleCategoryExcludeChange,
     handleCategoryFilterChange,
     handleDateFilterChange,
     handlePaginationChange,

@@ -141,8 +141,13 @@ export const deleteAccount = createServerFn().handler(async (ctx) => {
     with: { plaidItem: true },
   });
 
-  if (!account || account.plaidItem?.userId !== userId)
+  if (
+    !account ||
+    (account.plaidItem ? account.plaidItem.userId !== userId : account.userId !== userId)
+  ) {
     throw new Error("Account not found");
+  }
 
+  await db.delete(historicalBalances).where(eq(historicalBalances.accountId, id));
   await db.delete(accounts).where(eq(accounts.id, id));
 });

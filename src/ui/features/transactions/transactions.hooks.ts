@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "@tanstack/react-router";
-import type { Table } from "@tanstack/react-table";
+import type { VisibilityState } from "@tanstack/react-table";
 import { createCategory } from "../../../server/categories.fns";
 import { AI_CATEGORIZE_MAX_TRANSACTIONS } from "../../../server/plaid.sync.fns";
 import { setTransactionType, updateTransactionCategory } from "../../../server/transactions.fns";
 import type { AmountRangeFilter, CategoryGroup, DateRangeFilter, Tx } from "./transactions.types";
+import { parseCategoryFilter } from "./transactions.utils";
 
 export const OPTIONAL_TRANSACTION_COLUMNS = [
   { id: "note", label: "Note" },
@@ -27,17 +28,94 @@ export const TRANSACTION_COLUMN_ORDER_OPTIONS = [
 export const DEFAULT_TRANSACTION_COLUMN_ORDER = [
   "select",
   ...TRANSACTION_COLUMN_ORDER_OPTIONS.map((column) => column.id),
-  "status",
   "reviewStatus",
 ];
 
 export const DEFAULT_TRANSACTION_COLUMN_VISIBILITY = {
-  reviewStatus: false,
   note: false,
   merchantName: false,
   datetime: false,
   location: false,
 };
+
+const TRANSACTION_TABLE_COLUMNS_STORAGE_KEY = "monai:transactions-table-columns";
+
+type StoredTransactionColumnPrefs = {
+  columnOrder?: string[];
+  columnVisibility?: VisibilityState;
+};
+
+const ORDERABLE_COLUMN_IDS = new Set<string>(
+  TRANSACTION_COLUMN_ORDER_OPTIONS.map((column) => column.id),
+);
+
+function readStoredTransactionColumnPrefs(): StoredTransactionColumnPrefs {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(TRANSACTION_TABLE_COLUMNS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as StoredTransactionColumnPrefs;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeColumnOrder(order: string[] | undefined) {
+  const fromStorage = (order ?? [])
+    .map((id) => (id === "status" ? "reviewStatus" : id))
+    .filter((id) => ORDERABLE_COLUMN_IDS.has(id));
+  const missing = TRANSACTION_COLUMN_ORDER_OPTIONS.map((column) => column.id).filter(
+    (id) => !fromStorage.includes(id),
+  );
+  return ["select", ...fromStorage, ...missing, "reviewStatus"];
+}
+
+function normalizeColumnVisibility(visibility: VisibilityState | undefined): VisibilityState {
+  const next: VisibilityState = { ...DEFAULT_TRANSACTION_COLUMN_VISIBILITY };
+  if (!visibility) return next;
+  for (const column of OPTIONAL_TRANSACTION_COLUMNS) {
+    if (typeof visibility[column.id] === "boolean") {
+      next[column.id] = visibility[column.id]!;
+    }
+  }
+  if (typeof visibility.reviewStatus === "boolean") {
+    next.reviewStatus = visibility.reviewStatus;
+  }
+  return next;
+}
+
+export function useTransactionTableColumnPrefs() {
+  const [columnOrder, setColumnOrderState] = useState(() =>
+    normalizeColumnOrder(readStoredTransactionColumnPrefs().columnOrder),
+  );
+  const [columnVisibility, setColumnVisibilityState] = useState<VisibilityState>(() =>
+    normalizeColumnVisibility(readStoredTransactionColumnPrefs().columnVisibility),
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      TRANSACTION_TABLE_COLUMNS_STORAGE_KEY,
+      JSON.stringify({ columnOrder, columnVisibility }),
+    );
+  }, [columnOrder, columnVisibility]);
+
+  const setColumnOrder = useCallback(
+    (updater: SetStateAction<string[]>) => setColumnOrderState(updater),
+    [],
+  );
+  const setColumnVisibility = useCallback(
+    (updater: SetStateAction<VisibilityState>) => setColumnVisibilityState(updater),
+    [],
+  );
+
+  const columnRenderKey = useMemo(
+    () => `${columnOrder.join("|")}|${JSON.stringify(columnVisibility)}`,
+    [columnOrder, columnVisibility],
+  );
+
+  return { columnOrder, columnRenderKey, columnVisibility, setColumnOrder, setColumnVisibility };
+}
 
 export function useTransactionFilterOptions({
   amountFilter,
@@ -71,13 +149,20 @@ export function useTransactionFilterOptions({
     ],
     [categoryOptions],
   );
+  const { isExclude: isCategoryFilterExcluded, key: categoryFilterKey } =
+    parseCategoryFilter(categoryFilter);
   const filteredCategoryFilterOptions = useMemo(() => {
     const query = categorySearch.trim().toLowerCase();
     if (!query) return categoryFilterOptions;
     return categoryFilterOptions.filter((option) => option.label.toLowerCase().includes(query));
   }, [categoryFilterOptions, categorySearch]);
+  const selectedCategoryLabel =
+    categoryFilterOptions.find((option) => option.id === categoryFilterKey)?.label ??
+    "All categories";
   const selectedCategoryFilterLabel =
-    categoryFilterOptions.find((option) => option.id === categoryFilter)?.label ?? "All categories";
+    isCategoryFilterExcluded && categoryFilterKey !== "all"
+      ? `Not ${selectedCategoryLabel}`
+      : selectedCategoryLabel;
   const columnFilters = useMemo(
     () => [
       { id: "reviewStatus", value: showAll ? "all" : "not-reviewed" },
@@ -89,8 +174,10 @@ export function useTransactionFilterOptions({
   );
 
   return {
+    categoryFilterKey,
     columnFilters,
     filteredCategoryFilterOptions,
+    isCategoryFilterExcluded,
     selectedCategoryFilterLabel,
   };
 }
@@ -118,7 +205,10 @@ export function useTransactionActionSelection({
   selectAllPages: boolean;
   setRowSelection: Dispatch<SetStateAction<Record<string, boolean>>>;
   setSelectAllPages: Dispatch<SetStateAction<boolean>>;
-  table: Table<Tx>;
+  table: {
+    getFilteredRowModel: () => { rows: Array<{ original: Tx }> };
+    getRowModel: () => { rows: Array<{ original: Tx }> };
+  };
   totalRows?: number;
 }) {
   const filteredRows = table.getFilteredRowModel().rows;

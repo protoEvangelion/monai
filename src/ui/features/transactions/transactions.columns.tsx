@@ -159,11 +159,12 @@ export function createTransactionColumns({
       ),
     },
     {
+      id: "note",
       accessorKey: "note",
       header: "Note",
       meta: {
-        className: "hidden min-w-[10rem] px-3 md:table-cell",
-        headerClassName: "hidden min-w-[10rem] px-3 md:table-cell",
+        className: "min-w-[10rem] px-3",
+        headerClassName: "min-w-[10rem] px-3",
       },
       cell: ({ row }) => (
         <span className="block max-w-[18rem] truncate text-xs text-default-400">

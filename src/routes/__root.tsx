@@ -14,6 +14,7 @@ import { useTheme } from "../ui/hooks/useTheme";
 import { AppHeader } from "../ui/layout/AppHeader";
 import { AppSidebar, type SidebarAccount } from "../ui/layout/AppSidebar";
 import TanstackQueryProvider from "../ui/integrations/tanstack-query/root-provider";
+import { MantineAppProvider } from "../ui/integrations/mantine/MantineAppProvider";
 import { ToastViewport } from "../ui/shared/toast";
 import { getAccounts } from "../server/accounts.fns";
 import { autoSync, syncLatestTransactionsOnLogin } from "../server/plaid.sync.fns";
@@ -110,6 +111,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body className="antialiased selection:bg-primary/30">
         <TanstackQueryProvider>
           <ClerkProvider>
+            <MantineAppProvider>
             <LoginSyncEffect isAuthPage={isAuthPage} />
             <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
               {mounted ? (
@@ -155,8 +157,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                     <div className="z-10 flex min-w-0 grow flex-col overflow-hidden">
                       <AppHeader pageTitle="" onOpenSidebar={() => setSidebarOpen(true)} />
 
-                      <main className="grow overflow-y-auto bg-transparent p-6 xl:p-8">
-                        <div className="mx-auto w-full">{children}</div>
+                      <main className="flex min-h-0 grow flex-col overflow-y-auto bg-transparent p-6 xl:p-8">
+                        <div className="mx-auto flex w-full min-h-0 flex-1 flex-col">{children}</div>
                       </main>
                     </div>
                   </>
@@ -165,6 +167,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             </div>
             <ToastViewport />
             {import.meta.env.DEV ? <TanStackDevtoolsHost /> : null}
+            </MantineAppProvider>
           </ClerkProvider>
         </TanstackQueryProvider>
         <Scripts />

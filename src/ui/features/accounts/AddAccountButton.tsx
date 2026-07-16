@@ -8,6 +8,7 @@ export function AddAccountButton({
   size = "md",
   onPress,
   isLoading,
+  isDisabled = false,
 }: {
   label?: string;
   icon?: React.ReactNode;
@@ -15,9 +16,10 @@ export function AddAccountButton({
   size?: "sm" | "md";
   onPress: () => void;
   isLoading: boolean;
+  isDisabled?: boolean;
 }) {
   return (
-    <Button variant={variant} size={size} onPress={onPress} isDisabled={isLoading}>
+    <Button variant={variant} size={size} onPress={onPress} isDisabled={isLoading || isDisabled}>
       {isLoading ? <Loader2Icon size={15} className="animate-spin" /> : (icon ?? <PlusIcon size={15} />)}
       {isLoading ? "Connecting..." : label}
     </Button>

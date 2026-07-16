@@ -263,8 +263,11 @@ export function CategoryDetailPanel({
         <CategoryKeyMetrics metrics={yearMetrics} />
 
         <CategoryTransactionsPanel
+          categories={selectedGroups}
+          lockedCategoryFilter={child ? `cat:${child.id}` : undefined}
           transactions={transactions}
           selectedGroups={selectedGroups}
+          viewDate={viewDate}
           onRefresh={onRefresh}
         />
       </CardContent>

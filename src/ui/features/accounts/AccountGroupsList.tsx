@@ -47,7 +47,13 @@ export function AccountGroupsList({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{account.name}</div>
-                    <div className="text-xs text-default-400">{account.type} · history retained</div>
+                    <div className="text-xs text-default-400">
+                      {account.plaidAccountId
+                        ? `${account.type} · history retained`
+                        : account.type === "real_estate"
+                          ? "Manual home estimate"
+                          : `${account.type} · manual`}
+                    </div>
                   </div>
                   <div className="w-28 text-right text-sm font-bold">
                     {formatCurrency(account.currentBalance)}

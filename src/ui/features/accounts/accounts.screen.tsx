@@ -1,7 +1,8 @@
 import { useRouter } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
+import { HomeIcon, PlusIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
+import { createRealEstateAccount, updateRealEstateAccount } from "../../../server/accounts.fns";
 import {
   createLinkToken,
   deleteAccount,
@@ -12,6 +13,7 @@ import { AccountDetailPanel } from "./AccountDetailPanel";
 import { AccountGroupsList } from "./AccountGroupsList";
 import { AccountSummaryCard } from "./AccountSummaryCard";
 import { AddAccountButton } from "./AddAccountButton";
+import { AddHomeAssetModal } from "./AddHomeAssetModal";
 import { ConnectionsList } from "./ConnectionsList";
 import { EmptyAccountsState } from "./EmptyAccountsState";
 import { useAccountsViewModel } from "./accounts.hooks";
@@ -33,6 +35,7 @@ export function AccountsScreen({
   const [isLinkLoading, setIsLinkLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState<number | null>(null);
+  const [isHomeModalOpen, setIsHomeModalOpen] = useState(false);
   const vm = useAccountsViewModel({ accounts, transactions });
 
   const { open, ready } = usePlaidLink({
@@ -98,12 +101,32 @@ export function AccountsScreen({
     }
   };
 
+  const handleCreateHomeAsset = async (input: { name: string; value: number }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (createRealEstateAccount as any)({ data: input });
+    await router.invalidate();
+  };
+
+  const handleUpdateHomeAsset = async (input: { id: number; name: string; value: number }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (updateRealEstateAccount as any)({ data: input });
+    await router.invalidate();
+  };
+
   return (
     <div className="flex min-h-[calc(100vh-8rem)] gap-0 overflow-hidden rounded-3xl border border-divider/60 bg-background/70 shadow-sm">
       <section className="min-w-0 flex-1 overflow-y-auto">
         <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-divider/60 bg-background/90 px-6 backdrop-blur-xl">
           <h1 className="text-lg font-bold">Accounts</h1>
           <div className="flex items-center gap-2">
+            <AddAccountButton
+              label="Add home"
+              icon={<HomeIcon size={15} />}
+              variant="ghost"
+              size="sm"
+              onPress={() => setIsHomeModalOpen(true)}
+              isLoading={false}
+            />
             <AddAccountButton
               label="Add"
               icon={<PlusIcon size={15} />}
@@ -147,7 +170,14 @@ export function AccountsScreen({
         accountTransactions={vm.accountTransactions}
         isDeleting={isDeleting}
         onDeleteAccount={handleDeleteAccount}
+        onUpdateHomeAsset={handleUpdateHomeAsset}
         selectedAccount={vm.selectedAccount}
+      />
+
+      <AddHomeAssetModal
+        isOpen={isHomeModalOpen}
+        onClose={() => setIsHomeModalOpen(false)}
+        onSave={handleCreateHomeAsset}
       />
     </div>
   );

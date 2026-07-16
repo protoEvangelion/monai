@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { fillNameFilter, selectCategoryFilter, waitForReviewTable } from './helpers/review-table'
 
 test.describe('app shell smoke', () => {
   test('navigates every sidebar route', async ({ page }) => {
@@ -43,10 +44,10 @@ test.describe('app shell smoke', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Connections' }).click()
-    await expect(page.getByText('Needs attention')).toBeVisible()
+    await expect(page.getByText('Linked institutions')).toBeVisible()
 
     await page.getByRole('button', { name: 'About' }).click()
-    await expect(page.getByText('Version')).toBeVisible()
+    await expect(page.getByText('Monai', { exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Close settings' }).last().click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeHidden()
@@ -54,17 +55,18 @@ test.describe('app shell smoke', () => {
 
   test('transactions controls search, filter, and open the category picker', async ({ page }) => {
     await page.goto('/transactions')
+    await waitForReviewTable(page)
 
-    await page.getByPlaceholder('Search').fill('Whole')
+    await fillNameFilter(page, 'Whole')
     await expect(page.getByRole('checkbox', { name: 'Select transaction Whole Foods' })).toBeVisible()
     await expect(page.getByRole('checkbox', { name: 'Select transaction Uber Eats' })).toBeHidden()
 
-    await page.getByPlaceholder('Search').clear()
-    await page.getByRole('combobox').selectOption('income')
+    await fillNameFilter(page, '')
+    await selectCategoryFilter(page, 'Income')
     await expect(page.getByTestId('transaction-row-5')).toBeVisible()
     await expect(page.getByTestId('transaction-row-1')).toBeHidden()
 
-    await page.getByRole('combobox').selectOption('cat:2')
+    await selectCategoryFilter(page, /Groceries/)
     await expect(page.getByTestId('transaction-row-1')).toBeVisible()
 
     await page

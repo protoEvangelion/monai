@@ -37,6 +37,7 @@ export function TransactionSelectionToolbar({
   onSetReviewed,
   onSetTransactionType,
   selectedTransactions,
+  showMarkReviewed = true,
 }: {
   categories: CategoryGroup[];
   isAICategorizing: boolean;
@@ -51,6 +52,7 @@ export function TransactionSelectionToolbar({
     transactionType: "regular" | "income" | "transfer",
   ) => void;
   selectedTransactions: Tx[];
+  showMarkReviewed?: boolean;
 }) {
   if (selectedTransactions.length === 0) return null;
 
@@ -129,14 +131,16 @@ export function TransactionSelectionToolbar({
       >
         <RepeatIcon size={20} />
       </FloatingSelectionToolbarButton>
-      <FloatingSelectionToolbarButton
-        label={reviewLabel}
-        onClick={() => onSetReviewed(selectedIds, !allSelectedAreReviewed)}
-        pressed={allSelectedAreReviewed}
-        variant="review"
-      >
-        <CheckIcon size={20} />
-      </FloatingSelectionToolbarButton>
+      {showMarkReviewed ? (
+        <FloatingSelectionToolbarButton
+          label={reviewLabel}
+          onClick={() => onSetReviewed(selectedIds, !allSelectedAreReviewed)}
+          pressed={allSelectedAreReviewed}
+          variant="review"
+        >
+          <CheckIcon size={20} />
+        </FloatingSelectionToolbarButton>
+      ) : null}
       <Dropdown>
         <DropdownTrigger
           aria-label="Selected transaction actions"

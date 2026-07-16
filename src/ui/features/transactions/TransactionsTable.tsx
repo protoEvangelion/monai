@@ -1,65 +1,183 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import {
-  type VisibilityState,
+  type ColumnFiltersState,
+  type SortingState,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  useReactTable,
+  getSortedRowModel,
 } from "@tanstack/react-table";
+import { useMantineReactTable } from "mantine-react-table";
 import { useTransactionReviewActions } from "./transactions.actions";
-import { createTransactionColumns } from "./transactions.columns";
 import { CreateCategoryFromTransactionModal } from "./CreateCategoryFromTransactionModal";
-import { TransactionsDataGrid } from "./TransactionsDataGrid";
+import { TransactionsMantineGrid } from "./TransactionsMantineGrid";
 import { TransactionSelectionToolbar } from "./TransactionSelectionToolbar";
-import { TransactionNoteModal } from "./TransactionNoteModal";
 import {
-  DEFAULT_TRANSACTION_COLUMN_ORDER,
-  DEFAULT_TRANSACTION_COLUMN_VISIBILITY,
-  OPTIONAL_TRANSACTION_COLUMNS,
-  TRANSACTION_COLUMN_ORDER_OPTIONS,
   useTransactionActionSelection,
   useTransactionCategoryActions,
-  useTransactionFilterOptions,
+  useTransactionTableColumnPrefs,
 } from "./transactions.hooks";
 import type {
   CategoryGroup,
   TransactionTableServerState,
   Tx,
 } from "./transactions.types";
-import { TransactionsToolbar } from "./TransactionsToolbar";
-import { transactionSearchFilter } from "./transactions.utils";
+import {
+  applyLocalColumnFilters,
+  LOCAL_COLUMN_FILTER_IDS,
+} from "./transactions.utils";
 import { useSelectedToolbarTransactions } from "./transactions.selection.hooks";
-import { TransactionsEmptyState } from "./TransactionsEmptyState";
 import { useTransactionTableState } from "./transactions.table-state.hooks";
+import {
+  createMrtTransactionColumns,
+  monthDateRangeFilter,
+  type TransactionTableVariant,
+} from "./transactions.mantine-columns";
+import { CategoryTransactionsBulkBar } from "../categories/CategoryTransactionsBulkBar";
+import type { getCategories } from "../../../server/categories.fns";
+import {
+  setTransactionsInternalTransfer,
+  setTransactionsType,
+  updateTransactionsCategory,
+} from "../../../server/transactions.fns";
+
+type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number];
+
+function toMrtColumnFilters({
+  amountFilter,
+  categoryFilter,
+  dateFilter,
+  lockedDateRange,
+  lockedCategoryFilter,
+  maxAmount,
+  search,
+  showAll,
+  variant,
+}: {
+  amountFilter: { min: string; max: string } | null;
+  categoryFilter: string;
+  dateFilter: { start: string; end: string } | null;
+  lockedCategoryFilter?: string;
+  lockedDateRange?: [string, string];
+  maxAmount: number;
+  search: string;
+  showAll: boolean;
+  variant: TransactionTableVariant;
+}): ColumnFiltersState {
+  const filters: ColumnFiltersState =
+    variant === "category"
+      ? []
+      : [{ id: "reviewStatus", value: showAll ? "all" : "not-reviewed" }];
+
+  const categoryValue = lockedCategoryFilter ?? categoryFilter;
+  if (categoryValue && categoryValue !== "all") {
+    filters.push({ id: "category", value: categoryValue });
+  }
+
+  const dateValue = lockedDateRange ?? (dateFilter ? [dateFilter.start, dateFilter.end] : null);
+  if (dateValue) {
+    filters.push({
+      id: "date",
+      value: [new Date(dateValue[0]), new Date(dateValue[1])],
+    });
+  }
+
+  if (amountFilter && (amountFilter.min || amountFilter.max)) {
+    filters.push({
+      id: "amount",
+      value: [
+        Number(amountFilter.min) || 0,
+        Number(amountFilter.max) || Math.max(100, Math.ceil(maxAmount)),
+      ],
+    });
+  }
+
+  if (search.trim()) {
+    filters.push({ id: "name", value: search.trim() });
+  }
+
+  return filters;
+}
+
+function dateStringsFromFilterValue(value: unknown) {
+  if (!Array.isArray(value)) return null;
+  const [start, end] = value;
+  const startStr =
+    start instanceof Date
+      ? start.toISOString().slice(0, 10)
+      : typeof start === "string"
+        ? start
+        : "";
+  const endStr =
+    end instanceof Date ? end.toISOString().slice(0, 10) : typeof end === "string" ? end : "";
+  return startStr && endStr ? { start: startStr, end: endStr } : null;
+}
+
+function filterValueEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, index) => filterValueEqual(item, b[index]));
+  }
+  return false;
+}
+
+function columnFiltersEqual(a: ColumnFiltersState, b: ColumnFiltersState) {
+  if (a.length !== b.length) return false;
+  return a.every(
+    (filter, index) =>
+      filter.id === b[index]?.id && filterValueEqual(filter.value, b[index]?.value),
+  );
+}
 
 export function ReviewTable({
-  transactions,
   categories,
-  showAll = false,
+  categoryBulkGroups,
+  initialCategoryFilter,
+  lockedCategoryFilter,
+  onCategoryRefresh,
   searchQuery = "",
   serverState,
+  showAll = false,
+  transactions,
+  variant = "full",
+  viewDate,
 }: {
   transactions: Tx[];
   categories: CategoryGroup[];
   showAll?: boolean;
   searchQuery?: string;
   serverState?: TransactionTableServerState;
+  variant?: TransactionTableVariant;
+  viewDate?: string;
+  initialCategoryFilter?: string;
+  lockedCategoryFilter?: string;
+  categoryBulkGroups?: LoadedGroup[];
+  onCategoryRefresh?: () => void;
 }) {
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const rowSelectionRef = useRef(rowSelection);
   rowSelectionRef.current = rowSelection;
   const [selectAllPages, setSelectAllPages] = useState(false);
   const [pickerTxId, setPickerTxId] = useState<number | null>(null);
-  const [noteTransaction, setNoteTransaction] = useState<Tx | null>(null);
   const [catSearch, setCatSearch] = useState("");
-  const [columnOrder, setColumnOrder] = useState(DEFAULT_TRANSACTION_COLUMN_ORDER);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-    DEFAULT_TRANSACTION_COLUMN_VISIBILITY,
+  const [sorting, setSorting] = useState<SortingState>([{ id: "date", desc: true }]);
+  const [categorySaving, setCategorySaving] = useState(false);
+  const isCategoryVariant = variant === "category";
+  const categoryColumnOrder = useMemo(
+    () =>
+      lockedCategoryFilter
+        ? ["select", "date", "name", "amount"]
+        : ["select", "date", "name", "amount", "category"],
+    [lockedCategoryFilter],
   );
+  const { columnOrder, columnVisibility, setColumnOrder, setColumnVisibility } =
+    useTransactionTableColumnPrefs();
+  const tableColumnOrder = isCategoryVariant ? categoryColumnOrder : columnOrder;
+  const tableColumnVisibility = isCategoryVariant ? {} : columnVisibility;
   const {
     amountFilter,
     categoryFilter,
-    categorySearch,
     dateFilter,
     debouncedTableSearch,
     handleAmountFilterChange,
@@ -68,8 +186,6 @@ export function ReviewTable({
     handlePaginationChange,
     isServerMode,
     pagination,
-    searchInput,
-    setCategorySearch,
     setSearchInput,
   } = useTransactionTableState({
     searchQuery,
@@ -78,15 +194,61 @@ export function ReviewTable({
     setSelectAllPages,
     showAll,
   });
-  const { columnFilters, filteredCategoryFilterOptions, selectedCategoryFilterLabel } =
-    useTransactionFilterOptions({
+
+  const lockedDateRange = useMemo(
+    () => (viewDate ? (monthDateRangeFilter(viewDate) as [string, string]) : undefined),
+    [viewDate],
+  );
+  const effectiveCategoryFilter = lockedCategoryFilter ?? initialCategoryFilter ?? categoryFilter;
+  const maxAmount = useMemo(
+    () => Math.max(0, ...transactions.map((tx) => Math.abs(tx.amount))),
+    [transactions],
+  );
+
+  const serverColumnFilters = useMemo(
+    () =>
+      toMrtColumnFilters({
+        amountFilter,
+        categoryFilter: effectiveCategoryFilter,
+        dateFilter,
+        lockedCategoryFilter,
+        lockedDateRange,
+        maxAmount,
+        search: debouncedTableSearch,
+        showAll,
+        variant,
+      }),
+    [
       amountFilter,
-      categories,
-      categoryFilter,
-      categorySearch,
       dateFilter,
+      debouncedTableSearch,
+      effectiveCategoryFilter,
+      lockedCategoryFilter,
+      lockedDateRange,
+      maxAmount,
       showAll,
+      variant,
+    ],
+  );
+
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(serverColumnFilters);
+
+  useEffect(() => {
+    setColumnFilters((prev) => {
+      const localFilters = prev.filter((filter) =>
+        LOCAL_COLUMN_FILTER_IDS.includes(filter.id as (typeof LOCAL_COLUMN_FILTER_IDS)[number]),
+      );
+      const next = [...serverColumnFilters, ...localFilters];
+      if (columnFiltersEqual(prev, next)) return prev;
+      return next;
     });
+  }, [serverColumnFilters]);
+
+  const tableData = useMemo(() => {
+    if (!isServerMode) return transactions;
+    return applyLocalColumnFilters(transactions, columnFilters);
+  }, [columnFilters, isServerMode, transactions]);
+
   const categoryActions = useTransactionCategoryActions({
     categories,
     onClosePicker: () => {
@@ -94,18 +256,6 @@ export function ReviewTable({
       setCatSearch("");
     },
   });
-  const isRowSelected = useCallback(
-    (txId: number) => Boolean(rowSelectionRef.current[String(txId)]),
-    [],
-  );
-  const handleRowSelectionChange = useCallback((txId: number, checked: boolean) => {
-    setRowSelection((current) => {
-      const key = String(txId);
-      if (checked) return { ...current, [key]: true };
-      const { [key]: _removed, ...next } = current;
-      return next;
-    });
-  }, []);
 
   const filteredGroups = useMemo(
     () =>
@@ -124,65 +274,182 @@ export function ReviewTable({
 
   const columns = useMemo(
     () =>
-      createTransactionColumns({
+      createMrtTransactionColumns({
         categories,
         catSearch,
         filteredGroups,
+        lockedCategoryFilter,
+        lockedDateRange,
+        maxAmount,
         onCategoryChange: categoryActions.handleCategoryChange,
         onCategorySearchChange: setCatSearch,
         onCreateCategory: categoryActions.openCreateCategoryModal,
         onPickerTxIdChange: setPickerTxId,
-        onRowSelectStart: () => setSelectAllPages(false),
-        onRowSelectionChange: handleRowSelectionChange,
         onTransactionTypeChange: categoryActions.handleTransactionTypeChange,
-        isRowSelected,
         pickerTxId,
+        variant,
       }),
-    [catSearch, filteredGroups, handleRowSelectionChange, isRowSelected, pickerTxId, categories],
+    [
+      catSearch,
+      filteredGroups,
+      lockedCategoryFilter,
+      lockedDateRange,
+      maxAmount,
+      pickerTxId,
+      categories,
+      variant,
+      categoryActions,
+    ],
   );
 
-  const table = useReactTable({
-    data: transactions,
+  const handleColumnFiltersChange = useCallback(
+    (updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState)) => {
+      setColumnFilters((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        if (columnFiltersEqual(prev, next)) return prev;
+
+        const category = next.find((filter) => filter.id === "category");
+        const date = next.find((filter) => filter.id === "date");
+        const amount = next.find((filter) => filter.id === "amount");
+        const name = next.find((filter) => filter.id === "name");
+
+        if (!lockedCategoryFilter && category) {
+          handleCategoryFilterChange(String(category.value ?? "all"));
+        }
+        if (!lockedDateRange && date) {
+          handleDateFilterChange(dateStringsFromFilterValue(date.value));
+        }
+        if (Array.isArray(amount?.value)) {
+          const [min, max] = amount.value as [number, number];
+          handleAmountFilterChange(
+            min || max ? { min: min ? String(min) : "", max: max ? String(max) : "" } : null,
+          );
+        }
+        if (name !== undefined) {
+          setSearchInput(String(name.value ?? ""));
+        } else if (prev.some((filter) => filter.id === "name")) {
+          setSearchInput("");
+        }
+
+        return next;
+      });
+    },
+    [
+      handleAmountFilterChange,
+      handleCategoryFilterChange,
+      handleDateFilterChange,
+      lockedCategoryFilter,
+      lockedDateRange,
+      setSearchInput,
+    ],
+  );
+
+  const table = useMantineReactTable({
     columns,
+    data: tableData,
     getRowId: (row) => String(row.id),
+    enableColumnActions: false,
+    enableColumnResizing: true,
+    enableColumnOrdering: !isCategoryVariant,
+    enableHiding: !isCategoryVariant,
+    enableSorting: true,
+    enableColumnFilters: true,
+    enableGlobalFilter: false,
+    enablePagination: !isCategoryVariant,
+    enableRowSelection: true,
+    enableSelectAll: true,
+    enableDensityToggle: false,
+    enableFullScreenToggle: false,
+    enableStickyHeader: true,
+    columnFilterDisplayMode: "subheader",
+    layoutMode: "grid",
+    initialState: {
+      density: isCategoryVariant ? "xs" : "md",
+      showColumnFilters: true,
+      columnSizing: {
+        reviewStatus: 96,
+      },
+      columnVisibility: isCategoryVariant
+        ? {}
+        : {
+            note: false,
+            merchantName: false,
+            datetime: false,
+            location: false,
+            ...columnVisibility,
+          },
+      columnOrder: tableColumnOrder,
+    },
     state: {
       columnFilters,
-      columnOrder,
-      columnVisibility,
-      globalFilter: debouncedTableSearch,
+      columnOrder: tableColumnOrder,
+      columnVisibility: tableColumnVisibility,
       pagination,
+      rowSelection,
+      sorting,
     },
-    globalFilterFn: transactionSearchFilter,
-    onGlobalFilterChange: setSearchInput,
-    onColumnOrderChange: setColumnOrder,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnFiltersChange: handleColumnFiltersChange,
+    onColumnOrderChange: isCategoryVariant ? undefined : setColumnOrder,
+    onColumnVisibilityChange: isCategoryVariant ? undefined : setColumnVisibility,
     onPaginationChange: handlePaginationChange,
+    onRowSelectionChange: setRowSelection,
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     manualFiltering: isServerMode,
     manualPagination: isServerMode,
     rowCount: serverState?.total,
     autoResetPageIndex: false,
+    mantineSelectAllCheckboxProps: {
+      "aria-label": "Select transactions",
+      style: { cursor: "pointer" },
+    },
+    mantineSelectCheckboxProps: ({ row }) => ({
+      "aria-label": `Select transaction ${row.original.merchantName}`,
+      style: { cursor: "pointer" },
+    }),
+    mantineTableProps: {
+      style: { tableLayout: "fixed" },
+    },
+    mantineTableHeadCellProps: {
+      style: {
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
+        verticalAlign: "top",
+      },
+    },
+    mantinePaperProps: {
+      style: {
+        border: "none",
+        boxShadow: "none",
+        background: "transparent",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+      },
+    },
+    mantineTableContainerProps: {
+      style: { flex: 1, minHeight: 0, maxHeight: "100%" },
+    },
+    mantineTableBodyRowProps: ({ row }) =>
+      ({
+        "data-testid": `transaction-row-${row.original.id}`,
+      }) as HTMLAttributes<HTMLTableRowElement>,
+    positionToolbarAlertBanner: "none",
   });
 
-  const {
-    actionIds,
-    aiTransactionCount,
-    allSelected,
-    cappedTransactionIds,
-    pageRows,
-    selectedIds,
-    toggleAll,
-    total,
-  } = useTransactionActionSelection({
-    rowSelection,
-    selectAllPages,
-    setRowSelection,
-    setSelectAllPages,
-    table,
-    totalRows: serverState?.total,
-  });
+  const { actionIds, aiTransactionCount, cappedTransactionIds, selectedIds } =
+    useTransactionActionSelection({
+      rowSelection,
+      selectAllPages,
+      setRowSelection,
+      setSelectAllPages,
+      table,
+      totalRows: serverState?.total,
+    });
 
   const {
     handleAICategorize,
@@ -198,84 +465,85 @@ export function ReviewTable({
     setRowSelection,
     setSelectAllPages,
   });
-  const selectedToolbarTransactions = useSelectedToolbarTransactions({ cappedTransactionIds, selectAllPages, selectedIds, transactions });
+  const selectedToolbarTransactions = useSelectedToolbarTransactions({
+    cappedTransactionIds,
+    selectAllPages,
+    selectedIds,
+    transactions,
+  });
   const selectAllVisible = () => {
     setSelectAllPages(true);
     setRowSelection(Object.fromEntries(cappedTransactionIds.map((id) => [String(id), true])));
   };
 
-  return (
-    <div className="flex min-h-0 flex-col">
-      <TransactionsToolbar
-        allSelected={allSelected}
-        amountFilter={amountFilter}
-        categoryFilter={categoryFilter}
-        categorySearch={categorySearch}
-        dateFilter={dateFilter}
-        filteredCategoryFilterOptions={filteredCategoryFilterOptions}
-        onAmountFilterChange={handleAmountFilterChange}
-        onCategoryFilterChange={handleCategoryFilterChange}
-        onCategorySearchChange={setCategorySearch}
-        onColumnOrderChange={(ids) =>
-          setColumnOrder(["select", ...ids, "status", "reviewStatus"])
-        }
-        onDateFilterChange={handleDateFilterChange}
-        onSelectAll={toggleAll}
-        onTableSearchChange={setSearchInput}
-        onVisibleOptionalColumnIdsChange={(ids) =>
-          setColumnVisibility((current) => ({
-            ...current,
-            ...Object.fromEntries(
-              OPTIONAL_TRANSACTION_COLUMNS.map((column) => [column.id, ids.includes(column.id)]),
-            ),
-            reviewStatus: false,
-          }))
-        }
-        optionalColumnOptions={OPTIONAL_TRANSACTION_COLUMNS}
-        selectAllPages={selectAllPages}
-        selectedCategoryFilterLabel={selectedCategoryFilterLabel}
-        tableSearch={searchInput}
-        transactionColumnOrderOptions={TRANSACTION_COLUMN_ORDER_OPTIONS}
-        visibleColumnOrder={columnOrder.filter((id) =>
-          TRANSACTION_COLUMN_ORDER_OPTIONS.some((column) => column.id === id),
-        )}
-        visibleOptionalColumnIds={OPTIONAL_TRANSACTION_COLUMNS
-          .filter((column) => table.getColumn(column.id)?.getIsVisible() ?? false)
-          .map((column) => column.id)}
-      />
+  const categorySelectedTransactions = useMemo(
+    () => transactions.filter((tx) => rowSelection[String(tx.id)]),
+    [rowSelection, transactions],
+  );
+  const categoryAllSelectedAreInternal =
+    categorySelectedTransactions.length > 0 &&
+    categorySelectedTransactions.every((tx) => tx.transactionType === "transfer");
 
-      {total === 0 ? (
-        <TransactionsEmptyState
-          amountFilter={amountFilter}
-          categoryFilter={categoryFilter}
-          dateFilter={dateFilter}
-          searchInput={searchInput}
-          showAll={showAll}
+  const runCategoryMutation = async (fn: () => Promise<void>) => {
+    setCategorySaving(true);
+    try {
+      await fn();
+      onCategoryRefresh?.();
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <TransactionsMantineGrid table={table} />
+      </div>
+
+      {variant === "category" && categoryBulkGroups ? (
+        <CategoryTransactionsBulkBar
+          allSelectedAreInternal={categoryAllSelectedAreInternal}
+          saving={categorySaving}
+          selectedGroups={categoryBulkGroups}
+          selectedTransactions={categorySelectedTransactions}
+          onClearSelection={() => setRowSelection({})}
+          onSelectAll={() =>
+            setRowSelection(Object.fromEntries(transactions.map((tx) => [String(tx.id), true])))
+          }
+          onSetCategory={(ids, categoryId) =>
+            runCategoryMutation(async () => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (updateTransactionsCategory as any)({ data: { ids, categoryId } });
+            })
+          }
+          onSetInternalTransfer={(ids, isInternalTransfer) =>
+            runCategoryMutation(async () => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (setTransactionsInternalTransfer as any)({ data: { ids, isInternalTransfer } });
+            })
+          }
+          onSetTransactionType={(ids, transactionType) =>
+            runCategoryMutation(async () => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (setTransactionsType as any)({ data: { ids, transactionType } });
+            })
+          }
         />
       ) : (
-        <TransactionsDataGrid
-          columnRenderKey={columns}
-          onOpenTransaction={setNoteTransaction}
-          pageRows={pageRows}
-          pagination={pagination}
-          rowSelection={rowSelection}
-          table={table}
-          total={total}
+        <TransactionSelectionToolbar
+          categories={categories}
+          isAICategorizing={isAICategorizing}
+          selectedTransactions={selectedToolbarTransactions}
+          showMarkReviewed={!showAll}
+          onAICategorize={handleAICategorize}
+          onClearSelection={resetSelection}
+          onSelectAll={selectAllVisible}
+          onSetCategory={handleSetCategory}
+          onSetDate={handleSetDate}
+          onSetReviewed={handleSetReviewed}
+          onSetTransactionType={handleSetTransactionType}
         />
       )}
-
-      <TransactionSelectionToolbar
-        categories={categories}
-        isAICategorizing={isAICategorizing}
-        selectedTransactions={selectedToolbarTransactions}
-        onAICategorize={handleAICategorize}
-        onClearSelection={resetSelection}
-        onSelectAll={selectAllVisible}
-        onSetCategory={handleSetCategory}
-        onSetDate={handleSetDate}
-        onSetReviewed={handleSetReviewed}
-        onSetTransactionType={handleSetTransactionType}
-      />
 
       <CreateCategoryFromTransactionModal
         categories={categories}
@@ -297,13 +565,6 @@ export function ReviewTable({
         setNewCategoryParentId={categoryActions.setNewCategoryParentId}
       />
 
-      {noteTransaction ? (
-        <TransactionNoteModal
-          key={noteTransaction.id}
-          transaction={noteTransaction}
-          onClose={() => setNoteTransaction(null)}
-        />
-      ) : null}
     </div>
   );
 }

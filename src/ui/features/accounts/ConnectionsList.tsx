@@ -54,12 +54,13 @@ export function ConnectionsList({
                 variant="ghost"
                 size="sm"
                 onPress={onOpenPlaid}
-                isLoading={isLinkLoading}
+                isLoading={false}
+                isDisabled={isLinkLoading}
               />
               <button
                 type="button"
                 aria-label="Disconnect institution"
-                disabled={isDisconnecting === connection.id}
+                disabled={isDisconnecting === connection.id || isLinkLoading}
                 onClick={() => onDisconnect(connection.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-danger hover:bg-danger/10 disabled:opacity-50"
               >

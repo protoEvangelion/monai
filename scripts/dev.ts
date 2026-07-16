@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 const args = Bun.argv.slice(2)
 const modeArg = args.find((arg) => arg === '--production' || arg === '--prod' || arg === '--sandbox')
 const forwardedArgs = args.filter((arg) => arg !== '--production' && arg !== '--prod' && arg !== '--sandbox')
@@ -30,15 +32,14 @@ console.log(
   ].join(' | '),
 )
 
-const child = Bun.spawn(
-  ['bunx', 'vite', 'dev', '--port', '3000', ...forwardedArgs],
-  {
-    env,
-    stdin: 'inherit',
-    stdout: 'inherit',
-    stderr: 'inherit',
-  },
-)
+const viteBin = resolve(process.cwd(), 'node_modules/vite/bin/vite.js')
+
+const child = Bun.spawn(['bun', viteBin, 'dev', '--port', '3000', ...forwardedArgs], {
+  env,
+  stdin: 'inherit',
+  stdout: 'inherit',
+  stderr: 'inherit',
+})
 
 const exitCode = await child.exited
 process.exit(exitCode)
