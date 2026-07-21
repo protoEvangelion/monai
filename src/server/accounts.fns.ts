@@ -179,6 +179,17 @@ export const getNetWorthHistory = createServerFn().handler(async () => {
       }
     }
 
+    // Carry each account's last known balance forward through later months
+    let lastBalance: number | null = null;
+    for (const key of monthKeys) {
+      const point = latestForMonth.get(key);
+      if (point) {
+        lastBalance = point.balance;
+      } else if (lastBalance !== null) {
+        latestForMonth.set(key, { date: keyToDate(key).getTime(), balance: lastBalance });
+      }
+    }
+
     latestForMonth.forEach(({ balance }, key) => {
       const bucket = acc.get(key) ?? { assets: 0, debts: 0 };
       if (isDebtType(account.type)) bucket.debts += Math.abs(balance);
@@ -189,7 +200,7 @@ export const getNetWorthHistory = createServerFn().handler(async () => {
     return acc;
   }, new Map(monthKeys.map((k) => [k, { assets: 0, debts: 0 }])));
 
-  return monthKeys.map((key) => {
+  const history = monthKeys.map((key) => {
     const { assets, debts } = totals.get(key) ?? { assets: 0, debts: 0 };
     const date = keyToDate(key);
     return {
@@ -201,4 +212,8 @@ export const getNetWorthHistory = createServerFn().handler(async () => {
       netWorth: Math.round(assets - debts),
     };
   });
+
+  // Drop leading empty months so the chart starts at first real data
+  const firstDataIndex = history.findIndex((point) => point.assets !== 0 || point.debts !== 0);
+  return firstDataIndex === -1 ? [] : history.slice(firstDataIndex);
 });
