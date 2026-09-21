@@ -161,73 +161,74 @@ export function CategoryTopCard({
                 : "border-l-warning"
           }`}
         >
-          <div className="grid gap-4 px-4 py-4 md:grid-cols-2 md:items-start">
-            {/* Left column: ZBB status + edit income */}
-            <div className="flex min-w-0 flex-col gap-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <div
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
-                    isBalanced
-                      ? "bg-success-soft text-success"
-                      : isOverAssigned
-                        ? "bg-danger-soft text-danger"
-                        : "bg-warning-soft text-warning"
-                  }`}
-                >
-                  {isBalanced ? (
-                    <CheckCircle2Icon size={22} />
-                  ) : (
-                    <AlertTriangleIcon size={22} />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-default-500">
-                    <span>Zero-Based Budget</span>
-                    <span className="group relative inline-flex">
-                      <span
-                        aria-label="About zero-based budgeting"
-                        className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-default-500 transition-colors hover:text-primary"
-                      >
-                        <InfoIcon size={11} />
+          <div className="grid gap-4 px-4 py-4 lg:grid-cols-3 lg:items-start">
+            {/* Status */}
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+                  isBalanced
+                    ? "bg-success-soft text-success"
+                    : isOverAssigned
+                      ? "bg-danger-soft text-danger"
+                      : "bg-warning-soft text-warning"
+                }`}
+              >
+                {isBalanced ? (
+                  <CheckCircle2Icon size={22} />
+                ) : (
+                  <AlertTriangleIcon size={22} />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-default-500">
+                  <span>Zero-Based Budget</span>
+                  <span className="group relative inline-flex">
+                    <span
+                      aria-label="About zero-based budgeting"
+                      className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-default-500 transition-colors hover:text-primary"
+                    >
+                      <InfoIcon size={11} />
+                    </span>
+                    <span className="pointer-events-none absolute left-0 top-5 z-20 w-80 rounded-xl border border-divider/60 bg-background p-3 normal-case tracking-normal text-default-700 opacity-0 shadow-xl ring-1 ring-black/5 transition-opacity duration-150 group-hover:opacity-100">
+                      <span className="block text-sm font-bold text-foreground">
+                        Why zero-based budgeting?
                       </span>
-                      <span className="pointer-events-none absolute left-0 top-5 z-20 w-80 rounded-xl border border-divider/60 bg-background p-3 normal-case tracking-normal text-default-700 opacity-0 shadow-xl ring-1 ring-black/5 transition-opacity duration-150 group-hover:opacity-100">
-                        <span className="block text-sm font-bold text-foreground">
-                          Why zero-based budgeting?
-                        </span>
-                        <span className="mt-1.5 block text-sm leading-5 text-default-500">
-                          This view helps you give every expected income dollar
-                          a job before the month starts, so the plan is
-                          intentional instead of reactive.
-                        </span>
-                        <span className="mt-2 block text-sm">
-                          See immediately whether income is fully assigned.
-                        </span>
-                        <span className="mt-1 block text-sm">
-                          Catch overbudgeting before spending begins.
-                        </span>
-                        <span className="mt-1 block text-sm">
-                          Separate the monthly plan from actual spending.
-                        </span>
+                      <span className="mt-1.5 block text-sm leading-5 text-default-500">
+                        This view helps you give every expected income dollar
+                        a job before the month starts, so the plan is
+                        intentional instead of reactive.
+                      </span>
+                      <span className="mt-2 block text-sm">
+                        See immediately whether income is fully assigned.
+                      </span>
+                      <span className="mt-1 block text-sm">
+                        Catch overbudgeting before spending begins.
+                      </span>
+                      <span className="mt-1 block text-sm">
+                        Separate the monthly plan from actual spending.
                       </span>
                     </span>
-                  </div>
-                  <p
-                    className={`truncate text-xl font-black leading-tight ${
-                      isBalanced
-                        ? "text-success"
-                        : isOverAssigned
-                          ? "text-danger"
-                          : "text-warning"
-                    }`}
-                  >
-                    {statusLabel}
-                  </p>
-                  <p className="truncate text-xs text-default-500">
-                    {statusDetail}
-                  </p>
+                  </span>
                 </div>
+                <p
+                  className={`truncate text-xl font-black leading-tight ${
+                    isBalanced
+                      ? "text-success"
+                      : isOverAssigned
+                        ? "text-danger"
+                        : "text-warning"
+                  }`}
+                >
+                  {statusLabel}
+                </p>
+                <p className="truncate text-xs text-default-500">
+                  {statusDetail}
+                </p>
               </div>
+            </div>
 
+            {/* Edit income */}
+            <div className="min-w-0">
               <EditIncomeField
                 incomeInput={incomeInput}
                 incomeChanged={incomeChanged}
@@ -237,6 +238,7 @@ export function CategoryTopCard({
               />
             </div>
 
+            {/* Progress metrics */}
             <div className="min-w-0 grid gap-3">
               <BulletMetric
                 title="Income"

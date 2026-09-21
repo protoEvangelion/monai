@@ -1,6 +1,7 @@
 import { SettingsIcon } from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
+import { Area, AreaChart, Tooltip as ChartTooltip } from "recharts";
 import { formatCurrency } from "../../../lib/format";
+import { useElementSize } from "../dashboard/dashboard.hooks";
 import { ACCOUNT_CHART_RANGES } from "./accounts.config";
 import type { NetWorthData } from "./accounts.types";
 
@@ -17,6 +18,8 @@ export function AccountSummaryCard({
   totalAssets: number;
   totalDebts: number;
 }) {
+  const { ref, size } = useElementSize<HTMLDivElement>();
+
   return (
     <div className="rounded-3xl border border-divider/60 bg-content1 p-6">
       <div className="flex items-start justify-between">
@@ -38,9 +41,14 @@ export function AccountSummaryCard({
           <SettingsIcon size={16} />
         </button>
       </div>
-      <div className="mt-4 h-48">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={netWorthHistory}>
+      <div ref={ref} className="mt-4 h-48 w-full min-w-0">
+        {size.width > 0 && size.height > 0 ? (
+          <AreaChart
+            width={size.width}
+            height={size.height}
+            data={netWorthHistory}
+            margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
+          >
             <defs>
               <linearGradient id="netWorthFill" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stopColor="#17c964" stopOpacity={0.22} />
@@ -58,13 +66,13 @@ export function AccountSummaryCard({
             />
             <Area
               dataKey="netWorth"
-              type="monotone"
+              type="linear"
               stroke="#17c964"
               strokeWidth={3}
               fill="url(#netWorthFill)"
             />
           </AreaChart>
-        </ResponsiveContainer>
+        ) : null}
       </div>
       <div className="mt-2 flex justify-center gap-2">
         {ACCOUNT_CHART_RANGES.map((range) => (

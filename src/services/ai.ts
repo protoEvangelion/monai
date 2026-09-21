@@ -1,27 +1,12 @@
-import { runCursorCategorizerCli } from "./cursorCli";
-
-function parseCategoryId(raw: string) {
-  const match = raw.match(/\b\d+\b/);
-  return match ? Number(match[0]) : null;
-}
-
-async function runCursorCategorizer(prompt: string) {
-  return runCursorCategorizerCli({ prompt });
-}
-
+/**
+ * Optional single-merchant helper. Prefer browser Prompt API via
+ * `lib/browserAiCategorize.ts` for batch categorization in the UI.
+ */
 export async function categorizeMerchant(
-  merchantName: string,
-  categories: { id: number; name: string }[],
-) {
-  const categoryList = categories.map((c) => `${c.id}: ${c.name}`).join("\n");
-  const prompt = [
-    "Classify the merchant into exactly one category from the list.",
-    'Return only JSON in the shape {"categoryId":123}. Do not include markdown or explanation.',
-    "",
-    categoryList,
-    "",
-    `Merchant: ${merchantName}`,
-  ].join("\n");
-
-  return parseCategoryId(await runCursorCategorizer(prompt));
+  _merchantName: string,
+  _categories: { id: number; name: string }[],
+): Promise<number | null> {
+  throw new Error(
+    "Server-side Cursor categorization was removed. Use Chrome built-in AI in the browser.",
+  );
 }

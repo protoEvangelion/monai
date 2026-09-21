@@ -15,6 +15,7 @@ import { AppHeader } from "../ui/layout/AppHeader";
 import { AppSidebar, type SidebarAccount } from "../ui/layout/AppSidebar";
 import TanstackQueryProvider from "../ui/integrations/tanstack-query/root-provider";
 import { MantineAppProvider } from "../ui/integrations/mantine/MantineAppProvider";
+import { PlaidLinkProvider } from "../ui/integrations/plaid/PlaidLinkProvider";
 import { ToastViewport } from "../ui/shared/toast";
 import { getAccounts } from "../server/accounts.fns";
 import { autoSync, syncLatestTransactionsOnLogin } from "../server/plaid.sync.fns";
@@ -112,6 +113,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <TanstackQueryProvider>
           <ClerkProvider>
             <MantineAppProvider>
+            <PlaidLinkProvider>
             <LoginSyncEffect isAuthPage={isAuthPage} />
             <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
               {mounted ? (
@@ -167,6 +169,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             </div>
             <ToastViewport />
             {import.meta.env.DEV ? <TanStackDevtoolsHost /> : null}
+            </PlaidLinkProvider>
             </MantineAppProvider>
           </ClerkProvider>
         </TanstackQueryProvider>

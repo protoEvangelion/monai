@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
-import { transactions, plaidItems, categories, accounts } from "../db/schema";
+import { transactions, plaidItems, categories, accounts, categorizationRules } from "../db/schema";
 import { eq, desc, inArray, and, gte, lte, like, not, or, sql, type SQL } from "drizzle-orm";
 import { parseCategoryFilter } from "../ui/features/transactions/transactions.utils";
 
@@ -25,6 +25,17 @@ async function getUserAccountIds(db: typeof import("../db").db, userId: string) 
   });
 
   return userPlaidItems.flatMap((item) => item.accounts.map((acc) => acc.id));
+}
+
+/** Exclude Plaid parent rows that have been split into child legs. */
+function excludeSplitParentsSql(): SQL {
+  return sql`${transactions.id} NOT IN (
+    SELECT DISTINCT split_parent_id FROM transactions WHERE split_parent_id IS NOT NULL
+  )`;
+}
+
+function cents(value: number) {
+  return Math.round(value * 100);
 }
 
 async function assertTransactionsOwned(
@@ -57,11 +68,12 @@ export const getTransactions = createServerFn().handler(async () => {
   if (accountIds.length === 0) return [];
 
   const allTransactions = await db.query.transactions.findMany({
-    where: inArray(transactions.accountId, accountIds),
+    where: and(inArray(transactions.accountId, accountIds), excludeSplitParentsSql()),
     orderBy: [desc(transactions.date)],
     with: {
       account: true,
       category: true,
+      rule: true,
     },
   });
 
@@ -120,7 +132,10 @@ function transactionPageWhere({
   accountIds: number[];
   query: ReturnType<typeof normalizeTransactionsPageQuery>;
 }) {
-  const conditions: (SQL | undefined)[] = [inArray(transactions.accountId, accountIds)];
+  const conditions: (SQL | undefined)[] = [
+    inArray(transactions.accountId, accountIds),
+    excludeSplitParentsSql(),
+  ];
 
   if (query.reviewStatus === "not-reviewed") conditions.push(eq(transactions.isReviewed, false));
   if (query.reviewStatus === "reviewed") conditions.push(eq(transactions.isReviewed, true));
@@ -183,18 +198,27 @@ export const getTransactionsPage = createServerFn().handler(async (ctx) => {
     .select({
       account: accounts,
       category: categories,
+      rule: categorizationRules,
       tx: transactions,
     })
     .from(transactions)
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .leftJoin(categorizationRules, eq(transactions.ruleId, categorizationRules.id))
     .where(where)
     .orderBy(desc(transactions.date), desc(transactions.id))
     .limit(query.pageSize)
     .offset(query.pageIndex * query.pageSize);
 
   return {
-    rows: rows.map(({ account, category, tx }) => ({ ...tx, account, category })),
+    rows: rows.map(({ account, category, rule, tx }) => ({
+      ...tx,
+      account,
+      category,
+      rule: rule
+        ? { id: rule.id, pattern: rule.pattern }
+        : null,
+    })),
     pageIndex: query.pageIndex,
     pageSize: query.pageSize,
     total,
@@ -298,7 +322,7 @@ export const updateTransactionCategory = createServerFn().handler(async (ctx) =>
 
   await db
     .update(transactions)
-    .set({ categoryId, transactionType: "regular" })
+    .set({ categoryId, transactionType: "regular", ruleId: null })
     .where(and(eq(transactions.id, id), inArray(transactions.accountId, accountIds)));
 });
 
@@ -370,6 +394,7 @@ export const setTransactionsInternalTransfer = createServerFn().handler(async (c
     .update(transactions)
     .set({
       transactionType: isInternalTransfer ? "transfer" : "regular",
+      ruleId: null,
       ...(isInternalTransfer ? { categoryId: null } : {}),
     })
     .where(inArray(transactions.id, ownedIds));
@@ -396,6 +421,7 @@ export const setTransactionType = createServerFn().handler(async (ctx) => {
     .update(transactions)
     .set({
       transactionType,
+      ruleId: null,
       ...(transactionType === "regular" ? {} : { categoryId: null }),
     })
     .where(eq(transactions.id, id));
@@ -423,6 +449,7 @@ export const setTransactionsType = createServerFn().handler(async (ctx) => {
     .update(transactions)
     .set({
       transactionType,
+      ruleId: null,
       ...(transactionType === "regular" ? {} : { categoryId: null }),
     })
     .where(inArray(transactions.id, ownedIds));
@@ -448,6 +475,91 @@ export const updateTransactionsCategory = createServerFn().handler(async (ctx) =
 
   await db
     .update(transactions)
-    .set({ categoryId, transactionType: "regular" })
+    .set({ categoryId, transactionType: "regular", ruleId: null })
     .where(inArray(transactions.id, ownedIds));
+});
+
+export const splitTransaction = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { id, splits } = (ctx as any).data as {
+    id: number;
+    splits: Array<{ amount: number; categoryId: number; note?: string | null }>;
+  };
+
+  if (!Number.isInteger(id)) throw new Error("Invalid transaction");
+  if (!Array.isArray(splits) || splits.length < 2) {
+    throw new Error("Split into at least two legs");
+  }
+
+  const { db } = await import("../db");
+  await assertTransactionsOwned(db, userId, [id]);
+
+  const parent = await db.query.transactions.findFirst({
+    where: eq(transactions.id, id),
+  });
+  if (!parent) throw new Error("Transaction not found");
+  if (parent.splitParentId != null) throw new Error("Cannot split a split leg");
+  if (parent.transactionType === "transfer") throw new Error("Cannot split a transfer");
+
+  const existingChildren = await db.query.transactions.findFirst({
+    where: eq(transactions.splitParentId, id),
+    columns: { id: true },
+  });
+  if (existingChildren) throw new Error("Transaction is already split");
+
+  const categoryIds = [...new Set(splits.map((split) => split.categoryId))];
+  const cats = await db.query.categories.findMany({
+    where: and(inArray(categories.id, categoryIds), eq(categories.userId, userId)),
+  });
+  if (cats.length !== categoryIds.length) throw new Error("Category not found");
+  if (cats.some((cat) => cat.parentId === null)) {
+    throw new Error("Split legs require leaf categories");
+  }
+
+  const parentSign = Math.sign(parent.amount) || 1;
+  let splitCentsTotal = 0;
+  for (const split of splits) {
+    if (!Number.isFinite(split.amount) || split.amount === 0) {
+      throw new Error("Each split needs a non-zero amount");
+    }
+    if (Math.sign(split.amount) !== parentSign) {
+      throw new Error("Split amounts must match the transaction sign");
+    }
+    if (!Number.isInteger(split.categoryId)) throw new Error("Invalid category");
+    splitCentsTotal += cents(split.amount);
+  }
+
+  if (splitCentsTotal !== cents(parent.amount)) {
+    throw new Error("Split amounts must sum to the original amount");
+  }
+
+  await db.insert(transactions).values(
+    splits.map((split) => ({
+      accountId: parent.accountId,
+      categoryId: split.categoryId,
+      plaidTransactionId: null,
+      amount: split.amount,
+      date: parent.date,
+      datetime: parent.datetime,
+      name: parent.name,
+      merchantName: parent.merchantName,
+      location: parent.location,
+      note: split.note?.trim() || parent.note,
+      isReviewed: true,
+      isRecurring: parent.isRecurring,
+      isPending: parent.isPending,
+      splitParentId: parent.id,
+      transactionType: parent.transactionType === "income" ? ("income" as const) : ("regular" as const),
+    })),
+  );
+
+  await db
+    .update(transactions)
+    .set({ categoryId: null, isReviewed: true })
+    .where(eq(transactions.id, parent.id));
+
+  return { ok: true as const, childCount: splits.length };
 });

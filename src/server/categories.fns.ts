@@ -7,7 +7,7 @@ import {
   plaidItems,
   transactions,
 } from "../db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, and } from "drizzle-orm";
 import { seedDefaultCategories } from "./categories.seed";
 
 export const getCategoriesWithSpending = createServerFn().handler(async () => {
@@ -41,7 +41,14 @@ export const getCategoriesWithSpending = createServerFn().handler(async () => {
             txCount: sql<number>`CAST(COUNT(${transactions.id}) AS INTEGER)`,
           })
           .from(transactions)
-          .where(inArray(transactions.accountId, accountIds))
+          .where(
+            and(
+              inArray(transactions.accountId, accountIds),
+              sql`${transactions.id} NOT IN (
+                SELECT DISTINCT split_parent_id FROM transactions WHERE split_parent_id IS NOT NULL
+              )`,
+            ),
+          )
           .groupBy(transactions.categoryId)
       : [];
 

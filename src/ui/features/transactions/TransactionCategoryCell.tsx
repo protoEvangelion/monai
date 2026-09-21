@@ -65,6 +65,11 @@ export function TransactionCategoryCell({
             placeholder="Search category"
             className="w-full shrink-0 border-b border-divider bg-content2 px-4 py-3 text-sm text-foreground outline-none placeholder:text-default-400"
           />
+          {tx.rule ? (
+            <div className="border-b border-[#0ea5e9]/40 bg-[#0ea5e9]/10 px-4 py-2 text-xs font-semibold text-[#0284c7]">
+              Auto-categorized by rule “{tx.rule.pattern}”
+            </div>
+          ) : null}
           <div className="border-b border-divider px-1.5 py-1.5">
             <button
               type="button"
@@ -157,7 +162,15 @@ export function TransactionCategoryCell({
       {tx.transactionType === "regular" ? (
         <button
           type="button"
-          className="inline-flex max-w-36 cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold uppercase transition-opacity hover:opacity-80"
+          title={
+            tx.rule
+              ? `Auto-categorized by rule “${tx.rule.pattern}”`
+              : undefined
+          }
+          className={[
+            "inline-flex max-w-36 cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold uppercase transition-opacity hover:opacity-80",
+            tx.rule ? "border border-dashed border-[#0ea5e9]" : "border border-transparent",
+          ].join(" ")}
           style={{ backgroundColor: `${color}22`, color }}
           onMouseDown={(event) => event.preventDefault()}
           onClick={(event) => {

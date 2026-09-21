@@ -5,6 +5,8 @@ const testEnv = {
   DATABASE_URL: './data/test-e2e.db',
   MONAI_CREDENTIAL_MODE: 'sandbox',
   PLAID_ENV: 'sandbox',
+  // e2e seeds under DEV_USER_ID; bypass Clerk only for Playwright.
+  MONAI_DEV_AUTH_BYPASS: '1',
 }
 Object.assign(process.env, testEnv)
 

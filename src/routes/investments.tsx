@@ -1,8 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
-import { getAccounts } from "../server/accounts.fns";
-import { getTransactions } from "../server/transactions.fns";
+import { getInvestmentsDashboard } from "../server/investments.fns";
 import { InvestmentsScreen } from "../ui/features/investments/investments.screen";
 
 const authStateFn = createServerFn().handler(async () => {
@@ -14,15 +13,12 @@ export const Route = createFileRoute("/investments")({
   component: InvestmentsRoute,
   beforeLoad: async () => await authStateFn(),
   loader: async () => {
-    const [accounts, transactions] = await Promise.all([
-      getAccounts(),
-      getTransactions(),
-    ]);
-    return { accounts, transactions };
+    const data = await getInvestmentsDashboard();
+    return { data };
   },
 });
 
 function InvestmentsRoute() {
-  const { accounts, transactions } = Route.useLoaderData();
-  return <InvestmentsScreen accounts={accounts} transactions={transactions} />;
+  const { data } = Route.useLoaderData();
+  return <InvestmentsScreen data={data} />;
 }

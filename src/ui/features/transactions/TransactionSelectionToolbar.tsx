@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownPopover,
   DropdownTrigger,
+  Button,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -11,12 +12,15 @@ import {
 import {
   CalendarDaysIcon,
   CheckIcon,
+  ListFilterIcon,
   Loader2Icon,
   MoreVerticalIcon,
   RepeatIcon,
   SparklesIcon,
+  SplitIcon,
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { CategoryActionPicker } from "../categories/CategoryActionPicker";
 import {
   FloatingSelectionToolbar,
@@ -25,6 +29,10 @@ import {
 } from "../../shared/FloatingSelectionToolbar";
 import type { CategoryGroup, Tx } from "./transactions.types";
 import { dateInputValue } from "./transactions.utils";
+
+function isSplittable(tx: Tx) {
+  return tx.transactionType !== "transfer" && tx.splitParentId == null;
+}
 
 export function TransactionSelectionToolbar({
   categories,
@@ -36,6 +44,7 @@ export function TransactionSelectionToolbar({
   onSetDate,
   onSetReviewed,
   onSetTransactionType,
+  onSplit,
   selectedTransactions,
   showMarkReviewed = true,
 }: {
@@ -51,12 +60,15 @@ export function TransactionSelectionToolbar({
     ids: number[],
     transactionType: "regular" | "income" | "transfer",
   ) => void;
+  onSplit: (transaction: Tx) => void;
   selectedTransactions: Tx[];
   showMarkReviewed?: boolean;
 }) {
+  const navigate = useNavigate();
   if (selectedTransactions.length === 0) return null;
 
   const selectedIds = selectedTransactions.map((tx) => tx.id);
+  const browserAiEnabled = import.meta.env.VITE_ENABLE_BROWSER_AI === "1";
   const firstSelectedDate = selectedTransactions[0]?.date
     ? dateInputValue(selectedTransactions[0].date)
     : "";
@@ -65,23 +77,42 @@ export function TransactionSelectionToolbar({
   );
   const allSelectedAreReviewed = selectedTransactions.every((tx) => tx.isReviewed);
   const reviewLabel = allSelectedAreReviewed ? "Mark unreviewed" : "Mark reviewed";
+  const canSplit =
+    selectedTransactions.length === 1 && isSplittable(selectedTransactions[0]);
+  const rulePattern =
+    selectedTransactions.length === 1
+      ? selectedTransactions[0].merchantName
+      : selectedTransactions[0]?.merchantName ?? "";
 
   const toolbar = (
     <FloatingSelectionToolbar
       count={selectedTransactions.length}
       onClearSelection={onClearSelection}
     >
+      {browserAiEnabled ? (
+        <FloatingSelectionToolbarButton
+          label={`AI Categorize ${selectedTransactions.length} selected`}
+          onClick={onAICategorize}
+          disabled={isAICategorizing}
+          variant="ai"
+        >
+          {isAICategorizing ? (
+            <Loader2Icon size={20} className="animate-spin" />
+          ) : (
+            <SparklesIcon size={20} />
+          )}
+        </FloatingSelectionToolbarButton>
+      ) : null}
       <FloatingSelectionToolbarButton
-        label={`AI Categorize ${selectedTransactions.length} selected`}
-        onClick={onAICategorize}
-        disabled={isAICategorizing}
-        variant="ai"
+        label="Add rule from selection"
+        onClick={() =>
+          navigate({
+            to: "/rules",
+            search: { pattern: rulePattern },
+          })
+        }
       >
-        {isAICategorizing ? (
-          <Loader2Icon size={20} className="animate-spin" />
-        ) : (
-          <SparklesIcon size={20} />
-        )}
+        <ListFilterIcon size={20} />
       </FloatingSelectionToolbarButton>
       <CategoryActionPicker
         categories={categories}
@@ -131,6 +162,20 @@ export function TransactionSelectionToolbar({
       >
         <RepeatIcon size={20} />
       </FloatingSelectionToolbarButton>
+      <FloatingSelectionToolbarButton
+        label={
+          canSplit
+            ? "Split transaction"
+            : "Select exactly one non-transfer transaction to split"
+        }
+        onClick={() => {
+          if (!canSplit) return;
+          onSplit(selectedTransactions[0]);
+        }}
+        disabled={!canSplit}
+      >
+        <SplitIcon size={20} />
+      </FloatingSelectionToolbarButton>
       {showMarkReviewed ? (
         <FloatingSelectionToolbarButton
           label={reviewLabel}
@@ -142,11 +187,15 @@ export function TransactionSelectionToolbar({
         </FloatingSelectionToolbarButton>
       ) : null}
       <Dropdown>
-        <DropdownTrigger
-          aria-label="Selected transaction actions"
-          className={floatingSelectionButtonClass()}
-        >
-          <MoreVerticalIcon size={21} />
+        <DropdownTrigger>
+          <Button
+            isIconOnly
+            variant="ghost"
+            aria-label="Selected transaction actions"
+            className={floatingSelectionButtonClass()}
+          >
+            <MoreVerticalIcon size={21} />
+          </Button>
         </DropdownTrigger>
         <DropdownPopover>
           <DropdownMenu aria-label="Selected transaction actions">

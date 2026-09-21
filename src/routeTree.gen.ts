@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransactionsRouteImport } from './routes/transactions'
+import { Route as RulesRouteImport } from './routes/rules'
 import { Route as RecurringsRouteImport } from './routes/recurrings'
 import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as CategoriesRouteImport } from './routes/categories'
@@ -22,6 +23,11 @@ import { Route as CategoriesNewCategoryRouteImport } from './routes/categories.n
 const TransactionsRoute = TransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RulesRoute = RulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecurringsRoute = RecurringsRouteImport.update({
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
   '/recurrings': typeof RecurringsRoute
+  '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
   '/recurrings': typeof RecurringsRoute
+  '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
   '/recurrings': typeof RecurringsRoute
+  '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/investments'
     | '/recurrings'
+    | '/rules'
     | '/transactions'
     | '/categories/new-category'
     | '/categories/new-group'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/investments'
     | '/recurrings'
+    | '/rules'
     | '/transactions'
     | '/categories/new-category'
     | '/categories/new-group'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/investments'
     | '/recurrings'
+    | '/rules'
     | '/transactions'
     | '/categories/new-category'
     | '/categories/new-group'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   CategoriesRoute: typeof CategoriesRouteWithChildren
   InvestmentsRoute: typeof InvestmentsRoute
   RecurringsRoute: typeof RecurringsRoute
+  RulesRoute: typeof RulesRoute
   TransactionsRoute: typeof TransactionsRoute
   SignInSplatRoute: typeof SignInSplatRoute
 }
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       path: '/transactions'
       fullPath: '/transactions'
       preLoaderRoute: typeof TransactionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rules': {
+      id: '/rules'
+      path: '/rules'
+      fullPath: '/rules'
+      preLoaderRoute: typeof RulesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recurrings': {
@@ -233,6 +253,7 @@ const rootRouteChildren: RootRouteChildren = {
   CategoriesRoute: CategoriesRouteWithChildren,
   InvestmentsRoute: InvestmentsRoute,
   RecurringsRoute: RecurringsRoute,
+  RulesRoute: RulesRoute,
   TransactionsRoute: TransactionsRoute,
   SignInSplatRoute: SignInSplatRoute,
 }

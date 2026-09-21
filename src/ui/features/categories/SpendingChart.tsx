@@ -40,12 +40,22 @@ function SpendingChartTooltip({
   );
 }
 
+function chartIndex(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value !== "" && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return null;
+}
+
 export function SpendingChart({
   data,
   showBudgetLine,
+  onMonthSelect,
 }: {
   data: ChartDatum[];
   showBudgetLine: boolean;
+  onMonthSelect?: (month: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -68,6 +78,12 @@ export function SpendingChart({
     return () => observer.disconnect();
   }, []);
 
+  const selectMonthAtIndex = (index: number | null) => {
+    if (index == null || !onMonthSelect) return;
+    const month = data[index]?.month;
+    if (month) onMonthSelect(month);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -79,6 +95,12 @@ export function SpendingChart({
           height={size.height}
           data={data}
           margin={{ top: 12, right: 16, left: 12, bottom: 12 }}
+          style={onMonthSelect ? { cursor: "pointer" } : undefined}
+          onClick={(state) => {
+            selectMonthAtIndex(
+              chartIndex(state?.activeIndex) ?? chartIndex(state?.activeTooltipIndex),
+            );
+          }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -96,10 +118,21 @@ export function SpendingChart({
           />
           <YAxis hide />
           <ChartTooltip content={<SpendingChartTooltip />} />
-          <Bar dataKey="spent" name="Spent" radius={[4, 4, 0, 0]}>
+          <Bar
+            dataKey="spent"
+            name="Spent"
+            radius={[4, 4, 0, 0]}
+            onClick={(item, index) => {
+              const month =
+                (item as { payload?: ChartDatum } | undefined)?.payload?.month ??
+                data[index]?.month;
+              if (month && onMonthSelect) onMonthSelect(month);
+            }}
+          >
             {data.map((entry) => (
               <Cell
                 key={`spent-${entry.month}`}
+                cursor={onMonthSelect ? "pointer" : undefined}
                 fill={
                   entry.spent > entry.budget && entry.budget > 0
                     ? "#ef4444"
@@ -108,6 +141,8 @@ export function SpendingChart({
                       : "#94a3b8"
                 }
                 opacity={entry.isSelectedMonth ? 1 : 0.82}
+                stroke={entry.isSelectedMonth ? "#0f172a" : undefined}
+                strokeWidth={entry.isSelectedMonth ? 1.5 : 0}
               />
             ))}
           </Bar>
@@ -120,6 +155,7 @@ export function SpendingChart({
               strokeWidth={2.5}
               dot={false}
               activeDot={{ r: 4, strokeWidth: 0, fill: "#60a5fa" }}
+              isAnimationActive={false}
             />
           ) : null}
         </ComposedChart>

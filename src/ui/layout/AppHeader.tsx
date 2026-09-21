@@ -18,8 +18,10 @@ import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useTransition } from "react";
 import { useTheme, type ThemePalette } from "../hooks/useTheme";
+import { useTimeTravel } from "../hooks/useTimeTravel";
 import { manualSync } from "../../server/plaid.sync.fns";
 import { showToast } from "../shared/toast";
+import { MonthControls } from "../features/categories/MonthControls";
 
 export function AppHeader({
   pageTitle: _pageTitle,
@@ -29,6 +31,7 @@ export function AppHeader({
   onOpenSidebar: () => void;
 }) {
   const { theme, toggleTheme, setPalette } = useTheme();
+  const { viewDate, setViewDate } = useTimeTravel();
   const router = useRouter();
   const manualSyncFn = useServerFn(manualSync);
   const [isSyncing, startSyncTransition] = useTransition();
@@ -57,8 +60,8 @@ export function AppHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between border-b border-divider/70 bg-content1/70 px-4 backdrop-blur-xl xl:px-8">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-divider/70 bg-content1/80 px-4 backdrop-blur-xl xl:px-8">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <Button
           variant="ghost"
           isIconOnly
@@ -71,7 +74,15 @@ export function AppHeader({
         </Button>
       </div>
 
-      <div className="flex h-full items-center gap-3">
+      <div className="flex shrink-0 justify-center">
+        <MonthControls
+          compact
+          viewDate={viewDate}
+          onViewDateChange={setViewDate}
+        />
+      </div>
+
+      <div className="flex h-full min-w-0 flex-1 items-center justify-end gap-3">
         <Button
           variant="secondary"
           size="sm"
@@ -84,17 +95,21 @@ export function AppHeader({
           <span className="hidden sm:inline">{isSyncing ? "Syncing" : "Sync"}</span>
         </Button>
         <Dropdown>
-          <DropdownTrigger
-            className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full px-3 text-sm hover:bg-white/10"
-            aria-label="Theme palette"
-          >
-            {paletteLabel}
-            <ChevronDownIcon size={14} />
+          <DropdownTrigger>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="inline-flex h-9 shrink-0 rounded-full px-3"
+              aria-label="Theme palette"
+            >
+              {paletteLabel}
+              <ChevronDownIcon size={14} />
+            </Button>
           </DropdownTrigger>
           <DropdownPopover>
             <DropdownMenu aria-label="Theme palette">
               <DropdownItem key="ocean" onAction={() => setPalette("ocean")}>
-                <div className="flex items-center justify-between gap-3 w-full">
+                <div className="flex w-full items-center justify-between gap-3">
                   <span>Ocean</span>
                   {currentPalette === "ocean" && <CheckIcon size={14} />}
                 </div>
@@ -103,13 +118,13 @@ export function AppHeader({
                 key="graphite"
                 onAction={() => setPalette("graphite")}
               >
-                <div className="flex items-center justify-between gap-3 w-full">
+                <div className="flex w-full items-center justify-between gap-3">
                   <span>Graphite</span>
                   {currentPalette === "graphite" && <CheckIcon size={14} />}
                 </div>
               </DropdownItem>
               <DropdownItem key="sunset" onAction={() => setPalette("sunset")}>
-                <div className="flex items-center justify-between gap-3 w-full">
+                <div className="flex w-full items-center justify-between gap-3">
                   <span>Sunset</span>
                   {currentPalette === "sunset" && <CheckIcon size={14} />}
                 </div>

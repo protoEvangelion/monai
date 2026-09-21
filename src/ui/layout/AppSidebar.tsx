@@ -12,6 +12,7 @@ import {
   CreditCardIcon,
   LandmarkIcon,
   TrendingUpIcon,
+  ListFilterIcon,
   XIcon,
 } from "lucide-react";
 import HeaderUser from "../integrations/clerk/header-user";
@@ -40,14 +41,17 @@ function SidebarLink({
   to,
   icon,
   label,
+  search,
 }: {
   to: string;
   icon: React.ReactNode;
   label: string;
+  search?: Record<string, unknown>;
 }) {
   return (
     <Link
       to={to}
+      search={search}
       activeProps={{ className: "bg-primary/20 text-primary font-semibold hover:bg-primary/30" }}
       className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-default-600 transition-colors hover:bg-default-200"
     >
@@ -173,6 +177,12 @@ export function AppSidebar({
           to="/categories"
           icon={<PieChartIcon size={18} />}
           label="Categories"
+        />
+        <SidebarLink
+          to="/rules"
+          search={{ pattern: undefined }}
+          icon={<ListFilterIcon size={18} />}
+          label="Rules"
         />
         <SidebarLink
           to="/recurrings"

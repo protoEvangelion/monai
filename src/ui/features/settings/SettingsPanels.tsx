@@ -51,8 +51,8 @@ function GeneralSettingsPanel() {
         <h3 className="text-sm font-bold text-foreground">Automation</h3>
         <SettingRow
           title="AI auto-categorization"
-          description="Manual AI categorization is available from transaction tables."
-          action={<StatusBadge>Manual</StatusBadge>}
+          description="Uses categorization rules on sync. Optional Chrome Nano AI is off unless VITE_ENABLE_BROWSER_AI=1."
+          action={<StatusBadge>Rules</StatusBadge>}
         />
       </section>
     </div>

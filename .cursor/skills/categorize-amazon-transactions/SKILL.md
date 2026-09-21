@@ -1,42 +1,40 @@
 ---
 name: categorize-amazon-transactions
-description: Reconcile Amazon charges in the Monai app that are missing notes against Amazon Your Payments transaction history, then add a concise purchase note and assign or correct an existing Monai category when the item context makes the category clear. Use when the user asks to identify, annotate, reconcile, add notes to, or categorize Amazon transactions in Monai using their authenticated Amazon payment history — including a single charge like AMAZON MKTPL*3H14L0NA3 or a comma-separated list.
+description: Auto-reconcile unreviewed Amazon charges in Monai that are missing notes against Amazon Your Payments history — scrape, match, add purchase notes, and assign leaf categories without asking which targets to use. Use when the user invokes /categorize-amazon-transactions or asks to annotate/categorize Amazon transactions (optional specific descriptors like AMAZON MKTPL*3H14L0NA3 still supported).
 ---
 
 # Categorize Amazon Transactions
 
-Reconcile Monai Amazon charges that have no note against Amazon payment history.
+Reconcile Monai Amazon charges that are **not reviewed** and have **no note** against Amazon payment history. Add a concise purchase note and assign or correct an existing leaf category when item context is clear.
 
-## Start: Which Transactions?
+## Default behavior (no questions)
 
-**Before scraping or matching**, use **AskQuestion** unless the user already gave targets in their message.
+**Do not ask** which transactions to categorize. Start immediately:
 
-**Question:** Which Amazon transactions should I categorize?
+| Default scope | Meaning |
+|---------------|---------|
+| Unreviewed + missing note | Every Amazon charge with `is_reviewed = 0` and empty `note` |
 
-| Option | Meaning |
-|--------|---------|
-| **All** | Batch — every Amazon charge in Monai missing a note |
-| **Specific list** | Only comma-separated descriptors (ask in a follow-up if not provided) |
+If the user already named targets (e.g. `AMAZON MKTPL*3H14L0NA3` or ids), use those instead — still limited to unreviewed + missing note unless they explicitly say to include reviewed or replace notes.
 
-If the user already named targets (e.g. `AMAZON MKTPL*3H14L0NA3`), skip the question and use those.
+### Target formats (optional override)
 
-### Target formats (comma-separated)
-
-Each entry can be:
+Comma-separated entries when the user provides them:
 
 - Full merchant descriptor: `AMAZON MKTPL*3H14L0NA3`
-- Amazon marketplace token only: `3H14L0NA3` (suffix after `*` in `AMAZON MKTPL*…` on the bank charge)
+- Marketplace token only: `3H14L0NA3`
 - Monai transaction id: `7349`
 
-Confirm targets resolve in the DB before scraping:
+Confirm the worklist before scraping:
 
 ```bash
-bun scripts/match-amazon-notes.ts --list-targets --targets "AMAZON MKTPL*3H14L0NA3"
-bun scripts/match-amazon-notes.ts --list-targets --targets "3H14L0NA3,7349"
 bun scripts/match-amazon-notes.ts --list-targets --targets all
+bun scripts/match-amazon-notes.ts --list-targets --targets "3H14L0NA3,7349"
 ```
 
-If `--list-targets` returns zero rows, stop and tell the user (wrong token, already has a note, or not Amazon).
+Default SQL filter excludes reviewed rows. Pass `--include-reviewed` only when the user asks to include them.
+
+If `--list-targets` returns zero rows, stop and report (nothing left to do, wrong token, or already noted/reviewed).
 
 ## Scrape (In-Browser)
 
@@ -97,6 +95,7 @@ WHERE (
     OR lower(coalesce(t.name, '')) LIKE '%amazon%'
   )
   AND (t.note IS NULL OR trim(t.note) = '')
+  AND t.is_reviewed = 0
   AND t.amount > 0
 ORDER BY t.date DESC;
 "
@@ -115,7 +114,7 @@ ORDER BY p.name, c.name;
 "
 ```
 
-Skip rows that already have any note unless the user explicitly asks to replace existing notes.
+Skip rows that already have any note unless the user explicitly asks to replace existing notes. Skip reviewed rows unless the user passes `--include-reviewed` / asks to include them.
 
 ## Match Scraped Amazon Data To Monai Rows
 
@@ -140,21 +139,23 @@ Use `suggestedNote` from scrape output when accurate (`buildNote` skips payment-
 
 ## Match And Apply
 
-Match scraped data to the worklist, then apply:
+Auto-apply notes and categories (no confirmation step). Use `--dry-run` only if the user asks for a preview.
 
 ```bash
-# Batch (default)
-bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all --dry-run
+# Default: all unreviewed Amazon charges missing notes
 bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all
 
-# Single charge or comma-separated list
-bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets "AMAZON MKTPL*3H14L0NA3" --dry-run
+# Optional specific list (still unreviewed-only by default)
 bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets "3H14L0NA3,7349"
+
+# Preview only when requested
+bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all --dry-run
+
+# Include reviewed rows only when the user asks
+bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all --include-reviewed
 ```
 
-`--targets` defaults to `all` when omitted. Always `--dry-run` first unless the user asked to apply.
-
-`match-amazon-notes.ts` joins on exact amount + date within three days, skips ambiguous matches, then calls `apply-amazon-notes.ts`.
+`--targets` defaults to `all` when omitted. `match-amazon-notes.ts` joins on exact amount + date within three days, skips ambiguous matches, then calls `apply-amazon-notes.ts`.
 
 Manual apply when needed:
 
@@ -168,4 +169,4 @@ bun scripts/apply-amazon-notes.ts '[
 
 ## Finish
 
-Report: targets used, categorized count, skipped count, brief reasons for skips (date + amount only).
+Report: worklist size (unreviewed missing notes), categorized count, skipped count, brief reasons for skips (date + amount only).

@@ -109,12 +109,32 @@ export function createMrtTransactionColumns({
     filterVariant: "text",
     Cell: ({ row }) => {
       const name = transactionDisplayName(row.original);
+      const isSplitLeg = row.original.splitParentId != null;
       return (
-        <Tooltip label={name} multiline maw={320} openDelay={300} withArrow>
-          <Text size="sm" fw={600} truncate style={{ cursor: "default" }}>
-            {name}
-          </Text>
-        </Tooltip>
+        <div className="flex min-w-0 items-center gap-2">
+          <Tooltip label={name} multiline maw={320} openDelay={300} withArrow>
+            <Text size="sm" fw={600} truncate style={{ cursor: "default" }}>
+              {name}
+            </Text>
+          </Tooltip>
+          {isSplitLeg ? (
+            <Text
+              size="xs"
+              fw={700}
+              c="dimmed"
+              style={{
+                flexShrink: 0,
+                borderRadius: 999,
+                border: "1px solid var(--mantine-color-gray-4)",
+                padding: "1px 6px",
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+              }}
+            >
+              Split
+            </Text>
+          ) : null}
+        </div>
       );
     },
   };

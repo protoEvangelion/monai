@@ -5,6 +5,22 @@ export const CURSOR_CATEGORIZER_MODEL = process.env.CURSOR_CATEGORIZER_MODEL;
 export const CURSOR_MODEL_LABEL = CURSOR_CATEGORIZER_MODEL ?? "cursor-default";
 export const CURSOR_PROVIDER_LABEL = "cursor-cli";
 
+export class CursorCategorizerUnavailableError extends Error {
+  constructor(message = "Cursor categorizer is not authenticated.") {
+    super(message);
+    this.name = "CursorCategorizerUnavailableError";
+  }
+}
+
+export function isCursorCategorizerAuthError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("Authentication required") ||
+    message.includes("CURSOR_API_KEY") ||
+    message.includes("agent login")
+  );
+}
+
 const CURSOR_CLI_PATH = process.env.CURSOR_CLI_PATH ?? "agent";
 
 function cursorCliEnv() {
@@ -103,18 +119,21 @@ export async function runCursorCategorizerCli({
       }
 
       if (code !== 0) {
-        reject(
-          new Error(
-            [
-              `Cursor categorizer exited with code ${code}.`,
-              stderr ? `stderr:\n${preview(stderr, 2_000)}` : null,
-              stdout ? `stdout:\n${preview(stdout, 2_000)}` : null,
-              "Run `agent login` or set CURSOR_API_KEY if authentication fails.",
-            ]
-              .filter(Boolean)
-              .join("\n"),
-          ),
+        const failure = new Error(
+          [
+            `Cursor categorizer exited with code ${code}.`,
+            stderr ? `stderr:\n${preview(stderr, 2_000)}` : null,
+            stdout ? `stdout:\n${preview(stdout, 2_000)}` : null,
+            "Run `agent login` or set CURSOR_API_KEY if authentication fails.",
+          ]
+            .filter(Boolean)
+            .join("\n"),
         );
+        if (isCursorCategorizerAuthError(failure)) {
+          reject(new CursorCategorizerUnavailableError(failure.message));
+          return;
+        }
+        reject(failure);
         return;
       }
 

@@ -35,18 +35,26 @@ type Match = {
 function parseArgv(argv: string[]) {
   const dryRun = argv.includes("--dry-run");
   const listTargetsOnly = argv.includes("--list-targets");
+  const includeReviewed = argv.includes("--include-reviewed");
   const targetsIdx = argv.indexOf("--targets");
   const targets = parseAmazonTargets(targetsIdx >= 0 ? argv[targetsIdx + 1] : "all");
-  const reserved = new Set<string>(["--dry-run", "--list-targets", "--targets"]);
+  const reserved = new Set<string>([
+    "--dry-run",
+    "--list-targets",
+    "--include-reviewed",
+    "--targets",
+  ]);
   if (targetsIdx >= 0) reserved.add(argv[targetsIdx + 1] ?? "");
   const positional = argv.filter((arg) => !reserved.has(arg));
   const scrapePath =
     positional[0] ?? path.resolve(process.cwd(), "data/amazon-payments-scraped.json");
 
-  return { dryRun, listTargetsOnly, scrapePath, targets };
+  return { dryRun, listTargetsOnly, includeReviewed, scrapePath, targets };
 }
 
-const { dryRun, listTargetsOnly, scrapePath, targets } = parseArgv(process.argv.slice(2));
+const { dryRun, listTargetsOnly, includeReviewed, scrapePath, targets } = parseArgv(
+  process.argv.slice(2),
+);
 
 const databasePath = path.resolve(
   process.cwd(),
@@ -73,6 +81,7 @@ const worklist = db
       )
       and (t.note is null or trim(t.note) = '')
       and t.amount > 0
+      ${includeReviewed ? "" : "and t.is_reviewed = 0"}
     order by t.date desc
   `,
   )
@@ -85,6 +94,7 @@ if (listTargetsOnly) {
     JSON.stringify(
       {
         targets,
+        includeReviewed,
         worklist: worklist.length,
         matchedTargets: targetedWorklist.length,
         transactions: targetedWorklist.map((tx) => ({
@@ -174,6 +184,7 @@ console.log(
     {
       scrapePath,
       targets,
+      includeReviewed,
       worklist: worklist.length,
       targetedWorklist: targetedWorklist.length,
       matched: updates.length,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { getMonthlyBudgets } from "../../../server/budget.fns";
 import type { getCategories } from "../../../server/categories.fns";
 import type { getTransactions } from "../../../server/transactions.fns";
@@ -14,6 +14,26 @@ import { centsToDollars, getMonthKey, isSameMonth } from "./categories.utils";
 type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number];
 type LoadedTransaction = Awaited<ReturnType<typeof getTransactions>>[number];
 type LoadedMonthlyBudget = Awaited<ReturnType<typeof getMonthlyBudgets>>[number];
+
+const EXPANDED_GROUPS_STORAGE_KEY = "monai.categories.expandedGroupIds";
+
+function readStoredExpandedGroupIds(): number[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(EXPANDED_GROUPS_STORAGE_KEY);
+    if (raw == null) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((id): id is number => typeof id === "number" && Number.isFinite(id));
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredExpandedGroupIds(ids: Set<number>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify([...ids]));
+}
 
 export function useCategoriesViewModel({
   groups,
@@ -32,7 +52,11 @@ export function useCategoriesViewModel({
 }) {
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(groups[0]?.id ?? null);
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set());
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => {
+    const stored = readStoredExpandedGroupIds();
+    return new Set(stored ?? []);
+  });
+  const hasExpandPreferenceRef = useRef(readStoredExpandedGroupIds() !== null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const monthKey = useMemo(() => getMonthKey(viewDate), [viewDate]);
@@ -73,7 +97,6 @@ export function useCategoriesViewModel({
       budgetedMonthTransactions.filter(
         (tx) =>
           tx.transactionType === "regular" &&
-          tx.amount > 0 &&
           (!tx.categoryId || !incomeCategoryIds.has(tx.categoryId)),
       ),
     [budgetedMonthTransactions, incomeCategoryIds],
@@ -165,18 +188,22 @@ export function useCategoriesViewModel({
   useEffect(() => {
     setExpandedGroupIds((prev) => {
       const validIds = new Set(derivedGroups.map((group) => group.id));
-      const next = new Set<number>();
-      if (prev.size === 0) {
-        validIds.forEach((id) => next.add(id));
-        return next;
+      if (!validIds.size) return prev;
+
+      // First visit only: expand everything once, then remember.
+      if (!hasExpandPreferenceRef.current) {
+        hasExpandPreferenceRef.current = true;
+        writeStoredExpandedGroupIds(validIds);
+        return validIds;
       }
+
+      // Afterwards: prune deleted groups only — never auto-reexpand.
+      const next = new Set<number>();
       prev.forEach((id) => {
         if (validIds.has(id)) next.add(id);
       });
-      validIds.forEach((id) => {
-        if (!prev.has(id)) next.add(id);
-      });
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev;
+      writeStoredExpandedGroupIds(next);
       return next;
     });
   }, [derivedGroups]);
@@ -285,6 +312,8 @@ export function useCategoriesViewModel({
       const next = new Set(prev);
       if (next.has(item.groupId)) next.delete(item.groupId);
       else next.add(item.groupId);
+      hasExpandPreferenceRef.current = true;
+      writeStoredExpandedGroupIds(next);
       return next;
     });
   }, [onSelectedCategoryKeyChange]);

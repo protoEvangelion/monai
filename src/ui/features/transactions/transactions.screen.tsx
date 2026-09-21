@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+import { ListFilterIcon } from "lucide-react";
 import { getCategoriesWithSpending } from "../../../server/categories.fns";
 import { getTransactionsPage, type TransactionsPageQuery } from "../../../server/transactions.fns";
 import { ReviewTable } from "../../shared/ReviewTable";
@@ -31,8 +33,16 @@ export function TransactionsScreen({
 }) {
   return (
     <div className="flex max-h-[calc(100dvh-7.5rem)] min-h-[28rem] flex-col overflow-hidden rounded-3xl border border-divider/60 bg-background shadow-sm">
-      <div className="flex h-14 shrink-0 items-center border-b border-divider/60 bg-background/90 px-6 backdrop-blur-xl">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-divider/60 bg-background/90 px-6 backdrop-blur-xl">
         <h1 className="text-lg font-bold">Transactions</h1>
+        <Link
+          to="/rules"
+          search={{ pattern: undefined }}
+          className="inline-flex h-9 items-center gap-2 rounded-xl border border-divider px-3 text-xs font-bold hover:bg-content2"
+        >
+          <ListFilterIcon size={14} />
+          Add Rule
+        </Link>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">

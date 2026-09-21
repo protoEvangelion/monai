@@ -26,7 +26,7 @@ export const TRANSACTION_COLUMN_ORDER_OPTIONS = [
 ] as const;
 
 export const DEFAULT_TRANSACTION_COLUMN_ORDER = [
-  "select",
+  "mrt-row-select",
   ...TRANSACTION_COLUMN_ORDER_OPTIONS.map((column) => column.id),
   "reviewStatus",
 ];
@@ -39,6 +39,7 @@ export const DEFAULT_TRANSACTION_COLUMN_VISIBILITY = {
 };
 
 const TRANSACTION_TABLE_COLUMNS_STORAGE_KEY = "monai:transactions-table-columns";
+const ROW_SELECT_COLUMN_ID = "mrt-row-select";
 
 type StoredTransactionColumnPrefs = {
   columnOrder?: string[];
@@ -68,7 +69,7 @@ function normalizeColumnOrder(order: string[] | undefined) {
   const missing = TRANSACTION_COLUMN_ORDER_OPTIONS.map((column) => column.id).filter(
     (id) => !fromStorage.includes(id),
   );
-  return ["select", ...fromStorage, ...missing, "reviewStatus"];
+  return [ROW_SELECT_COLUMN_ID, ...fromStorage, ...missing, "reviewStatus"];
 }
 
 function normalizeColumnVisibility(visibility: VisibilityState | undefined): VisibilityState {
@@ -100,10 +101,12 @@ export function useTransactionTableColumnPrefs() {
     );
   }, [columnOrder, columnVisibility]);
 
-  const setColumnOrder = useCallback(
-    (updater: SetStateAction<string[]>) => setColumnOrderState(updater),
-    [],
-  );
+  const setColumnOrder = useCallback((updater: SetStateAction<string[]>) => {
+    setColumnOrderState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      return normalizeColumnOrder(next);
+    });
+  }, []);
   const setColumnVisibility = useCallback(
     (updater: SetStateAction<VisibilityState>) => setColumnVisibilityState(updater),
     [],

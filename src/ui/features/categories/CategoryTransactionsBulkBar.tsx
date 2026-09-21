@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownPopover,
   DropdownTrigger,
+  Button,
 } from "@heroui/react";
 import { Loader2Icon, MoreVerticalIcon, RepeatIcon } from "lucide-react";
 import { getCategories } from "../../../server/categories.fns";
@@ -70,11 +71,15 @@ export function CategoryTransactionsBulkBar({
         <RepeatIcon size={20} />
       </FloatingSelectionToolbarButton>
       <Dropdown>
-        <DropdownTrigger
-          aria-label="Bulk transaction actions"
-          className={floatingSelectionButtonClass()}
-        >
-          <MoreVerticalIcon size={21} />
+        <DropdownTrigger>
+          <Button
+            isIconOnly
+            variant="ghost"
+            aria-label="Bulk transaction actions"
+            className={floatingSelectionButtonClass()}
+          >
+            <MoreVerticalIcon size={21} />
+          </Button>
         </DropdownTrigger>
         <DropdownPopover>
           <DropdownMenu aria-label="Bulk transaction actions">

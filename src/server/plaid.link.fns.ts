@@ -3,8 +3,8 @@ import { getAuthOrDevAuth } from "../lib/devAuth";
 import {
   plaidItems,
   accounts,
-  transactions,
   historicalBalances,
+  holdings,
 } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { plaidPost, deleteLocalItemData, mapAccountType } from "./plaid.utils";
@@ -47,12 +47,20 @@ export const createLinkToken = createServerFn().handler(async () => {
     client_name: "Monai",
     user: { client_user_id: userId },
     products: ["transactions", "assets"],
+    optional_products: ["investments"],
     country_codes: ["US"],
     language: "en",
   });
 
   return data.link_token as string;
 });
+
+function normalizeInstitutionName(name: string | null | undefined) {
+  return String(name ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 export const exchangePublicToken = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();
@@ -65,6 +73,21 @@ export const exchangePublicToken = createServerFn().handler(async (ctx) => {
     publicToken: string;
     institutionName?: string;
   };
+
+  const normalizedInstitution = normalizeInstitutionName(institutionName);
+  if (normalizedInstitution) {
+    const existingItems = await db.query.plaidItems.findMany({
+      where: eq(plaidItems.userId, userId),
+    });
+    const duplicate = existingItems.find(
+      (item) => normalizeInstitutionName(item.institutionName) === normalizedInstitution,
+    );
+    if (duplicate) {
+      throw new Error(
+        `${institutionName ?? "That bank"} is already connected. Disconnect it first, or use Sync — reconnecting creates duplicate accounts and transactions.`,
+      );
+    }
+  }
 
   const { access_token, item_id } = await plaidPost(
     "/item/public_token/exchange",
@@ -91,6 +114,13 @@ export const exchangePublicToken = createServerFn().handler(async (ctx) => {
   await seedDefaultCategories(userId);
   await syncTransactions(access_token, item.id, userId, true);
   console.log(`[connect] transactions synced`);
+  const { syncInvestmentsHoldings } = await import("./plaid.investments.fns");
+  await syncInvestmentsHoldings(access_token, item.id).catch((err) =>
+    console.warn(
+      "[connect] Investments holdings sync failed (product may not be enabled):",
+      err?.message,
+    ),
+  );
   await backfillHistoricalBalances(access_token, item.id).catch((err) =>
     console.warn(
       "[connect] Assets backfill failed (product may not be enabled):",
@@ -149,5 +179,6 @@ export const deleteAccount = createServerFn().handler(async (ctx) => {
   }
 
   await db.delete(historicalBalances).where(eq(historicalBalances.accountId, id));
+  await db.delete(holdings).where(eq(holdings.accountId, id));
   await db.delete(accounts).where(eq(accounts.id, id));
 });

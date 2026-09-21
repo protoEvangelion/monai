@@ -44,7 +44,7 @@ export function CategoryTable({
     () => [
       columnHelper.display({
         id: "category",
-        header: () => "Regular categories",
+        header: () => "Categories",
         cell: ({ row }) => {
           const item = row.original;
           const isGroup = item.kind === "group";
@@ -54,24 +54,28 @@ export function CategoryTable({
             const expanded = expandedGroupIds.has(item.groupId);
             return (
               <div className="flex min-w-0 items-center gap-3">
-                <button
-                  type="button"
-                  aria-label={expanded ? "Collapse group" : "Expand group"}
-                  className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-default-400 hover:bg-default-100"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onToggleExpand(item);
-                  }}
-                >
-                  <ChevronRightIcon
-                    size={14}
-                    className={
-                      expanded
-                        ? "rotate-90 transition-transform"
-                        : "transition-transform"
-                    }
-                  />
-                </button>
+                {item.childCount > 0 ? (
+                  <button
+                    type="button"
+                    aria-label={expanded ? "Collapse group" : "Expand group"}
+                    className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-default-400 hover:bg-default-100"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleExpand(item);
+                    }}
+                  >
+                    <ChevronRightIcon
+                      size={14}
+                      className={
+                        expanded
+                          ? "rotate-90 transition-transform"
+                          : "transition-transform"
+                      }
+                    />
+                  </button>
+                ) : (
+                  <span className="h-6 w-6 shrink-0" aria-hidden="true" />
+                )}
                 <div className="min-w-0">
                   <button
                     type="button"

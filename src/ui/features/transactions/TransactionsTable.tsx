@@ -10,6 +10,7 @@ import {
 import { useMantineReactTable } from "mantine-react-table";
 import { useTransactionReviewActions } from "./transactions.actions";
 import { CreateCategoryFromTransactionModal } from "./CreateCategoryFromTransactionModal";
+import { SplitTransactionModal } from "./SplitTransactionModal";
 import { TransactionsMantineGrid } from "./TransactionsMantineGrid";
 import { TransactionSelectionToolbar } from "./TransactionSelectionToolbar";
 import {
@@ -34,6 +35,7 @@ import {
   type TransactionTableVariant,
 } from "./transactions.mantine-columns";
 import { CategoryTransactionsBulkBar } from "../categories/CategoryTransactionsBulkBar";
+import { DashboardAiCategorizeButton } from "./DashboardAiCategorizeButton";
 import type { getCategories } from "../../../server/categories.fns";
 import {
   setTransactionsInternalTransfer,
@@ -163,12 +165,14 @@ export function ReviewTable({
   const [catSearch, setCatSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "date", desc: true }]);
   const [categorySaving, setCategorySaving] = useState(false);
+  const [splitTransactionTarget, setSplitTransactionTarget] = useState<Tx | null>(null);
   const isCategoryVariant = variant === "category";
+  const isDashboardVariant = variant === "dashboard";
   const categoryColumnOrder = useMemo(
     () =>
       lockedCategoryFilter
-        ? ["select", "date", "name", "amount"]
-        : ["select", "date", "name", "amount", "category"],
+        ? ["mrt-row-select", "date", "name", "amount"]
+        : ["mrt-row-select", "date", "name", "amount", "category"],
     [lockedCategoryFilter],
   );
   const { columnOrder, columnVisibility, setColumnOrder, setColumnVisibility } =
@@ -361,11 +365,13 @@ export function ReviewTable({
     enableDensityToggle: false,
     enableFullScreenToggle: false,
     enableStickyHeader: true,
+    enableColumnPinning: true,
     columnFilterDisplayMode: "subheader",
     layoutMode: "grid",
     initialState: {
       density: isCategoryVariant ? "xs" : "md",
       showColumnFilters: true,
+      columnPinning: { left: ["mrt-row-select"] },
       columnSizing: {
         reviewStatus: 96,
       },
@@ -383,6 +389,7 @@ export function ReviewTable({
     state: {
       columnFilters,
       columnOrder: tableColumnOrder,
+      columnPinning: { left: ["mrt-row-select"] },
       columnVisibility: tableColumnVisibility,
       pagination,
       rowSelection,
@@ -439,6 +446,10 @@ export function ReviewTable({
         "data-testid": `transaction-row-${row.original.id}`,
       }) as HTMLAttributes<HTMLTableRowElement>,
     positionToolbarAlertBanner: "none",
+    renderTopToolbarCustomActions:
+      isDashboardVariant && import.meta.env.VITE_ENABLE_BROWSER_AI === "1"
+        ? () => <DashboardAiCategorizeButton transactions={transactions} />
+        : undefined,
   });
 
   const { actionIds, aiTransactionCount, cappedTransactionIds, selectedIds } =
@@ -457,7 +468,9 @@ export function ReviewTable({
     handleSetCategory,
     handleSetReviewed,
     handleSetTransactionType,
+    handleSplitTransaction,
     isAICategorizing,
+    isSplitting,
     resetSelection,
   } = useTransactionReviewActions({
     actionIds,
@@ -542,8 +555,24 @@ export function ReviewTable({
           onSetDate={handleSetDate}
           onSetReviewed={handleSetReviewed}
           onSetTransactionType={handleSetTransactionType}
+          onSplit={setSplitTransactionTarget}
         />
       )}
+
+      <SplitTransactionModal
+        categories={categories}
+        isOpen={splitTransactionTarget != null}
+        isSaving={isSplitting}
+        transaction={splitTransactionTarget}
+        onOpenChange={(open) => {
+          if (!open && !isSplitting) setSplitTransactionTarget(null);
+        }}
+        onSplit={async (splits) => {
+          if (!splitTransactionTarget) return;
+          await handleSplitTransaction(splitTransactionTarget.id, splits);
+          setSplitTransactionTarget(null);
+        }}
+      />
 
       <CreateCategoryFromTransactionModal
         categories={categories}

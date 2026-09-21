@@ -26,13 +26,13 @@
 Runtime      →  Bun
 Framework    →  TanStack Start (full-stack React 19)
 Auth         →  Clerk
-Database     →  Bun SQLite + Drizzle ORM
+Database     →  LibSQL / SQLite (local file) + Turso (Vercel)
 UI           →  HeroUI v3 + Tailwind CSS v4
 State        →  TanStack Query (server) · Zustand (client)
 Charts       →  Recharts
 Animation    →  Framer Motion
-AI           →  Cursor CLI
-Deploy       →  Vercel (Nitro)
+AI           →  Cursor CLI (local only)
+Deploy       →  Vercel (Nitro) + Turso
 Linting      →  oxlint
 TypeScript   →  @typescript/native-preview (tsgo) 🚀
 ```
@@ -55,10 +55,13 @@ cp .env.example .env.local
 
 | Variable | Where to get it |
 |---|---|
-| `VITE_CLERK_PUBLISHABLE_KEY` | [clerk.com](https://clerk.com) → your app → API Keys |
-| `CURSOR_API_KEY` | Optional Cursor API key (or run `agent login`) |
-| `CURSOR_CLI_PATH` | Optional path to Cursor Agent CLI. Defaults to `agent` |
-| `CURSOR_CATEGORIZER_MODEL` | Optional Cursor model override |
+| `VITE_CLERK_PUBLISHABLE_KEY` | [clerk.com](https://clerk.com) → your app → API Keys (test key for demos) |
+| `CLERK_SECRET_KEY` | Clerk dashboard → API Keys |
+| `PLAID_CLIENT_ID` / `PLAID_SECRET` | [Plaid](https://dashboard.plaid.com) → **Sandbox** keys for demos |
+| `PLAID_ENV` | `sandbox` for demos (never `production` on public Vercel) |
+| `DATABASE_URL` | Local: `file:./data/dev.db` |
+| `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | [Turso](https://turso.tech) — required for Vercel |
+| Chrome Prompt API | AI Categorize uses on-device Gemini Nano in Chrome (no server LLM / Cursor) |
 
 ### 3. Set up the database
 
@@ -70,15 +73,47 @@ bun run db:studio      # optional: browse your data visually
 ### 4. Run it
 
 ```bash
-bun --bun run dev      # http://localhost:3000
+bun --bun run dev                 # Plaid sandbox + local/dev DB (safe)
+bun --bun run dev -- --production # Plaid production + production.db (real data, local only)
 ```
+
+`scripts/dev.ts` switches credentials by mode:
+
+| Flag | Plaid | Database |
+|---|---|---|
+| *(default)* / `--sandbox` | sandbox secret + `PLAID_ENV=sandbox` | `PLAID_SANDBOX_DATABASE_URL` → else `TURSO_DATABASE_URL` → else `DATABASE_URL` |
+| `--production` / `--prod` | `PLAID_PRODUCTION_SECRET` | `PLAID_PRODUCTION_DATABASE_URL` (Turso env cleared) |
+
+### 5. Vercel demo (sandbox only)
+
+**Required env (Production):**
+
+| Var | Notes |
+|---|---|
+| `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Required — local `file:` SQLite will not work on Vercel |
+| `PLAID_ENV=sandbox` | Never production Plaid on a public demo |
+| `PLAID_CLIENT_ID` / `PLAID_SECRET` | Sandbox secret only |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk **test** publishable key (Vite needs `VITE_` prefix) |
+| `CLERK_SECRET_KEY` | Clerk test secret; add your `*.vercel.app` URL to Clerk allowed origins |
+
+1. Create Turso DB: `turso auth login` → `turso db create monai-demo` → copy URL + `turso db tokens create monai-demo`
+2. Push schema: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... bun run db:push`
+3. Set Turso vars in Vercel (`vercel env add` or dashboard) for Production (and Preview if you use PRs)
+4. Do **not** set `PLAID_PRODUCTION_*` or point `DATABASE_URL` at a local `file:` path
+
+```bash
+bun --bun run build
+bun run deploy   # vercel --prod
+```
+
+Clerk: after first deploy, add the deployment URL under Clerk → Domains / allowed origins.
 
 ---
 
 ## 📦 Scripts
 
 ```bash
-bun --bun run dev        # dev server on :3000
+bun --bun run dev        # sandbox/dev server on :3000
 bun --bun run build      # production build
 bun --bun run test       # vitest
 bun run lint             # oxlint
@@ -134,9 +169,9 @@ historical_balances → daily snapshots for net worth chart
 
 ## 🤖 AI Auto-Categorization
 
-Monai shells out to `agent -p --mode ask` in a read-only sandbox for categorization and maps transactions to your custom category tree.
+Sync applies **categorization rules** only (no server LLM / Cursor CLI).
 
-Install Cursor Agent CLI (`curl https://cursor.com/install -fsS | bash`), then run `agent login` or set `CURSOR_API_KEY`. Optionally set `CURSOR_CLI_PATH`, `CURSOR_CATEGORIZER_MODEL`, or `CURSOR_CATEGORIZER_TIMEOUT_MS` in `.env.local`.
+Optional Chrome on-device Gemini Nano (“AI Categorize”) is **off by default**. Set `VITE_ENABLE_BROWSER_AI=1` locally if you want to experiment — not recommended for the public demo yet.
 
 ---
 

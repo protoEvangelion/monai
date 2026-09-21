@@ -1,18 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAuthOrDevAuth } from "../lib/devAuth";
 import { plaidItems, accounts, transactions, historicalBalances } from "../db/schema";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import {
   plaidPost,
   isMissingPlaidItemError,
   isPlaidReconnectRequiredError,
   deleteLocalItemData,
 } from "./plaid.utils";
-import { categorizeTransactions } from "./categorize.fns";
-import { isCatchAllCategory } from "./categorize.utils";
+import { AI_CATEGORIZE_MAX_TRANSACTIONS, applyRulesForItem } from "./categorize.fns";
+import { isIncomingSyncDuplicate } from "./transactions.dedupe";
 
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
-export const AI_CATEGORIZE_MAX_TRANSACTIONS = 100;
+export { AI_CATEGORIZE_MAX_TRANSACTIONS };
 const syncInFlight = new Set<number>();
 
 type TransactionMetadataCarryover = {
@@ -48,6 +48,7 @@ function plaidTransactionFields(tx: any, accountId: number) {
     merchantName: tx.merchant_name ?? tx.name,
     location: tx.location?.address ?? null,
     isRecurring: tx.recurring_transaction_id != null,
+    isPending: Boolean(tx.pending),
   };
 }
 
@@ -77,6 +78,97 @@ function normalizedTransactionName(value: string | null | undefined) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+type ExistingDedupeRow = {
+  accountId: number;
+  amount: number;
+  date: Date;
+  vendor: string;
+  claimed: boolean;
+};
+
+async function loadExistingDedupeRows(
+  db: typeof import("../db").db,
+  userId: string,
+  _excludeAccountIds: number[],
+) {
+  const rows = await db.all<{
+    account_id: number;
+    amount: number;
+    date: number | Date;
+    merchant_name: string;
+    name: string | null;
+  }>(sql`
+    select t.account_id as account_id, t.merchant_name as merchant_name, t.name as name,
+      t.amount as amount, t.date as date
+    from transactions t
+    join accounts a on a.id = t.account_id
+    left join plaid_items p on p.id = a.plaid_item_id
+    where (p.user_id = ${userId} or a.user_id = ${userId})
+  `);
+
+  return rows.map((row) => {
+    const date =
+      row.date instanceof Date ? row.date : new Date(Number(row.date) * 1000);
+    return {
+      accountId: row.account_id,
+      amount: row.amount,
+      date,
+      vendor: row.merchant_name || row.name || "",
+      claimed: false,
+    } satisfies ExistingDedupeRow;
+  });
+}
+
+/** Drop incoming txs that already exist for this user (keep categorized originals). */
+function filterDuplicateIncomingTransactions(
+  existingRows: ExistingDedupeRow[],
+  incoming: Array<{ accountId: number; tx: any }>,
+) {
+  const kept: Array<{ accountId: number; tx: any }> = [];
+  let skipped = 0;
+
+  for (const row of incoming) {
+    const vendor = String(row.tx.merchant_name ?? row.tx.name ?? "");
+    const candidate = {
+      accountId: row.accountId,
+      amount: Number(row.tx.amount),
+      date: plaidTransactionDate(row.tx),
+      vendor,
+    };
+
+    const match = existingRows.find(
+      (existing) => !existing.claimed && isIncomingSyncDuplicate(existing, candidate),
+    );
+    if (match) {
+      match.claimed = true;
+      skipped += 1;
+      continue;
+    }
+
+    // Also claim against already-kept incoming (±1 day reconnect pairs in same batch).
+    const batchMatch = kept.find((prior) =>
+      isIncomingSyncDuplicate(
+        {
+          accountId: prior.accountId,
+          amount: Number(prior.tx.amount),
+          date: plaidTransactionDate(prior.tx),
+          vendor: String(prior.tx.merchant_name ?? prior.tx.name ?? ""),
+        },
+        candidate,
+      ),
+    );
+    if (batchMatch) {
+      skipped += 1;
+      continue;
+    }
+
+    kept.push(row);
+    existingRows.push({ ...candidate, claimed: true });
+  }
+
+  return { kept, skipped };
 }
 
 function hasUserMetadata(row: TransactionMetadataCarryover) {
@@ -154,6 +246,16 @@ async function deletePlaidTransactions(db: typeof import("../db").db, plaidTrans
   const uniqueIds = [...new Set(plaidTransactionIds.filter(Boolean))];
   if (!uniqueIds.length) return 0;
 
+  const parents = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(inArray(transactions.plaidTransactionId, uniqueIds));
+  const parentIds = parents.map((row) => row.id);
+
+  if (parentIds.length) {
+    await db.delete(transactions).where(inArray(transactions.splitParentId, parentIds));
+  }
+
   const deleted = await db
     .delete(transactions)
     .where(inArray(transactions.plaidTransactionId, uniqueIds))
@@ -173,6 +275,8 @@ async function mergePendingMetadataIntoPosted(
   ]);
 
   if (!pending || !posted) return;
+  // Only merge when the "pending" row is actually pending — avoid deleting posted twins.
+  if (!pending.isPending) return;
 
   await db
     .update(transactions)
@@ -180,6 +284,7 @@ async function mergePendingMetadataIntoPosted(
       categoryId: posted.categoryId ?? pending.categoryId,
       isReviewed: posted.isReviewed || pending.isReviewed,
       note: posted.note ?? pending.note,
+      isPending: false,
       transactionType:
         posted.transactionType === "regular" && pending.transactionType !== "regular"
           ? pending.transactionType
@@ -205,6 +310,7 @@ async function replacePendingTransactions(
     ]);
 
     if (!pending || !posted) continue;
+    if (!pending.isPending) continue;
 
     await mergePendingMetadataIntoPosted(db, pending.id, posted.id);
     await db.delete(transactions).where(eq(transactions.id, pending.id));
@@ -223,8 +329,8 @@ async function cleanupLikelyPendingDuplicates(db: typeof import("../db").db, ite
      and lower(posted.merchant_name) = lower(pending.merchant_name)
      and round(abs(posted.amount), 2) = round(abs(pending.amount), 2)
      and posted.id <> pending.id
-     and posted.datetime is not null
-     and pending.datetime is null
+     and pending.is_pending = 1
+     and posted.is_pending = 0
      and posted.date >= pending.date
      and posted.date <= pending.date + (4 * 24 * 60 * 60)
     join accounts account
@@ -271,6 +377,9 @@ export async function syncTransactions(
     where: eq(accounts.plaidItemId, itemId),
   });
   const accountMap = new Map(dbAccounts.map((a) => [a.plaidAccountId, a.id]));
+  const itemAccountIds = dbAccounts.map((account) => account.id);
+  const existingDedupeRows = await loadExistingDedupeRows(db, userId, itemAccountIds);
+  let skippedDuplicateCount = 0;
 
   try {
     while (hasMore) {
@@ -280,13 +389,7 @@ export async function syncTransactions(
       });
 
       const removedPlaidTransactionIds = (page.removed ?? []).map(plaidTransactionId);
-      const stalePendingPlaidTransactionIds = [...(page.added ?? []), ...(page.modified ?? [])]
-        .filter((tx: any) => tx.pending)
-        .map(plaidTransactionId);
-      const pageMetadataCarryovers = await getPlaidTransactionMetadata(db, [
-        ...removedPlaidTransactionIds,
-        ...stalePendingPlaidTransactionIds,
-      ]);
+      const pageMetadataCarryovers = await getPlaidTransactionMetadata(db, removedPlaidTransactionIds);
       metadataCarryovers.push(...pageMetadataCarryovers);
 
       const removedCount = await deletePlaidTransactions(db, removedPlaidTransactionIds);
@@ -294,44 +397,46 @@ export async function syncTransactions(
         console.log(`Removed ${removedCount} deleted Plaid transactions for item ${itemId}`);
       }
 
-      const stalePendingCount = await deletePlaidTransactions(db, stalePendingPlaidTransactionIds);
-      if (stalePendingCount > 0) {
-        console.log(`Removed ${stalePendingCount} pending transactions for item ${itemId}`);
-      }
+      const incoming = (page.added ?? [])
+        .filter((tx: any) => accountMap.has(tx.account_id))
+        .map((tx: any) => ({
+          accountId: accountMap.get(tx.account_id)!,
+          tx,
+        }));
+      const { kept, skipped } = filterDuplicateIncomingTransactions(
+        existingDedupeRows,
+        incoming,
+      );
+      skippedDuplicateCount += skipped;
 
       const inserted = await Promise.all(
-        page.added
-          .filter((tx: any) => accountMap.has(tx.account_id))
-          .filter((tx: any) => !tx.pending)
-          .map((tx: any) => {
-            const accountId = accountMap.get(tx.account_id)!;
-            const values = plaidTransactionFields(tx, accountId);
-            const metadata = findMetadataCarryover({
-              accountId,
-              metadataRows: metadataCarryovers,
-              tx,
+        kept.map(({ accountId, tx }) => {
+          const values = plaidTransactionFields(tx, accountId);
+          const metadata = findMetadataCarryover({
+            accountId,
+            metadataRows: metadataCarryovers,
+            tx,
+          });
+          return db
+            .insert(transactions)
+            .values({
+              ...values,
+              categoryId: metadata?.categoryId ?? null,
+              isReviewed: metadata?.isReviewed ?? false,
+              note: metadata?.note ?? null,
+              transactionType: metadata?.transactionType ?? "regular",
+            })
+            .onConflictDoUpdate({
+              target: transactions.plaidTransactionId,
+              set: values,
             });
-            return db
-              .insert(transactions)
-              .values({
-                ...values,
-                categoryId: metadata?.categoryId ?? null,
-                isReviewed: metadata?.isReviewed ?? false,
-                note: metadata?.note ?? null,
-                transactionType: metadata?.transactionType ?? "regular",
-              })
-              .onConflictDoUpdate({
-                target: transactions.plaidTransactionId,
-                set: values,
-              });
-          }),
+        }),
       );
       addedCount += inserted.length;
 
       await Promise.all(
         page.modified
           .filter((tx: any) => accountMap.has(tx.account_id))
-          .filter((tx: any) => !tx.pending)
           .map((tx: any) =>
             db
               .update(transactions)
@@ -360,15 +465,49 @@ export async function syncTransactions(
       await db.update(plaidItems).set({ cursor }).where(eq(plaidItems.id, itemId));
     }
 
-    console.log(`Sync completed for item ${itemId}. Total added: ${addedCount}`);
+    console.log(
+      `Sync completed for item ${itemId}. Total added: ${addedCount}` +
+        (skippedDuplicateCount
+          ? `, skipped ${skippedDuplicateCount} duplicate(s) (kept existing)`
+          : ""),
+    );
     await db.update(plaidItems).set({ lastSyncedAt: new Date() }).where(eq(plaidItems.id, itemId));
     const cleanupCount = await cleanupLikelyPendingDuplicates(db, itemId);
     if (cleanupCount > 0) {
       console.log(`Cleaned up ${cleanupCount} likely pending duplicate transactions for item ${itemId}`);
     }
     if (categorizeAfterSync) {
-      await categorizeTransactions(userId, itemId);
+      // Rules only on sync — AI runs in the browser via Chrome Prompt API.
+      const ruleResult = await applyRulesForItem(userId, itemId).catch((error) => {
+        console.warn(
+          `[rules] apply failed for item ${itemId}:`,
+          error instanceof Error ? error.message : error,
+        );
+        return null;
+      });
+      if (ruleResult?.updated) {
+        console.log(
+          `[rules] applied to ${ruleResult.updated} transaction(s) for item ${itemId}`,
+        );
+      }
     }
+
+    // Refresh live balances before snapshotting — otherwise history just copies stale values
+    const { refreshAccountBalances } = await import("./plaid.utils");
+    await refreshAccountBalances(accessToken, itemId).catch((err) =>
+      console.warn(
+        `[sync] Account balance refresh failed for item ${itemId}:`,
+        err?.message ?? err,
+      ),
+    );
+
+    const { syncInvestmentsHoldings } = await import("./plaid.investments.fns");
+    await syncInvestmentsHoldings(accessToken, itemId).catch((err) =>
+      console.warn(
+        `[sync] Investments holdings sync skipped for item ${itemId}:`,
+        err?.message ?? err,
+      ),
+    );
 
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
@@ -385,7 +524,10 @@ export async function syncTransactions(
             balance: acct.currentBalance,
             source: "snapshot",
           })
-          .onConflictDoNothing(),
+          .onConflictDoUpdate({
+            target: [historicalBalances.accountId, historicalBalances.date],
+            set: { balance: acct.currentBalance, source: "snapshot" },
+          }),
       ),
     );
   } catch (error) {
@@ -451,89 +593,6 @@ export const syncLatestTransactionsOnLogin = createServerFn().handler(async () =
     syncedItemCount: results.filter((result) => result === "synced").length,
     failedItemCount: results.filter((result) => result === "failed").length,
   };
-});
-
-export const runAICategorization = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const { db } = await import("../db");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { ids, limit, scope, searchQuery } = ((ctx as any)?.data ?? {}) as {
-    ids?: number[];
-    limit?: number;
-    scope?: "all" | "review";
-    searchQuery?: string;
-  };
-  const batchLimit = Math.min(
-    AI_CATEGORIZE_MAX_TRANSACTIONS,
-    Math.max(1, Number(limit) || AI_CATEGORIZE_MAX_TRANSACTIONS),
-  );
-  const selectedIds = Array.isArray(ids)
-    ? ids.filter((n): n is number => typeof n === "number" && Number.isFinite(n))
-    : undefined;
-
-  let uniqueSelectedIds = selectedIds ? [...new Set(selectedIds)].slice(0, batchLimit) : undefined;
-
-  const items = await db.query.plaidItems.findMany({
-    where: eq(plaidItems.userId, userId),
-    with: { accounts: true },
-  });
-
-  if (!uniqueSelectedIds?.length && scope) {
-    const accountIds = items.flatMap((item) => item.accounts.map((account) => account.id));
-    if (accountIds.length > 0) {
-      const query = searchQuery?.trim().toLowerCase() ?? "";
-      const candidates = await db.query.transactions.findMany({
-        where: inArray(transactions.accountId, accountIds),
-        orderBy: [desc(transactions.date)],
-        with: { category: true },
-      });
-
-      uniqueSelectedIds = candidates
-        .filter((tx) => (scope === "review" ? !tx.isReviewed : true))
-        .filter((tx) => tx.transactionType === "regular")
-        .filter((tx) => !query || tx.merchantName.toLowerCase().includes(query))
-        .filter(
-          (tx) =>
-            tx.categoryId == null ||
-            (tx.category?.name ? isCatchAllCategory(tx.category.name) : false),
-        )
-        .slice(0, batchLimit)
-        .map((tx) => tx.id);
-    }
-  }
-
-  if (!uniqueSelectedIds?.length) {
-    throw new Error("No uncategorized transactions found for AI categorization.");
-  }
-
-  try {
-    const results = await Promise.all(
-      items.map((item) =>
-        categorizeTransactions(userId, item.id, {
-          transactionIds: uniqueSelectedIds,
-        }),
-      ),
-    );
-
-    return {
-      requestedCount: results.reduce((sum, result) => sum + result.requestedCount, 0),
-      updatedCount: results.reduce((sum, result) => sum + result.updatedCount, 0),
-      skippedCount: results.reduce((sum, result) => sum + result.skippedCount, 0),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      [
-        "[categorize] batch failed",
-        `  requestedTransactionIds: ${uniqueSelectedIds.length}`,
-        `  error: ${message}`,
-      ].join("\n"),
-    );
-    throw new Error(`AI categorization failed: ${message}`);
-  }
 });
 
 export const autoSync = createServerFn().handler(async () => {

@@ -21,6 +21,7 @@ export type DashboardTopGroup = {
 export type DashboardNetWorthPoint = {
   day?: number;
   monthKey?: string;
+  dayKey?: string;
   date?: Date | string;
   dateLabel?: string;
   assets: number;

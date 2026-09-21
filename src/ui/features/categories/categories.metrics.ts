@@ -21,7 +21,13 @@ export type CategoryViewGroup = Omit<LoadedGroup, "children"> & {
   budget: number;
   txCount: number;
   activeChildren: number;
+  // Populated only for the synthetic "Income" row, which has no child categories.
+  transactions?: LoadedTransaction[];
 };
+
+// Sentinel id for the synthetic top-of-table "Income" row. Income is tracked by
+// transaction type, not by a real category, so it never collides with a DB id.
+export const INCOME_GROUP_ID = -1;
 
 export type MonthlySpendingDatum = {
   budget: number;
@@ -215,38 +221,52 @@ export function createMonthlySpendingData({
 }) {
   if (!selectedGroup) return [];
 
+  const isIncome = selectedGroup.id === INCOME_GROUP_ID && !selectedChild;
   const selectedCategoryIds = new Set(
     selectedChild ? [selectedChild.id] : selectedGroup.children.map((child) => child.id),
   );
   const spentByMonth = new Map<string, number>();
 
   transactions.forEach((tx) => {
+    const month = getMonthKey(tx.date);
+    if (isIncome) {
+      if (tx.transactionType !== "income") return;
+      spentByMonth.set(month, (spentByMonth.get(month) ?? 0) + Math.abs(tx.amount));
+      return;
+    }
+
     if (
       tx.transactionType !== "regular" ||
-      tx.amount <= 0 ||
       !tx.categoryId ||
       !selectedCategoryIds.has(tx.categoryId)
     ) {
       return;
     }
 
-    const month = getMonthKey(tx.date);
     spentByMonth.set(month, (spentByMonth.get(month) ?? 0) + tx.amount);
   });
 
-  const endMonth = monthStart(viewDate);
+  // Keep the chart window fixed to the last 24 months ending at "now",
+  // so selecting an earlier month only moves the highlight — not the range.
+  const endMonth = monthStart(new Date());
   const startMonth = shiftMonth(endMonth, -23);
+  const selectedMonthKey = getMonthKey(viewDate);
+  const expectedIncomeByMonth = isIncome
+    ? new Map(budgets.map((entry) => [entry.month, centsToDollars(entry.expectedIncomeCents)]))
+    : null;
 
   return Array.from({ length: 24 }, (_, index): MonthlySpendingDatum => {
     const date = shiftMonth(startMonth, index);
     const month = getMonthKey(date);
-    const budget = selectedChild
-      ? categoryBudgetForMonth({ budgets, category: selectedChild, month })
-      : groupBudgetForMonth({ budgets, group: selectedGroup, month });
+    const budget = isIncome
+      ? (expectedIncomeByMonth?.get(month) ?? 0)
+      : selectedChild
+        ? categoryBudgetForMonth({ budgets, category: selectedChild, month })
+        : groupBudgetForMonth({ budgets, group: selectedGroup, month });
 
     return {
       budget: Number(budget.toFixed(2)),
-      isSelectedMonth: month === getMonthKey(viewDate),
+      isSelectedMonth: month === selectedMonthKey,
       label: monthLabel(date),
       month,
       shortLabel: monthShortLabel(date),

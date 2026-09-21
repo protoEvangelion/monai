@@ -8,10 +8,14 @@ export type Tx = {
   location: string | null;
   note: string | null;
   isReviewed: boolean;
+  isPending?: boolean;
+  splitParentId?: number | null;
+  ruleId?: number | null;
   transactionType: "regular" | "income" | "transfer";
   categoryId?: number | null;
   accountId?: number;
   category: { id: number; name: string; icon: string | null } | null;
+  rule?: { id: number; pattern: string } | null;
 };
 
 export type CategoryGroup = {

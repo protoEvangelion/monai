@@ -5,28 +5,15 @@ import { accounts, historicalBalances, plaidItems } from "../db/schema";
 
 const isDebtType = (type: string) => type === "credit" || type === "loan";
 
-const toMonthKey = (d: Date) =>
-  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+const toDayKey = (d: Date) =>
+  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 
-const monthKey = (year: number, month: number) =>
-  `${year}-${String(month + 1).padStart(2, "0")}`;
-
-const last24MonthKeys = (): string[] => {
-  const now = new Date();
-  return Array.from({ length: 24 }, (_, i) =>
-    monthKey(
-      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (23 - i), 1)).getUTCFullYear(),
-      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (23 - i), 1)).getUTCMonth(),
-    ),
-  );
+const dayKeyToDate = (key: string) => {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
 };
 
-const keyToDate = (key: string) => {
-  const [year, month] = key.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, 1));
-};
-
-type MonthBucket = { assets: number; debts: number };
+const LOOKBACK_MS = 24 * 30 * 24 * 60 * 60 * 1000; // ~24 months
 
 async function getUserAccounts(db: typeof import("../db").db, userId: string) {
   const items = await db.query.plaidItems.findMany({
@@ -153,67 +140,75 @@ export const getNetWorthHistory = createServerFn().handler(async () => {
   const { db } = await import("../db");
   const userAccounts = await getUserAccounts(db, userId);
 
-  const monthKeys = last24MonthKeys();
-  const validKeys = new Set(monthKeys);
+  const now = new Date();
+  const cutoff = now.getTime() - LOOKBACK_MS;
+  const todayKey = toDayKey(now);
 
-  const totals = userAccounts.reduce<Map<string, MonthBucket>>((acc, account) => {
-    const latestForMonth = account.historicalBalances.reduce<
-      Map<string, { date: number; balance: number }>
-    >((map, point) => {
+  // Every calendar day that has at least one stored balance observation
+  const dayKeys = new Set<string>();
+  for (const account of userAccounts) {
+    for (const point of account.historicalBalances) {
       const d = new Date(point.date);
-      const key = toMonthKey(d);
-      if (!validKeys.has(key)) return map;
-      const prev = map.get(key);
-      if (!prev || d.getTime() > prev.date) map.set(key, { date: d.getTime(), balance: point.balance });
-      return map;
-    }, new Map());
+      if (d.getTime() < cutoff) continue;
+      dayKeys.add(toDayKey(d));
+    }
+  }
+  dayKeys.add(todayKey);
 
-    // Forward-fill current balance into latest month when no history exists yet
-    if (latestForMonth.size === 0) {
-      const currentKey = toMonthKey(new Date());
-      if (validKeys.has(currentKey)) {
-        latestForMonth.set(currentKey, {
-          date: Date.now(),
-          balance: account.currentBalance,
-        });
-      }
+  const sortedDays = [...dayKeys].sort();
+  if (!sortedDays.length) return [];
+
+  type DayBucket = { assets: number; debts: number };
+  const totals = new Map<string, DayBucket>(
+    sortedDays.map((key) => [key, { assets: 0, debts: 0 }]),
+  );
+
+  for (const account of userAccounts) {
+    // Latest observation per day for this account
+    const byDay = new Map<string, { at: number; balance: number }>();
+    for (const point of account.historicalBalances) {
+      const d = new Date(point.date);
+      if (d.getTime() < cutoff) continue;
+      const key = toDayKey(d);
+      const at = d.getTime();
+      const prev = byDay.get(key);
+      if (!prev || at >= prev.at) byDay.set(key, { at, balance: point.balance });
     }
 
-    // Carry each account's last known balance forward through later months
+    // Always reflect live balance on today
+    byDay.set(todayKey, { at: now.getTime(), balance: account.currentBalance });
+
     let lastBalance: number | null = null;
-    for (const key of monthKeys) {
-      const point = latestForMonth.get(key);
-      if (point) {
-        lastBalance = point.balance;
-      } else if (lastBalance !== null) {
-        latestForMonth.set(key, { date: keyToDate(key).getTime(), balance: lastBalance });
-      }
+    for (const key of sortedDays) {
+      const observed = byDay.get(key);
+      if (observed) lastBalance = observed.balance;
+      if (lastBalance === null) continue;
+
+      const bucket = totals.get(key)!;
+      if (isDebtType(account.type)) bucket.debts += Math.abs(lastBalance);
+      else bucket.assets += lastBalance;
     }
+  }
 
-    latestForMonth.forEach(({ balance }, key) => {
-      const bucket = acc.get(key) ?? { assets: 0, debts: 0 };
-      if (isDebtType(account.type)) bucket.debts += Math.abs(balance);
-      else bucket.assets += balance;
-      acc.set(key, bucket);
-    });
-
-    return acc;
-  }, new Map(monthKeys.map((k) => [k, { assets: 0, debts: 0 }])));
-
-  const history = monthKeys.map((key) => {
+  const history = sortedDays.map((key) => {
     const { assets, debts } = totals.get(key) ?? { assets: 0, debts: 0 };
-    const date = keyToDate(key);
+    const date = dayKeyToDate(key);
     return {
-      monthKey: key,
+      monthKey: key.slice(0, 7),
+      dayKey: key,
       date,
-      dateLabel: date.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+      dateLabel: date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }),
       assets: Math.round(assets),
       debts: Math.round(debts),
       netWorth: Math.round(assets - debts),
     };
   });
 
-  // Drop leading empty months so the chart starts at first real data
   const firstDataIndex = history.findIndex((point) => point.assets !== 0 || point.debts !== 0);
   return firstDataIndex === -1 ? [] : history.slice(firstDataIndex);
 });

@@ -14,14 +14,13 @@ import { useCallback, useEffect, useState } from "react";
 import { getMonthlyBudgets, updateExpectedIncome } from "../../../server/budget.fns";
 import { getCategories } from "../../../server/categories.fns";
 import { getTransactions } from "../../../server/transactions.fns";
-import { useTimeTravel } from "../../hooks/useTimeTravel";
 import { CategoryDetailPanel } from "./CategoryDetailPanel";
 import { CategoryModal } from "./CategoryModal";
 import { CategoryTable } from "./CategoryTable";
 import { CategoryTopCard } from "./CategoryTopCard";
 import { useCategoryModal } from "./categories.hooks";
 import { useCategoriesViewModel } from "./categories.view-model";
-import { MonthControls } from "./MonthControls";
+import { useTimeTravel } from "../../hooks/useTimeTravel";
 
 type LoadedGroup = Awaited<ReturnType<typeof getCategories>>[number];
 type LoadedTransaction = Awaited<ReturnType<typeof getTransactions>>[number];
@@ -33,15 +32,17 @@ export function CategoriesScreen({
   selectedCategoryKey,
   transactions,
   budgets,
+  viewDate,
 }: {
   groups: LoadedGroup[];
   onSelectedCategoryKeyChange?: (categoryKey?: string) => void;
   selectedCategoryKey?: string;
   transactions: LoadedTransaction[];
   budgets: LoadedMonthlyBudget[];
+  viewDate: string;
 }) {
   const router = useRouter();
-  const { viewDate } = useTimeTravel();
+  const { setViewDate } = useTimeTravel();
   const refresh = useCallback(() => router.invalidate(), [router]);
   const { modal, setModal, deletingId, closeModal, handleModalSuccess, handleDelete } =
     useCategoryModal(refresh);
@@ -77,7 +78,7 @@ export function CategoriesScreen({
 
   return (
     <div className="mx-auto flex w-full max-w-none flex-col gap-5 pb-20">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="min-w-0 justify-self-start">
           <h1 className="text-2xl font-bold tracking-tight">Categories</h1>
           <p className="mt-0.5 text-sm text-default-400">
@@ -85,14 +86,13 @@ export function CategoriesScreen({
             {groups.reduce((sum, group) => sum + group.children.length, 0)} categories
           </p>
         </div>
-        <div className="min-w-0 justify-self-stretch sm:justify-self-center">
-          <MonthControls transactions={transactions} />
-        </div>
         <div className="flex items-center gap-3 justify-self-start sm:justify-self-end">
           <Dropdown>
-            <DropdownTrigger className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_16px_color-mix(in_oklch,var(--color-accent)_45%,transparent)] transition-all hover:brightness-95 hover:shadow-[0_0_22px_color-mix(in_oklch,var(--color-accent)_60%,transparent)] active:scale-95">
-              <CirclePlusIcon size={14} />
-              New
+            <DropdownTrigger>
+              <Button className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_16px_color-mix(in_oklch,var(--color-accent)_45%,transparent)] transition-all hover:brightness-95 hover:shadow-[0_0_22px_color-mix(in_oklch,var(--color-accent)_60%,transparent)] active:scale-95">
+                <CirclePlusIcon size={14} />
+                New
+              </Button>
             </DropdownTrigger>
             <DropdownPopover>
               <DropdownMenu aria-label="Create actions">
@@ -180,6 +180,7 @@ export function CategoriesScreen({
               yearMetrics={vm.yearMetrics}
               onRefresh={refresh}
               onClose={vm.closeDetails}
+              onMonthSelect={setViewDate}
               onEditGroup={(group) =>
                 setModal({
                   mode: "edit-group",

@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, real, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text, real, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { sql, relations } from "drizzle-orm";
 
 export const plaidItems = sqliteTable("plaid_items", {
@@ -65,26 +65,49 @@ export const monthlyBudgetAllocations = sqliteTable(
   ],
 );
 
-export const transactions = sqliteTable("transactions", {
-  id: integer().primaryKey({ autoIncrement: true }),
-  accountId: integer("account_id")
-    .notNull()
-    .references(() => accounts.id),
-  categoryId: integer("category_id").references(() => categories.id),
-  plaidTransactionId: text("plaid_transaction_id").unique(),
-  amount: real().notNull(),
-  date: integer({ mode: "timestamp" }).notNull(),
-  datetime: integer({ mode: "timestamp" }),
-  name: text(),
-  merchantName: text("merchant_name").notNull(),
-  location: text(),
-  note: text(),
-  isReviewed: integer("is_reviewed", { mode: "boolean" }).notNull().default(false),
-  isRecurring: integer("is_recurring", { mode: "boolean" }).notNull().default(false),
-  transactionType: text("transaction_type", { enum: ["regular", "income", "transfer"] })
-    .notNull()
-    .default("regular"),
-});
+export const transactions = sqliteTable(
+  "transactions",
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    categoryId: integer("category_id").references(() => categories.id),
+    plaidTransactionId: text("plaid_transaction_id").unique(),
+    amount: real().notNull(),
+    date: integer({ mode: "timestamp" }).notNull(),
+    datetime: integer({ mode: "timestamp" }),
+    name: text(),
+    merchantName: text("merchant_name").notNull(),
+    location: text(),
+    note: text(),
+    isReviewed: integer("is_reviewed", { mode: "boolean" }).notNull().default(false),
+    isRecurring: integer("is_recurring", { mode: "boolean" }).notNull().default(false),
+    isPending: integer("is_pending", { mode: "boolean" }).notNull().default(false),
+    splitParentId: integer("split_parent_id"),
+    ruleId: integer("rule_id"),
+    transactionType: text("transaction_type", { enum: ["regular", "income", "transfer"] })
+      .notNull()
+      .default("regular"),
+  },
+  (t) => [index("transactions_split_parent_idx").on(t.splitParentId)],
+);
+
+export const categorizationRules = sqliteTable(
+  "categorization_rules",
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull(),
+    pattern: text().notNull(),
+    categoryId: integer("category_id").references(() => categories.id),
+    transactionType: text("transaction_type", { enum: ["regular", "income", "transfer"] })
+      .notNull()
+      .default("regular"),
+    createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  },
+  (t) => [index("categorization_rules_user_idx").on(t.userId)],
+);
 
 export const historicalBalances = sqliteTable(
   "historical_balances",
@@ -100,6 +123,36 @@ export const historicalBalances = sqliteTable(
   (t) => [uniqueIndex("historical_balances_account_date_idx").on(t.accountId, t.date)],
 );
 
+export const securities = sqliteTable("securities", {
+  id: integer().primaryKey({ autoIncrement: true }),
+  plaidSecurityId: text("plaid_security_id").notNull().unique(),
+  name: text().notNull(),
+  tickerSymbol: text("ticker_symbol"),
+  type: text(), // equity, etf, mutual fund, cash, cryptocurrency, etc.
+  closePrice: real("close_price"),
+  isoCurrencyCode: text("iso_currency_code"),
+});
+
+export const holdings = sqliteTable(
+  "holdings",
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    securityId: integer("security_id")
+      .notNull()
+      .references(() => securities.id),
+    quantity: real().notNull().default(0),
+    institutionPrice: real("institution_price"),
+    institutionValue: real("institution_value").notNull().default(0),
+    costBasis: real("cost_basis"),
+    isoCurrencyCode: text("iso_currency_code"),
+    asOf: integer("as_of", { mode: "timestamp" }),
+  },
+  (t) => [uniqueIndex("holdings_account_security_idx").on(t.accountId, t.securityId)],
+);
+
 // Relations
 export const plaidItemsRelations = relations(plaidItems, ({ many }) => ({
   accounts: many(accounts),
@@ -112,6 +165,22 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   }),
   transactions: many(transactions),
   historicalBalances: many(historicalBalances),
+  holdings: many(holdings),
+}));
+
+export const securitiesRelations = relations(securities, ({ many }) => ({
+  holdings: many(holdings),
+}));
+
+export const holdingsRelations = relations(holdings, ({ one }) => ({
+  account: one(accounts, {
+    fields: [holdings.accountId],
+    references: [accounts.id],
+  }),
+  security: one(securities, {
+    fields: [holdings.securityId],
+    references: [securities.id],
+  }),
 }));
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
@@ -140,7 +209,7 @@ export const monthlyBudgetAllocationsRelations = relations(monthlyBudgetAllocati
   }),
 }));
 
-export const transactionsRelations = relations(transactions, ({ one }) => ({
+export const transactionsRelations = relations(transactions, ({ one, many }) => ({
   account: one(accounts, {
     fields: [transactions.accountId],
     references: [accounts.id],
@@ -149,6 +218,24 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
     fields: [transactions.categoryId],
     references: [categories.id],
   }),
+  rule: one(categorizationRules, {
+    fields: [transactions.ruleId],
+    references: [categorizationRules.id],
+  }),
+  splitParent: one(transactions, {
+    fields: [transactions.splitParentId],
+    references: [transactions.id],
+    relationName: "transaction_splits",
+  }),
+  splitChildren: many(transactions, { relationName: "transaction_splits" }),
+}));
+
+export const categorizationRulesRelations = relations(categorizationRules, ({ one, many }) => ({
+  category: one(categories, {
+    fields: [categorizationRules.categoryId],
+    references: [categories.id],
+  }),
+  transactions: many(transactions),
 }));
 
 export const historicalBalancesRelations = relations(historicalBalances, ({ one }) => ({

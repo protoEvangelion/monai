@@ -1,14 +1,9 @@
 import { useRouter } from "@tanstack/react-router";
 import { HomeIcon, PlusIcon } from "lucide-react";
-import { useEffect, useState } from "react";
-import { usePlaidLink } from "react-plaid-link";
+import { useState } from "react";
 import { createRealEstateAccount, updateRealEstateAccount } from "../../../server/accounts.fns";
-import {
-  createLinkToken,
-  deleteAccount,
-  exchangePublicToken,
-  removeItem,
-} from "../../../server/plaid.link.fns";
+import { deleteAccount, removeItem } from "../../../server/plaid.link.fns";
+import { usePlaidLinkContext } from "../../integrations/plaid/PlaidLinkProvider";
 import { AccountDetailPanel } from "./AccountDetailPanel";
 import { AccountGroupsList } from "./AccountGroupsList";
 import { AccountSummaryCard } from "./AccountSummaryCard";
@@ -31,37 +26,11 @@ export function AccountsScreen({
   netWorthHistory: NetWorthData;
 }) {
   const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
-  const [isLinkLoading, setIsLinkLoading] = useState(false);
+  const { isLinkLoading, openPlaidLink } = usePlaidLinkContext();
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState<number | null>(null);
   const [isHomeModalOpen, setIsHomeModalOpen] = useState(false);
   const vm = useAccountsViewModel({ accounts, transactions });
-
-  const { open, ready } = usePlaidLink({
-    token: token ?? "",
-    onSuccess: async (publicToken, metadata) => {
-      try {
-        const institutionName = metadata?.institution?.name ?? undefined;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (exchangePublicToken as any)({
-          data: { publicToken, institutionName },
-        });
-        await router.invalidate();
-      } finally {
-        setIsLinkLoading(false);
-        setToken(null);
-      }
-    },
-    onExit: () => {
-      setToken(null);
-      setIsLinkLoading(false);
-    },
-  });
-
-  useEffect(() => {
-    if (token && ready) open();
-  }, [token, ready, open]);
 
   const handleDeleteAccount = async (id: number) => {
     if (!confirm("Remove this account from Monai?")) return;
@@ -85,19 +54,6 @@ export function AccountsScreen({
       await router.invalidate();
     } finally {
       setIsDisconnecting(null);
-    }
-  };
-
-  const handleOpenPlaid = async () => {
-    if (isLinkLoading) return;
-
-    setIsLinkLoading(true);
-    try {
-      const linkToken = await createLinkToken();
-      setToken(linkToken);
-    } catch {
-      setIsLinkLoading(false);
-      setToken(null);
     }
   };
 
@@ -131,7 +87,7 @@ export function AccountsScreen({
               label="Add"
               icon={<PlusIcon size={15} />}
               size="sm"
-              onPress={handleOpenPlaid}
+              onPress={openPlaidLink}
               isLoading={isLinkLoading}
             />
           </div>
@@ -151,11 +107,11 @@ export function AccountsScreen({
             isDisconnecting={isDisconnecting}
             isLinkLoading={isLinkLoading}
             onDisconnect={handleDisconnectBank}
-            onOpenPlaid={handleOpenPlaid}
+            onOpenPlaid={openPlaidLink}
           />
 
           {Object.keys(vm.grouped).length === 0 ? (
-            <EmptyAccountsState isLinkLoading={isLinkLoading} onOpenPlaid={handleOpenPlaid} />
+            <EmptyAccountsState isLinkLoading={isLinkLoading} onOpenPlaid={openPlaidLink} />
           ) : (
             <AccountGroupsList
               grouped={vm.grouped}

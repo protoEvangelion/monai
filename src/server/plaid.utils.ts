@@ -3,6 +3,7 @@ import {
   accounts,
   transactions,
   historicalBalances,
+  holdings,
 } from "../db/schema";
 import { eq } from "drizzle-orm";
 
@@ -67,6 +68,7 @@ export async function deleteLocalItemData(itemId: number) {
 
   await Promise.all(
     itemAccounts.flatMap((account) => [
+      db.delete(holdings).where(eq(holdings.accountId, account.id)),
       db
         .delete(historicalBalances)
         .where(eq(historicalBalances.accountId, account.id)),
@@ -87,4 +89,45 @@ export function mapAccountType(plaidType: string): string {
     other: "cash",
   };
   return map[plaidType] ?? "cash";
+}
+
+/** Pull latest balances from Plaid and update local accounts. */
+export async function refreshAccountBalances(accessToken: string, itemId: number) {
+  const { db } = await import("../db");
+
+  const { accounts: plaidAccounts } = await plaidPost("/accounts/get", {
+    access_token: accessToken,
+  });
+
+  const localAccounts = await db.query.accounts.findMany({
+    where: eq(accounts.plaidItemId, itemId),
+  });
+  const byPlaidId = new Map(
+    localAccounts
+      .filter((account) => account.plaidAccountId)
+      .map((account) => [account.plaidAccountId!, account]),
+  );
+
+  let updated = 0;
+  await Promise.all(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plaidAccounts as any[]).map(async (plaidAccount: any) => {
+      const local = byPlaidId.get(plaidAccount.account_id);
+      if (!local) return;
+      const balance = plaidAccount.balances?.current;
+      if (balance == null) return;
+      await db
+        .update(accounts)
+        .set({
+          name: plaidAccount.name ?? local.name,
+          currentBalance: balance,
+          type: mapAccountType(plaidAccount.type) || local.type,
+        })
+        .where(eq(accounts.id, local.id));
+      updated += 1;
+    }),
+  );
+
+  console.log(`[balances] refreshed ${updated} accounts for item ${itemId}`);
+  return updated;
 }

@@ -12,6 +12,21 @@ export function getMonthKey(value: Date | string) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+export function monthKeyToViewDate(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1).toISOString();
+}
+
+export function currentMonthKey() {
+  const now = new Date();
+  return getMonthKey(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+
+export function clampMonthKey(monthKey: string) {
+  const current = currentMonthKey();
+  return monthKey > current ? current : monthKey;
+}
+
 export function centsToDollars(cents: number) {
   return cents / 100;
 }

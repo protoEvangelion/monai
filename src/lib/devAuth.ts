@@ -1,21 +1,23 @@
 /**
- * Dev-only auth bypass for Plaid sandbox development.
- * Real Clerk auth is used unless the app is running locally against Plaid sandbox.
+ * Auth helper. Clerk is required by default (including sandbox demos).
+ * Opt into a local bypass only with MONAI_DEV_AUTH_BYPASS=1 (e.g. e2e).
  */
 
-export const DEV_USER_ID = 'dev_user_123'
+export const DEV_USER_ID = "dev_user_123";
 
 export async function getAuthOrDevAuth() {
-  const isLocalSandbox =
-    process.env.NODE_ENV === 'development' && process.env.PLAID_ENV === 'sandbox'
+  const allowBypass =
+    process.env.MONAI_DEV_AUTH_BYPASS === "1" &&
+    process.env.NODE_ENV === "development" &&
+    process.env.PLAID_ENV === "sandbox";
 
-  if (isLocalSandbox) {
+  if (allowBypass) {
     return {
       isAuthenticated: true,
       userId: DEV_USER_ID,
-    }
+    };
   }
 
-  const { auth } = await import('@clerk/tanstack-react-start/server')
-  return await auth()
+  const { auth } = await import("@clerk/tanstack-react-start/server");
+  return await auth();
 }
