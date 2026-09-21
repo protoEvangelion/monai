@@ -25,16 +25,11 @@ test.describe('app shell smoke', () => {
   test('header theme controls are interactive', async ({ page }) => {
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'Theme palette' }).click()
-    await page.getByRole('menuitem', { name: 'Graphite' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'graphite')
-
-    await page.getByRole('button', { name: 'Theme palette' }).click()
-    await page.getByRole('menuitem', { name: 'Ocean' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'ocean')
-
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await page.getByRole('button', { name: 'Toggle theme' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'ocean-dark')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await page.getByRole('button', { name: 'Toggle theme' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   })
 
   test('settings modal opens, switches tabs, and closes', async ({ page }) => {

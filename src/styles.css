@@ -4,7 +4,8 @@
 @import "@mantine/core/styles.css";
 @import "@mantine/dates/styles.css";
 @import "mantine-react-table/styles.css";
-@import "./ui/themes/ocean.css" layer(theme);
+@import "./bezel/variables.css";
+@import "./ui/themes/bezel-bridge.css";
 
 .mrt-table-paper .mantine-Checkbox-root,
 .mrt-table-paper .mantine-Checkbox-input {

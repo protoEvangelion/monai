@@ -17,8 +17,8 @@ export function DashboardTransactionsCard({
   );
 
   return (
-    <div className="h-full bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-divider/30">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card">
+      <div className="flex items-center justify-between border-b border-divider/30 px-6 py-4">
         <h5 className="font-bold text-sm">Transactions to review</h5>
         <Link
           to="/transactions"
@@ -27,7 +27,7 @@ export function DashboardTransactionsCard({
           View all <ChevronRightIcon size={14} />
         </Link>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-auto">
         <ReviewTable transactions={reviewTransactions} categories={categories} variant="dashboard" />
       </div>
     </div>

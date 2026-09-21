@@ -2,7 +2,7 @@ import { ChevronRightIcon } from "lucide-react";
 
 export function UpcomingPaymentsCard() {
   return (
-    <div className="bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm p-5">
+    <div className="rounded-2xl bg-card p-5">
       <div className="flex items-center justify-between mb-3">
         <h5 className="font-bold text-sm">Next two weeks</h5>
         <span className="flex items-center gap-1 text-xs text-default-400">

@@ -23,7 +23,7 @@ export function BudgetSummaryCard({
   overBudget: boolean;
 }) {
   return (
-    <div className="h-full bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm p-5">
+    <div className="h-full rounded-2xl bg-card p-5">
       <div className="flex items-center justify-between mb-5">
         <h5 className="font-bold text-sm">Zero-based budget</h5>
         <Link

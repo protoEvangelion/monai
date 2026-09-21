@@ -1,0 +1,251 @@
+/**
+ * Bezel → app theme bridge.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TOKEN GAPS (fix these in Bezel for a clean export — app is working around them):
+ * 1. `background` == `card` == `popover` (same #312156) — no elevated surface
+ * 2. `accent` == `muted` == `sidebar` (same #433465) — muddled semantics
+ * 3. No canvas/page token darker than `background` — dark UIs need one
+ * 4. `--border` export collides with border-width (emits `1px` instead of a color)
+ * 5. `light`/`dark` contexts exist but have zero overrides
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Surface ladder:
+ *   page    → deepened canvas (shows in the content corner radius)
+ *   chrome  → background          (#312156)  sidebar + topbar, borderless
+ *   card    → same dark purple as chrome — cards and table share it
+ */
+:root,
+.light,
+.dark {
+  --page: color-mix(in oklch, var(--background) 52%, black);
+  --chrome: var(--background);
+  --raised: var(--background);
+
+  --card: var(--background);
+  --popover: var(--background);
+  --surface: var(--background);
+
+  --danger: var(--destructive);
+  --danger-foreground: var(--destructive-foreground);
+
+  --default: var(--sidebar);
+  --default-foreground: var(--foreground);
+  --separator: var(--input);
+  --focus: var(--ring);
+
+  --border: var(--input);
+  --border-width: 1px;
+
+  --accent: var(--primary);
+  --accent-foreground: var(--primary-foreground);
+
+  --content1: var(--raised);
+  --content2: var(--chrome);
+  --content3: var(--input);
+  --content4: var(--ring);
+
+  color-scheme: dark;
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+}
+
+.light {
+  color-scheme: light;
+}
+
+html,
+body,
+#app {
+  background-color: var(--page);
+  color: var(--foreground);
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme inline {
+  --font-sans: Outfit, ui-sans-serif, system-ui, sans-serif;
+  --font-serif: Lora, ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-background: var(--page);
+  --color-page: var(--page);
+  --color-chrome: var(--chrome);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--sidebar);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-sidebar: var(--chrome);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--raised);
+  --color-raised: var(--raised);
+  --color-content1: var(--content1);
+  --color-content2: var(--content2);
+  --color-content3: var(--content3);
+  --color-content4: var(--content4);
+  --color-divider: var(--border);
+  --color-default: var(--default);
+  --color-default-foreground: var(--default-foreground);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+}
+
+/* Borderless cards — separation comes from the darker page, not strokes */
+.bg-card {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* Mantine React Table — same purple as cards; fields sit one step lighter */
+.mrt-table-paper,
+.mrt-table-paper .mantine-Paper-root,
+.mrt-table-paper .mrt-table-container {
+  background-color: var(--card) !important;
+  color: var(--foreground);
+  --mrt-base-background-color: var(--card);
+  --mrt-pinned-column-background-color: var(--card);
+  --mrt-striped-row-background-color: var(--card);
+  --mrt-row-hover-background-color: color-mix(in oklch, var(--foreground) 7%, var(--card));
+  --mantine-color-body: var(--card);
+  --mantine-color-default: var(--sidebar-accent);
+  --mantine-color-default-hover: color-mix(in oklch, var(--foreground) 8%, var(--card));
+  --mantine-color-default-border: transparent;
+  --mantine-color-dimmed: var(--muted-foreground);
+  --mantine-color-placeholder: var(--muted-foreground);
+  --mantine-color-text: var(--foreground);
+  --mantine-font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+}
+
+.mrt-table-paper tbody {
+  background-color: var(--card) !important;
+}
+
+.mrt-table-paper td::before,
+.mrt-table-paper th::before {
+  background-color: var(--card) !important;
+}
+
+.mrt-table-paper thead,
+.mrt-table-paper thead tr,
+.mrt-table-paper .mantine-Table-th,
+.mrt-table-paper th.mantine-Table-th,
+.mrt-table-paper [class*="MRT_TableHeadCell-module_root"] {
+  background-color: var(--card) !important;
+  color: var(--muted-foreground) !important;
+  border-bottom: none !important;
+  font-size: 11px;
+  font-weight: var(--font-weight-semi-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: top;
+}
+
+.mrt-table-paper tbody tr,
+.mrt-table-paper tbody tr td,
+.mrt-table-paper .mantine-Table-td,
+.mrt-table-paper [class*="MRT_TableBodyCell"] {
+  background-color: var(--card) !important;
+  color: var(--foreground) !important;
+  border-bottom: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent) !important;
+  box-shadow: none !important;
+}
+
+.mrt-table-paper tbody tr:nth-child(even),
+.mrt-table-paper tbody tr:nth-child(even) td {
+  background-color: var(--card) !important;
+}
+
+.mrt-table-paper tbody tr:hover,
+.mrt-table-paper tbody tr:hover td,
+.mrt-table-paper tbody tr:hover .mantine-Table-td,
+.mrt-table-paper tbody tr[data-selected],
+.mrt-table-paper tbody tr[data-selected] td {
+  background-color: color-mix(in oklch, var(--foreground) 7%, var(--card)) !important;
+}
+
+.mrt-table-paper .mantine-TextInput-input,
+.mrt-table-paper .mantine-Select-input,
+.mrt-table-paper .mantine-Input-input,
+.mrt-table-paper input:not([type="checkbox"]),
+.mrt-table-paper select {
+  background-color: var(--sidebar-accent) !important;
+  color: var(--foreground) !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif !important;
+  min-height: 32px;
+}
+
+.mrt-table-paper .mrt-filter-text-input,
+.mrt-table-paper [class*="MRT_FilterTextInput-module_root"],
+.mrt-table-paper [class*="MRT_FilterRange"],
+.mrt-table-paper .mantine-InputWrapper-root {
+  border: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.mrt-table-paper .mantine-TextInput-input:focus,
+.mrt-table-paper input:focus {
+  border-color: var(--primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 30%, transparent);
+}
+
+.mrt-table-paper .mantine-TextInput-input::placeholder,
+.mrt-table-paper input::placeholder {
+  color: var(--muted-foreground) !important;
+}
+
+.mrt-table-paper .mantine-Checkbox-root,
+.mrt-table-paper .mantine-Checkbox-inner,
+.mrt-table-paper .mantine-Checkbox-input {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+}
+
+.mrt-table-paper .mantine-Checkbox-input {
+  background-color: var(--card) !important;
+  border: 1.5px solid color-mix(in oklch, var(--foreground) 55%, transparent) !important;
+  border-radius: 4px !important;
+  padding: 0 !important;
+}
+
+.mrt-table-paper tbody tr:hover .mantine-Checkbox-input:not(:checked) {
+  background-color: color-mix(in oklch, var(--foreground) 7%, var(--card)) !important;
+}
+
+.mrt-table-paper .mantine-Checkbox-input:checked {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.mrt-table-paper .mrt-toolbar,
+.mrt-table-paper .mrt-top-toolbar,
+.mrt-table-paper .mrt-bottom-toolbar {
+  background-color: transparent !important;
+  color: var(--foreground) !important;
+  border-color: color-mix(in oklch, var(--border) 50%, transparent) !important;
+}

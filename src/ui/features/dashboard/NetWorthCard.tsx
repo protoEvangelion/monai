@@ -87,7 +87,7 @@ export function NetWorthCard({
   const filteredData = useMemo(() => filterByRange(chartData, range), [chartData, range]);
 
   return (
-    <div className="h-full overflow-hidden rounded-2xl border border-divider/40 bg-background/60 shadow-sm backdrop-blur-md">
+    <div className="h-full overflow-hidden rounded-2xl bg-card">
       <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-3">
         <div>
           <div

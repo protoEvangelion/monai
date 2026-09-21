@@ -7,8 +7,8 @@ const COLORS = ["#17c964", "#006FEE", "#9333ea", "#f5a524", "#f31260"];
 
 export function TopCategoriesCard({ topGroups }: { topGroups: DashboardTopGroup[] }) {
   return (
-    <div className="h-full bg-background/60 backdrop-blur-md border border-divider/40 rounded-2xl shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-divider/30">
+    <div className="h-full overflow-hidden rounded-2xl bg-card">
+      <div className="flex items-center justify-between border-b border-divider/30 px-5 py-4">
         <h5 className="font-bold text-sm">Top categories</h5>
         <Link
           to="/categories"

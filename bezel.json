@@ -1,0 +1,7 @@
+{
+  "projectId": "53a0c17a-eebc-4e51-adf0-3291982aefeb",
+  "version": "latest",
+  "variablesOutput": "src/bezel/variables.css",
+  "contextsOutput": "src/bezel/contexts.ts",
+  "fontsOutput": "src/bezel/fonts.ts"
+}

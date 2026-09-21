@@ -428,6 +428,7 @@ export function ReviewTable({
       },
     },
     mantinePaperProps: {
+      className: "mrt-table-paper",
       style: {
         border: "none",
         boxShadow: "none",
@@ -439,7 +440,24 @@ export function ReviewTable({
       },
     },
     mantineTableContainerProps: {
-      style: { flex: 1, minHeight: 0, maxHeight: "100%" },
+      style: {
+        flex: 1,
+        minHeight: 0,
+        maxHeight: "100%",
+        background: "transparent",
+      },
+    },
+    mantineTopToolbarProps: {
+      style: {
+        background: "transparent",
+        borderBottom: "1px solid color-mix(in oklch, var(--border) 45%, transparent)",
+      },
+    },
+    mantineBottomToolbarProps: {
+      style: {
+        background: "transparent",
+        borderTop: "1px solid color-mix(in oklch, var(--border) 45%, transparent)",
+      },
     },
     mantineTableBodyRowProps: ({ row }) =>
       ({

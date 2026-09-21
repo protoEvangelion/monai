@@ -6,8 +6,10 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "bun scripts/dev.ts",
-    "build": "vite build",
+    "tokens": "bezel build",
+    "postinstall": "bezel build",
+    "dev": "bun run tokens && bun scripts/dev.ts",
+    "build": "bun run tokens && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -25,6 +27,7 @@
     "demo:setup": "bun scripts/setup-demo-user.ts"
   },
   "dependencies": {
+    "@bezel-labs/bezel-kit": "^0.4.0",
     "@clerk/clerk-react": "^5.61.3",
     "@clerk/tanstack-react-start": "^1.1.3",
     "@faker-js/faker": "^10.3.0",

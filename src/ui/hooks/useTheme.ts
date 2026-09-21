@@ -1,36 +1,37 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-export const themePalettes = ['ocean', 'graphite', 'sunset'] as const
-
-export type ThemePalette = (typeof themePalettes)[number]
-export type ThemeName = ThemePalette | `${ThemePalette}-dark`
+export type ThemeName = "light" | "dark";
 
 interface ThemeState {
-  theme: ThemeName
-  toggleTheme: () => void
-  setTheme: (theme: ThemeName) => void
-  setPalette: (palette: ThemePalette) => void
+  theme: ThemeName;
+  toggleTheme: () => void;
+  setTheme: (theme: ThemeName) => void;
+}
+
+function normalizeTheme(value: unknown): ThemeName {
+  if (value === "light" || value === "dark") return value;
+  if (typeof value === "string" && value.endsWith("-dark")) return "dark";
+  return "dark";
 }
 
 export const useTheme = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'ocean',
-      toggleTheme: () => set((state) => ({
-        theme: state.theme.endsWith('-dark')
-          ? (state.theme.replace('-dark', '') as ThemeName)
-          : (`${state.theme}-dark` as ThemeName),
-      })),
+      theme: "dark",
+      toggleTheme: () =>
+        set((state) => ({
+          theme: state.theme === "dark" ? "light" : "dark",
+        })),
       setTheme: (theme) => set({ theme }),
-      setPalette: (palette) => set((state) => ({
-        theme: state.theme.endsWith('-dark')
-          ? (`${palette}-dark` as ThemeName)
-          : palette,
-      })),
     }),
     {
-      name: 'monai-theme',
-    }
-  )
-)
+      name: "monai-theme",
+      version: 2,
+      migrate: (persisted) => {
+        const state = (persisted ?? {}) as { theme?: unknown };
+        return { theme: normalizeTheme(state.theme) };
+      },
+    },
+  ),
+);

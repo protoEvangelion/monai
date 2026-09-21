@@ -28,10 +28,14 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Monai - Financial Dashboard" },
-      { name: "theme-color", content: "#6366f1" },
+      { name: "theme-color", content: "#14B8A6" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&family=Lora:wght@400&family=Outfit:wght@400;600&display=swap",
+      },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
       { rel: "manifest", href: "/manifest.json" },
@@ -53,7 +57,7 @@ const sidebarTypeLabels: Record<string, string> = {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
-  const isDarkTheme = theme.endsWith("-dark");
+  const isDarkTheme = theme === "dark";
   const location = useLocation();
   const isAuthPage = location.pathname.startsWith("/sign-in");
 
@@ -109,13 +113,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body className="antialiased selection:bg-primary/30">
+      <body className="bg-page font-sans text-foreground antialiased selection:bg-primary/30">
         <TanstackQueryProvider>
           <ClerkProvider>
             <MantineAppProvider>
             <PlaidLinkProvider>
             <LoginSyncEffect isAuthPage={isAuthPage} />
-            <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
+            <div className="relative flex h-screen overflow-hidden bg-page text-foreground">
               {mounted ? (
                 isAuthPage ? (
                   <div className="z-10 flex grow items-center justify-center p-4">
@@ -128,14 +132,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                           Your premium, local-first financial command center.
                         </p>
                       </div>
-                      <div className="rounded-3xl border border-divider/50 bg-background p-8 shadow-2xl">
+                      <div className="rounded-3xl border border-divider/50 bg-card p-8 shadow-2xl">
                         {children}
                       </div>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-divider/60 bg-background xl:flex">
+                    <aside className="z-10 hidden w-64 shrink-0 flex-col bg-chrome text-sidebar-foreground xl:flex">
                       <AppSidebar sidebarAccounts={sidebarAccounts} />
                     </aside>
 
@@ -147,7 +151,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                           className="absolute inset-0 bg-black/45"
                           onClick={() => setSidebarOpen(false)}
                         />
-                        <aside className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-divider/60 bg-background shadow-2xl">
+                        <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-chrome text-sidebar-foreground shadow-2xl">
                           <AppSidebar
                             sidebarAccounts={sidebarAccounts}
                             onClose={() => setSidebarOpen(false)}
@@ -156,10 +160,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                       </div>
                     ) : null}
 
-                    <div className="z-10 flex min-w-0 grow flex-col overflow-hidden">
+                    <div className="z-10 flex min-w-0 grow flex-col overflow-hidden bg-chrome">
                       <AppHeader pageTitle="" onOpenSidebar={() => setSidebarOpen(true)} />
 
-                      <main className="flex min-h-0 grow flex-col overflow-y-auto bg-transparent p-6 xl:p-8">
+                      <main className="flex min-h-0 grow flex-col overflow-y-auto rounded-tl-3xl bg-page p-6 xl:p-8">
                         <div className="mx-auto flex w-full min-h-0 flex-1 flex-col">{children}</div>
                       </main>
                     </div>
