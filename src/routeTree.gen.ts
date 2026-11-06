@@ -15,6 +15,7 @@ import { Route as RecurringsRouteImport } from './routes/recurrings'
 import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as AccountsRouteImport } from './routes/accounts'
+import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as CategoriesNewGroupRouteImport } from './routes/categories.new-group'
@@ -50,6 +51,11 @@ const AccountsRoute = AccountsRouteImport.update({
   path: '/accounts',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccessDeniedRoute = AccessDeniedRouteImport.update({
+  id: '/access-denied',
+  path: '/access-denied',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -73,6 +79,7 @@ const CategoriesNewCategoryRoute = CategoriesNewCategoryRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/access-denied': typeof AccessDeniedRoute
   '/accounts': typeof AccountsRoute
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
@@ -85,6 +92,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/access-denied': typeof AccessDeniedRoute
   '/accounts': typeof AccountsRoute
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
@@ -98,6 +106,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/access-denied': typeof AccessDeniedRoute
   '/accounts': typeof AccountsRoute
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
@@ -112,6 +121,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/access-denied'
     | '/accounts'
     | '/categories'
     | '/investments'
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/access-denied'
     | '/accounts'
     | '/categories'
     | '/investments'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/access-denied'
     | '/accounts'
     | '/categories'
     | '/investments'
@@ -149,6 +161,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccessDeniedRoute: typeof AccessDeniedRoute
   AccountsRoute: typeof AccountsRoute
   CategoriesRoute: typeof CategoriesRouteWithChildren
   InvestmentsRoute: typeof InvestmentsRoute
@@ -202,6 +215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/access-denied': {
+      id: '/access-denied'
+      path: '/access-denied'
+      fullPath: '/access-denied'
+      preLoaderRoute: typeof AccessDeniedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -249,6 +269,7 @@ const CategoriesRouteWithChildren = CategoriesRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccessDeniedRoute: AccessDeniedRoute,
   AccountsRoute: AccountsRoute,
   CategoriesRoute: CategoriesRouteWithChildren,
   InvestmentsRoute: InvestmentsRoute,

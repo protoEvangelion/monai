@@ -1,13 +1,12 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getAuthOrDevAuth } from "../lib/devAuth";
+import { requireAllowedSession } from "../lib/devAuth";
 import { getTransactionsPage, type TransactionsPageQuery } from "../server/transactions.fns";
 import { getCategoriesWithSpending } from "../server/categories.fns";
 import { TransactionsScreen } from "../ui/features/transactions/transactions.screen";
 
 const authStateFn = createServerFn().handler(async () => {
-  const { isAuthenticated } = await getAuthOrDevAuth();
-  if (!isAuthenticated) throw redirect({ to: "/sign-in/$" });
+  await requireAllowedSession();
 });
 
 type TransactionsSearch = TransactionsPageQuery;

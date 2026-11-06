@@ -1,6 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getAuthOrDevAuth } from "../lib/devAuth";
+import { requireAllowedSession } from "../lib/devAuth";
 import {
   getAccounts,
   getConnections,
@@ -10,8 +10,7 @@ import { getTransactions } from "../server/transactions.fns";
 import { AccountsScreen } from "../ui/features/accounts/accounts.screen";
 
 const authStateFn = createServerFn().handler(async () => {
-  const { isAuthenticated, userId } = await getAuthOrDevAuth();
-  if (!isAuthenticated) throw redirect({ to: "/sign-in/$" });
+  const { userId } = await requireAllowedSession();
   return { userId };
 });
 

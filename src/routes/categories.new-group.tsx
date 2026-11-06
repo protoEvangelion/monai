@@ -1,11 +1,10 @@
-import { createFileRoute, redirect } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
-import { getAuthOrDevAuth } from "../lib/devAuth"
+import { requireAllowedSession } from "../lib/devAuth"
 import { CategoryModal } from "../ui/features/categories/CategoryModal"
 
 const authStateFn = createServerFn().handler(async () => {
-  const { isAuthenticated } = await getAuthOrDevAuth()
-  if (!isAuthenticated) throw redirect({ to: "/sign-in/$" })
+  await requireAllowedSession()
 })
 
 export const Route = createFileRoute("/categories/new-group")({

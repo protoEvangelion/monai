@@ -59,7 +59,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
   const isDarkTheme = theme === "dark";
   const location = useLocation();
-  const isAuthPage = location.pathname.startsWith("/sign-in");
+  const isAuthPage =
+    location.pathname.startsWith("/sign-in") ||
+    location.pathname.startsWith("/access-denied");
 
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);

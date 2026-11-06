@@ -24,3 +24,6 @@ tmp
 /src/bezel/contexts.ts
 /src/bezel/fonts.ts
 # bezel:end
+
+# clerk configuration (can include secrets)
+/.clerk/
