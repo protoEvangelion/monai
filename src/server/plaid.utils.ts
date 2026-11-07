@@ -18,20 +18,40 @@ export class PlaidApiError extends Error {
   }
 }
 
+/**
+ * Resolve Plaid credentials across both env naming conventions.
+ *
+ * - Local: `scripts/dev.ts` maps PLAID_SANDBOX_* / PLAID_PRODUCTION_* down to
+ *   PLAID_ENV + PLAID_SECRET before Vite starts.
+ * - Vercel: only PLAID_PRODUCTION_ENV + PLAID_PRODUCTION_SECRET are set (they
+ *   hold real bank keys), so fall back to those instead of silently using
+ *   sandbox and rejecting every stored production token.
+ */
+export function resolvePlaidCredentials() {
+  const clientId = process.env.PLAID_CLIENT_ID;
+  const env =
+    process.env.PLAID_ENV?.trim() ||
+    process.env.PLAID_PRODUCTION_ENV?.trim() ||
+    "sandbox";
+  const secret =
+    process.env.PLAID_SECRET?.trim() || process.env.PLAID_PRODUCTION_SECRET?.trim();
+  return { clientId, env, secret };
+}
+
 export const plaidPost = async (path: string, body: object) => {
-  const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
-  if (!PLAID_CLIENT_ID || !PLAID_SECRET || !PLAID_ENV) {
+  const { clientId, env, secret } = resolvePlaidCredentials();
+  if (!clientId || !secret) {
     throw new Error(
-      "Missing Plaid env vars — check PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV in .env.local",
+      "Missing Plaid env vars — need PLAID_CLIENT_ID plus PLAID_SECRET (or PLAID_PRODUCTION_SECRET).",
     );
   }
-  const base = `https://${PLAID_ENV}.plaid.com`;
+  const base = `https://${env}.plaid.com`;
   const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      client_id: PLAID_CLIENT_ID,
-      secret: PLAID_SECRET,
+      client_id: clientId,
+      secret,
       ...body,
     }),
   });
@@ -58,6 +78,17 @@ export const isMissingPlaidItemError = (error: unknown) => {
 
 export const isPlaidReconnectRequiredError = (error: unknown) =>
   error instanceof PlaidApiError && error.errorCode === "ITEM_LOGIN_REQUIRED";
+
+/**
+ * Plaid access tokens are bound to the environment that created them
+ * (sandbox vs production). If the server is configured for the wrong
+ * environment, every stored item fails with INVALID_ACCESS_TOKEN — this is a
+ * config problem, not a bank-login problem, so it deserves its own message.
+ */
+export const isPlaidEnvMismatchError = (error: unknown) => {
+  const msg = (error as { message?: string })?.message?.toLowerCase() ?? "";
+  return msg.includes("wrong plaid environment");
+};
 
 export async function deleteLocalItemData(itemId: number) {
   const { db } = await import("../db");

@@ -39,9 +39,34 @@ async function seedAccounts(accessToken: string, itemId: number) {
   );
 }
 
-export const createLinkToken = createServerFn().handler(async () => {
+export const createLinkToken = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();
   if (!userId) throw new Error("Unauthorized");
+
+  const { db } = await import("../db");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { plaidItemId } = ((ctx as any).data ?? {}) as { plaidItemId?: number };
+
+  // Update (repair) mode: Link re-authenticates an existing item instead of
+  // creating a new one. Required when a bank returns ITEM_LOGIN_REQUIRED —
+  // a fresh link would either duplicate accounts or be rejected.
+  if (plaidItemId) {
+    const item = await db.query.plaidItems.findFirst({
+      where: eq(plaidItems.id, plaidItemId),
+    });
+    if (!item || item.userId !== userId) throw new Error("Connection not found");
+
+    const data = await plaidPost("/link/token/create", {
+      client_name: "Monai",
+      user: { client_user_id: userId },
+      country_codes: ["US"],
+      language: "en",
+      access_token: item.accessToken,
+    });
+
+    return { linkToken: data.link_token as string, itemId: item.id };
+  }
 
   const data = await plaidPost("/link/token/create", {
     client_name: "Monai",
@@ -52,7 +77,7 @@ export const createLinkToken = createServerFn().handler(async () => {
     language: "en",
   });
 
-  return data.link_token as string;
+  return { linkToken: data.link_token as string, itemId: null };
 });
 
 function normalizeInstitutionName(name: string | null | undefined) {
@@ -69,10 +94,49 @@ export const exchangePublicToken = createServerFn().handler(async (ctx) => {
   const { db } = await import("../db");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { publicToken, institutionName } = (ctx as any).data as {
+  const { publicToken, institutionName, itemId } = (ctx as any).data as {
     publicToken: string;
     institutionName?: string;
+    itemId?: number;
   };
+
+  const { access_token, item_id } = await plaidPost(
+    "/item/public_token/exchange",
+    {
+      public_token: publicToken,
+    },
+  );
+  console.log(
+    `[connect] token exchanged, item_id=${item_id}, institution=${institutionName ?? "unknown"}`,
+  );
+
+  // Repair mode: an existing item was re-linked, so reuse the row and just
+  // refresh its token. Inserting a new row would duplicate every account.
+  if (itemId) {
+    const existing = await db.query.plaidItems.findFirst({
+      where: eq(plaidItems.id, itemId),
+    });
+    if (!existing || existing.userId !== userId) throw new Error("Connection not found");
+
+    await db
+      .update(plaidItems)
+      .set({
+        itemId: item_id,
+        accessToken: access_token,
+        institutionName: institutionName ?? existing.institutionName,
+        // Reset the cursor so the next sync backfills anything missed while
+        // the login was broken.
+        cursor: null,
+        lastSyncedAt: null,
+      })
+      .where(eq(plaidItems.id, existing.id));
+
+    await seedAccounts(access_token, existing.id);
+    await syncTransactions(access_token, existing.id, userId, false, false);
+    await syncInvestmentsHoldingsSafe(access_token, existing.id);
+    console.log(`[connect] repaired item ${existing.id}`);
+    return { itemId: existing.id, repaired: true };
+  }
 
   const normalizedInstitution = normalizeInstitutionName(institutionName);
   if (normalizedInstitution) {
@@ -84,20 +148,10 @@ export const exchangePublicToken = createServerFn().handler(async (ctx) => {
     );
     if (duplicate) {
       throw new Error(
-        `${institutionName ?? "That bank"} is already connected. Disconnect it first, or use Sync — reconnecting creates duplicate accounts and transactions.`,
+        `${institutionName ?? "That bank"} is already connected. Use its Reconnect button instead — linking again creates duplicate accounts and transactions.`,
       );
     }
   }
-
-  const { access_token, item_id } = await plaidPost(
-    "/item/public_token/exchange",
-    {
-      public_token: publicToken,
-    },
-  );
-  console.log(
-    `[connect] token exchanged, item_id=${item_id}, institution=${institutionName ?? "unknown"}`,
-  );
 
   const [item] = await db
     .insert(plaidItems)
@@ -114,13 +168,7 @@ export const exchangePublicToken = createServerFn().handler(async (ctx) => {
   await seedDefaultCategories(userId);
   await syncTransactions(access_token, item.id, userId, true);
   console.log(`[connect] transactions synced`);
-  const { syncInvestmentsHoldings } = await import("./plaid.investments.fns");
-  await syncInvestmentsHoldings(access_token, item.id).catch((err) =>
-    console.warn(
-      "[connect] Investments holdings sync failed (product may not be enabled):",
-      err?.message,
-    ),
-  );
+  await syncInvestmentsHoldingsSafe(access_token, item.id);
   await backfillHistoricalBalances(access_token, item.id).catch((err) =>
     console.warn(
       "[connect] Assets backfill failed (product may not be enabled):",
@@ -128,7 +176,18 @@ export const exchangePublicToken = createServerFn().handler(async (ctx) => {
     ),
   );
   console.log(`[connect] done`);
+  return { itemId: item.id, repaired: false };
 });
+
+async function syncInvestmentsHoldingsSafe(accessToken: string, itemId: number) {
+  const { syncInvestmentsHoldings } = await import("./plaid.investments.fns");
+  await syncInvestmentsHoldings(accessToken, itemId).catch((err) =>
+    console.warn(
+      "[connect] Investments holdings sync failed (product may not be enabled):",
+      err?.message,
+    ),
+  );
+}
 
 export const removeItem = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();

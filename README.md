@@ -81,8 +81,13 @@ bun --bun run dev -- --production # Plaid production + production.db (real data,
 
 | Flag | Plaid | Database |
 |---|---|---|
-| *(default)* / `--sandbox` | sandbox secret + `PLAID_ENV=sandbox` | `PLAID_SANDBOX_DATABASE_URL` → else `TURSO_DATABASE_URL` → else `DATABASE_URL` |
-| `--production` / `--prod` | `PLAID_PRODUCTION_SECRET` | `PLAID_PRODUCTION_DATABASE_URL` (Turso env cleared) |
+| *(default)* / `--sandbox` | sandbox secret + `PLAID_ENV=sandbox` | `PLAID_SANDBOX_DATABASE_URL` → else `DATABASE_URL` (Turso is ignored) |
+| `--production` / `--prod` | `PLAID_PRODUCTION_SECRET` | `TURSO_DATABASE_URL` when set → else `PLAID_PRODUCTION_DATABASE_URL` |
+
+Why sandbox mode ignores Turso: Plaid access tokens are minted per environment, and
+the real bank rows in Turso were linked with production tokens. Sending sandbox keys
+at them makes Plaid fail with *"access token is for the wrong Plaid environment"*.
+Sandbox mode therefore stays on a local dev DB.
 
 ### 5. Vercel demo (sandbox only)
 

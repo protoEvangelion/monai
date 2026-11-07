@@ -87,7 +87,7 @@ export function AccountsScreen({
               label="Add"
               icon={<PlusIcon size={15} />}
               size="sm"
-              onPress={openPlaidLink}
+              onPress={() => openPlaidLink()}
               isLoading={isLinkLoading}
             />
           </div>
@@ -107,11 +107,15 @@ export function AccountsScreen({
             isDisconnecting={isDisconnecting}
             isLinkLoading={isLinkLoading}
             onDisconnect={handleDisconnectBank}
-            onOpenPlaid={openPlaidLink}
+            onReconnect={(id) => openPlaidLink(id)}
+            onOpenPlaid={() => openPlaidLink()}
           />
 
           {Object.keys(vm.grouped).length === 0 ? (
-            <EmptyAccountsState isLinkLoading={isLinkLoading} onOpenPlaid={openPlaidLink} />
+            <EmptyAccountsState
+              isLinkLoading={isLinkLoading}
+              onOpenPlaid={() => openPlaidLink()}
+            />
           ) : (
             <AccountGroupsList
               grouped={vm.grouped}

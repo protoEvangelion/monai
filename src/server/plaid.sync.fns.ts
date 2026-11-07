@@ -6,6 +6,7 @@ import {
   plaidPost,
   isMissingPlaidItemError,
   isPlaidReconnectRequiredError,
+  isPlaidEnvMismatchError,
   deleteLocalItemData,
 } from "./plaid.utils";
 import { AI_CATEGORIZE_MAX_TRANSACTIONS, applyRulesForItem } from "./categorize.fns";
@@ -542,6 +543,13 @@ export async function syncTransactions(
   }
 }
 
+/**
+ * Manual sync from the header button.
+ *
+ * Each Plaid item is synced independently so one broken bank login (e.g.
+ * ITEM_LOGIN_REQUIRED) doesn't fail the whole run — we return per-item results
+ * and let the UI show "N of M synced" plus which institutions need re-linking.
+ */
 export const manualSync = createServerFn().handler(async () => {
   const { userId } = await getAuthOrDevAuth();
   if (!userId) throw new Error("Unauthorized");
@@ -551,9 +559,54 @@ export const manualSync = createServerFn().handler(async () => {
   const items = await db.query.plaidItems.findMany({
     where: eq(plaidItems.userId, userId),
   });
-  await Promise.all(
-    items.map((item) => syncTransactions(item.accessToken, item.id, userId, false, false)),
+
+  const results = await Promise.all(
+    items.map(async (item) => {
+      if (syncInFlight.has(item.id)) {
+        return {
+          itemId: item.id,
+          institution: item.institutionName ?? `Item ${item.id}`,
+          status: "skipped" as const,
+        };
+      }
+
+      syncInFlight.add(item.id);
+      try {
+        await syncTransactions(item.accessToken, item.id, userId, false, false);
+        return {
+          itemId: item.id,
+          institution: item.institutionName ?? `Item ${item.id}`,
+          status: "synced" as const,
+        };
+      } catch (error) {
+        const needsReconnect = isPlaidReconnectRequiredError(error);
+        const envMismatch = isPlaidEnvMismatchError(error);
+        const message = envMismatch
+          ? "Plaid keys don't match this database's environment — run `bun run dev --production` locally, or check PLAID_ENV on Vercel."
+          : error instanceof Error
+            ? error.message
+            : "Could not sync this institution.";
+        return {
+          itemId: item.id,
+          institution: item.institutionName ?? `Item ${item.id}`,
+          status: envMismatch
+            ? ("config" as const)
+            : needsReconnect
+              ? ("reconnect" as const)
+              : ("failed" as const),
+          message,
+        };
+      } finally {
+        syncInFlight.delete(item.id);
+      }
+    }),
   );
+
+  return {
+    total: items.length,
+    synced: results.filter((r) => r.status === "synced").length,
+    failures: results.filter((r) => r.status !== "synced" && r.status !== "skipped"),
+  };
 });
 
 export const syncLatestTransactionsOnLogin = createServerFn().handler(async () => {

@@ -6,7 +6,8 @@ import { showToast } from "../../shared/toast";
 
 type PlaidLinkContextValue = {
   isLinkLoading: boolean;
-  openPlaidLink: () => Promise<void>;
+  /** Opens Plaid Link. Pass an item id to repair an existing connection (update mode). */
+  openPlaidLink: (plaidItemId?: number) => Promise<void>;
 };
 
 const PlaidLinkContext = createContext<PlaidLinkContextValue | null>(null);
@@ -14,6 +15,7 @@ const PlaidLinkContext = createContext<PlaidLinkContextValue | null>(null);
 export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
+  const [repairItemId, setRepairItemId] = useState<number | null>(null);
   const [isLinkLoading, setIsLinkLoading] = useState(false);
 
   const { open, ready } = usePlaidLink({
@@ -22,12 +24,12 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
       try {
         const institutionName = metadata?.institution?.name ?? undefined;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (exchangePublicToken as any)({
-          data: { publicToken, institutionName },
+        const result = await (exchangePublicToken as any)({
+          data: { publicToken, institutionName, itemId: repairItemId ?? undefined },
         });
         await router.invalidate();
         showToast({
-          title: "Account connected",
+          title: result?.repaired ? "Connection restored" : "Account connected",
           description: institutionName
             ? `${institutionName} is ready to sync.`
             : "Your bank is ready to sync.",
@@ -41,10 +43,12 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
       } finally {
         setIsLinkLoading(false);
         setToken(null);
+        setRepairItemId(null);
       }
     },
     onExit: () => {
       setToken(null);
+      setRepairItemId(null);
       setIsLinkLoading(false);
     },
   });
@@ -53,23 +57,30 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
     if (token && ready) open();
   }, [token, ready, open]);
 
-  const openPlaidLink = useCallback(async () => {
-    if (isLinkLoading) return;
+  const openPlaidLink = useCallback(
+    async (plaidItemId?: number) => {
+      if (isLinkLoading) return;
 
-    setIsLinkLoading(true);
-    try {
-      const linkToken = await createLinkToken();
-      setToken(linkToken);
-    } catch (error) {
-      setIsLinkLoading(false);
-      setToken(null);
-      showToast({
-        title: "Could not open Plaid Link",
-        description: error instanceof Error ? error.message : "Try again in a moment.",
-        tone: "danger",
-      });
-    }
-  }, [isLinkLoading]);
+      setIsLinkLoading(true);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { linkToken } = await (createLinkToken as any)({
+          data: plaidItemId ? { plaidItemId } : {},
+        });
+        setRepairItemId(plaidItemId ?? null);
+        setToken(linkToken);
+      } catch (error) {
+        setIsLinkLoading(false);
+        setToken(null);
+        showToast({
+          title: "Could not open Plaid Link",
+          description: error instanceof Error ? error.message : "Try again in a moment.",
+          tone: "danger",
+        });
+      }
+    },
+    [isLinkLoading],
+  );
 
   return (
     <PlaidLinkContext.Provider value={{ isLinkLoading, openPlaidLink }}>

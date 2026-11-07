@@ -7,12 +7,14 @@ export function ConnectionsList({
   isDisconnecting,
   isLinkLoading,
   onDisconnect,
+  onReconnect,
   onOpenPlaid,
 }: {
   connections: ConnectionsData;
   isDisconnecting: number | null;
   isLinkLoading: boolean;
   onDisconnect: (plaidItemId: number | null) => void;
+  onReconnect: (plaidItemId: number) => void;
   onOpenPlaid: () => void;
 }) {
   if (connections.length === 0) return null;
@@ -53,7 +55,7 @@ export function ConnectionsList({
                 icon={<RefreshCwIcon size={14} />}
                 variant="ghost"
                 size="sm"
-                onPress={onOpenPlaid}
+                onPress={() => onReconnect(connection.id)}
                 isLoading={false}
                 isDisabled={isLinkLoading}
               />

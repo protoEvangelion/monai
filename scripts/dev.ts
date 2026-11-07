@@ -14,23 +14,29 @@ const env = { ...process.env };
 /**
  * Credential modes (local):
  * - default / --sandbox → Plaid sandbox + sandbox/local DB (safe for demos)
- * - --production / --prod → Plaid production + production.db (real bank data)
+ * - --production / --prod → Plaid production + real data DB
  *
- * On Vercel, set PLAID_ENV=sandbox + TURSO_DATABASE_URL (+ TURSO_AUTH_TOKEN) explicitly.
+ * Real bank data (and its Plaid access tokens) live in Turso. Plaid tokens are
+ * environment-specific, so that DB can only be synced with production keys —
+ * sandbox keys make Plaid reject every stored item.
+ *
+ * On Vercel, set PLAID_ENV + PLAID_SECRET (+ TURSO_*) explicitly.
  * Never put PLAID_PRODUCTION_* on a public demo deployment.
  */
 if (mode === "production") {
-  env.DATABASE_URL = env.PLAID_PRODUCTION_DATABASE_URL ?? env.DATABASE_URL;
+  // Real bank data lives in Turso. Keep TURSO_* when configured so local and
+  // Vercel share one DB; only fall back to the local SQLite production file.
+  if (env.TURSO_DATABASE_URL) {
+    delete env.DATABASE_URL;
+  } else {
+    env.DATABASE_URL = env.PLAID_PRODUCTION_DATABASE_URL ?? env.DATABASE_URL;
+  }
   env.PLAID_ENV = env.PLAID_PRODUCTION_ENV ?? "production";
   env.PLAID_SECRET = env.PLAID_PRODUCTION_SECRET ?? env.PLAID_SECRET;
-  // Production mode is local-only real data — don't accidentally hit Turso demo DB.
-  delete env.TURSO_DATABASE_URL;
 } else {
-  // Prefer dedicated sandbox DB URL, then Turso demo DB, then default DATABASE_URL.
-  env.DATABASE_URL =
-    env.PLAID_SANDBOX_DATABASE_URL ??
-    env.TURSO_DATABASE_URL ??
-    env.DATABASE_URL;
+  // Sandbox mode stays local-only so sandbox keys never touch real bank rows.
+  delete env.TURSO_DATABASE_URL;
+  env.DATABASE_URL = env.PLAID_SANDBOX_DATABASE_URL ?? env.DATABASE_URL;
   env.PLAID_ENV = env.PLAID_SANDBOX_ENV ?? env.PLAID_ENV ?? "sandbox";
   env.PLAID_SECRET = env.PLAID_SANDBOX_SECRET ?? env.PLAID_SECRET;
 }
@@ -55,6 +61,13 @@ console.log(
 if (mode === "production" && env.PLAID_ENV === "production") {
   console.log(
     "[monai] WARNING: production Plaid + real DB — do not deploy these credentials to a public Vercel demo.",
+  );
+}
+
+if (mode === "sandbox" && process.env.TURSO_DATABASE_URL) {
+  console.log(
+    "[monai] TURSO_DATABASE_URL is set but ignored in sandbox mode. " +
+      "Run `bun run dev --production` to use the shared Turso bank data.",
   );
 }
 

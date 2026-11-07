@@ -26,11 +26,35 @@ export function AppHeader({
   const handleSync = () => {
     startSyncTransition(async () => {
       try {
-        await manualSyncFn();
+        const result = await manualSyncFn();
         await router.invalidate();
+
+        if (result.failures.length === 0) {
+          showToast({
+            title: "Sync complete",
+            description:
+              result.total > 1
+                ? `Updated ${result.synced} of ${result.total} institutions.`
+                : "Fetched the latest Plaid transactions.",
+          });
+          return;
+        }
+
+        const names = result.failures.map((f) => f.institution).join(", ");
+        const needsReconnect = result.failures.some((f) => f.status === "reconnect");
+        const isConfig = result.failures.some((f) => f.status === "config");
+
         showToast({
-          title: "Sync complete",
-          description: "Fetched the latest Plaid transactions.",
+          title:
+            result.synced > 0
+              ? `Synced ${result.synced} of ${result.total}`
+              : "Sync failed",
+          description: isConfig
+            ? result.failures.find((f) => f.status === "config")?.message
+            : needsReconnect
+              ? `${names} need${result.failures.length === 1 ? "s" : ""} you to sign in again. Reconnect on the Accounts page.`
+              : result.failures[0]?.message ?? "Could not sync transactions.",
+          tone: "danger",
         });
       } catch (error) {
         showToast({
