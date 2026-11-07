@@ -23,6 +23,28 @@
   justify-content: flex-start !important;
 }
 
+.mrt-table-paper .mrt-table-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none !important;
+  overflow: auto;
+}
+
+.mrt-table-paper .mrt-bottom-toolbar {
+  flex: 0 0 auto;
+  z-index: 2;
+}
+
+.mrt-table-paper :is(td, [class*="MRT_TableBodyCell"]):has([data-testid^="transaction-note-"]) {
+  align-items: center;
+}
+
+.mrt-table-paper .mantine-TextInput-root:has([data-testid^="transaction-note-"]) {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
 @source "../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
 
 @custom-variant dark (&:is(.dark *));

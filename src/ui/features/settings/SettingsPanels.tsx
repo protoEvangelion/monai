@@ -51,7 +51,7 @@ function GeneralSettingsPanel() {
         <h3 className="text-sm font-bold text-foreground">Automation</h3>
         <SettingRow
           title="AI auto-categorization"
-          description="Uses categorization rules on sync. Optional Chrome Nano AI is off unless VITE_ENABLE_BROWSER_AI=1."
+          description="Sync uses categorization rules. On your machine, AI Categorize runs the Cursor CLI. The deployed site still uses Chrome Nano."
           action={<StatusBadge>Rules</StatusBadge>}
         />
       </section>

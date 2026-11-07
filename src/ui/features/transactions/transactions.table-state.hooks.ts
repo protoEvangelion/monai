@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { PaginationState, Updater } from "@tanstack/react-table";
 import type {
   AmountRangeFilter,
@@ -74,12 +74,22 @@ export function useTransactionTableState({
     serverState.onQueryChange({ pageIndex: 0, search: debouncedTableSearch });
   }, [debouncedTableSearch, serverState?.onQueryChange, serverState?.search]);
 
+  const paginationRef = useRef(pagination);
+  paginationRef.current = pagination;
+
   const handlePaginationChange = (updater: Updater<PaginationState>) => {
-    setPagination((current) => {
-      const next = typeof updater === "function" ? updater(current) : updater;
-      serverState?.onQueryChange({ pageIndex: next.pageIndex });
-      return next;
-    });
+    const current = paginationRef.current;
+    const next = typeof updater === "function" ? updater(current) : updater;
+    setPagination(next);
+    if (
+      serverState &&
+      (next.pageIndex !== current.pageIndex || next.pageSize !== current.pageSize)
+    ) {
+      serverState.onQueryChange({
+        pageIndex: next.pageIndex,
+        pageSize: next.pageSize,
+      });
+    }
   };
 
   const handleAmountFilterChange = (value: AmountRangeFilter) => {

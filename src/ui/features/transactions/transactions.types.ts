@@ -15,7 +15,7 @@ export type Tx = {
   categoryId?: number | null;
   accountId?: number;
   category: { id: number; name: string; icon: string | null } | null;
-  rule?: { id: number; pattern: string } | null;
+  rule?: { id: number; pattern: string; amount?: number | null } | null;
 };
 
 export type CategoryGroup = {

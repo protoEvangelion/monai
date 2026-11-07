@@ -36,6 +36,7 @@ import {
 } from "./transactions.mantine-columns";
 import { CategoryTransactionsBulkBar } from "../categories/CategoryTransactionsBulkBar";
 import { DashboardAiCategorizeButton } from "./DashboardAiCategorizeButton";
+import { DashboardAmazonNotesButton } from "./DashboardAmazonNotesButton";
 import type { getCategories } from "../../../server/categories.fns";
 import {
   setTransactionsInternalTransfer,
@@ -167,7 +168,6 @@ export function ReviewTable({
   const [categorySaving, setCategorySaving] = useState(false);
   const [splitTransactionTarget, setSplitTransactionTarget] = useState<Tx | null>(null);
   const isCategoryVariant = variant === "category";
-  const isDashboardVariant = variant === "dashboard";
   const categoryColumnOrder = useMemo(
     () =>
       lockedCategoryFilter
@@ -359,7 +359,7 @@ export function ReviewTable({
     enableSorting: true,
     enableColumnFilters: true,
     enableGlobalFilter: false,
-    enablePagination: !isCategoryVariant,
+    enablePagination: true,
     enableRowSelection: true,
     enableSelectAll: true,
     enableDensityToggle: false,
@@ -407,7 +407,10 @@ export function ReviewTable({
     getSortedRowModel: getSortedRowModel(),
     manualFiltering: isServerMode,
     manualPagination: isServerMode,
-    rowCount: serverState?.total,
+    rowCount: serverState ? Number(serverState.total) || 0 : undefined,
+    pageCount: serverState
+      ? Math.max(1, Math.ceil((Number(serverState.total) || 0) / pagination.pageSize))
+      : undefined,
     autoResetPageIndex: false,
     mantineSelectAllCheckboxProps: {
       "aria-label": "Select transactions",
@@ -434,16 +437,19 @@ export function ReviewTable({
         boxShadow: "none",
         background: "transparent",
         display: "flex",
+        flex: "1 1 auto",
         flexDirection: "column",
         height: "100%",
         minHeight: 0,
+        overflow: "hidden",
       },
     },
     mantineTableContainerProps: {
       style: {
-        flex: 1,
+        flex: "1 1 auto",
         minHeight: 0,
-        maxHeight: "100%",
+        maxHeight: "none",
+        overflow: "auto",
         background: "transparent",
       },
     },
@@ -464,10 +470,12 @@ export function ReviewTable({
         "data-testid": `transaction-row-${row.original.id}`,
       }) as HTMLAttributes<HTMLTableRowElement>,
     positionToolbarAlertBanner: "none",
-    renderTopToolbarCustomActions:
-      isDashboardVariant && import.meta.env.VITE_ENABLE_BROWSER_AI === "1"
-        ? () => <DashboardAiCategorizeButton transactions={transactions} />
-        : undefined,
+    renderTopToolbarCustomActions: () => (
+      <div className="flex items-center gap-2">
+        <DashboardAiCategorizeButton transactions={transactions} />
+        <DashboardAmazonNotesButton />
+      </div>
+    ),
   });
 
   const { actionIds, aiTransactionCount, cappedTransactionIds, selectedIds } =

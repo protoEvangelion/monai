@@ -88,11 +88,9 @@ export function CategoriesScreen({
         </div>
         <div className="flex items-center gap-3 justify-self-start sm:justify-self-end">
           <Dropdown>
-            <DropdownTrigger>
-              <Button className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_16px_color-mix(in_oklch,var(--color-accent)_45%,transparent)] transition-all hover:brightness-95 hover:shadow-[0_0_22px_color-mix(in_oklch,var(--color-accent)_60%,transparent)] active:scale-95">
-                <CirclePlusIcon size={14} />
-                New
-              </Button>
+            <DropdownTrigger className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_16px_color-mix(in_oklch,var(--color-accent)_45%,transparent)] transition-all hover:brightness-95 hover:shadow-[0_0_22px_color-mix(in_oklch,var(--color-accent)_60%,transparent)] active:scale-95">
+              <CirclePlusIcon size={14} />
+              New
             </DropdownTrigger>
             <DropdownPopover>
               <DropdownMenu aria-label="Create actions">

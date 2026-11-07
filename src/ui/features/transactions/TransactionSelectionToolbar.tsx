@@ -4,7 +4,6 @@ import {
   DropdownMenu,
   DropdownPopover,
   DropdownTrigger,
-  Button,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -187,15 +186,11 @@ export function TransactionSelectionToolbar({
         </FloatingSelectionToolbarButton>
       ) : null}
       <Dropdown>
-        <DropdownTrigger>
-          <Button
-            isIconOnly
-            variant="ghost"
-            aria-label="Selected transaction actions"
-            className={floatingSelectionButtonClass()}
-          >
-            <MoreVerticalIcon size={21} />
-          </Button>
+        <DropdownTrigger
+          aria-label="Selected transaction actions"
+          className={floatingSelectionButtonClass()}
+        >
+          <MoreVerticalIcon size={21} />
         </DropdownTrigger>
         <DropdownPopover>
           <DropdownMenu aria-label="Selected transaction actions">

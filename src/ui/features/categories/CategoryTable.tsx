@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { formatCurrency } from "../../../lib/format";
 import { BudgetProgress } from "./BudgetProgress";
+import { INCOME_GROUP_ID } from "./categories.metrics";
 
 export type CategoryTableRow = {
   id: string;
@@ -125,6 +126,11 @@ export function CategoryTable({
           <BudgetProgress
             spent={row.original.spent}
             budget={row.original.budget}
+            tone={
+              row.original.kind === "group" && row.original.groupId === INCOME_GROUP_ID
+                ? "income"
+                : "spend"
+            }
           />
         ),
       }),
@@ -148,11 +154,74 @@ export function CategoryTable({
     getCoreRowModel: getCoreRowModel(),
   });
 
+  const modelRows = table.getRowModel().rows;
+  const incomeRow = modelRows.find(
+    (row) => row.original.kind === "group" && row.original.groupId === INCOME_GROUP_ID,
+  );
+  const bodyRows = modelRows.filter((row) => row.id !== incomeRow?.id);
+
+  const renderDataRow = (row: (typeof modelRows)[number]) => {
+    const item = row.original;
+    const selected = selectedRowId === item.id;
+    const hovered = hoveredRowId === item.id;
+    const rowSurfaceClass = selected
+      ? "bg-[color-mix(in_oklch,var(--color-accent)_12%,transparent)]"
+      : hovered
+        ? "bg-[color-mix(in_oklch,var(--color-accent)_16%,transparent)]"
+        : "";
+    const cells = row.getVisibleCells();
+    return (
+      <tr
+        key={row.id}
+        className="cursor-pointer"
+        onMouseEnter={() => setHoveredRowId(item.id)}
+        onMouseLeave={() =>
+          setHoveredRowId((prev) => (prev === item.id ? null : prev))
+        }
+        onClick={() => onRowClick(item)}
+      >
+        {cells.map((cell, ci) => (
+          <td
+            key={cell.id}
+            className={[
+              "px-3 py-2.5 align-middle transition-[background-color,border-color,color] duration-150",
+              rowSurfaceClass,
+              cell.column.id === "progress" ? "text-center" : "text-left",
+              ci === 0 ? "rounded-l-xl" : "",
+              ci === cells.length - 1 ? "rounded-r-xl" : "",
+            ].join(" ")}
+          >
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </td>
+        ))}
+      </tr>
+    );
+  };
+
+  const columnGroup = () => (
+    <colgroup>
+      <col className="w-[36%]" />
+      <col className="w-[14%]" />
+      <col className="w-[36%]" />
+      <col className="w-[14%]" />
+    </colgroup>
+  );
+
   return (
     <Card className="w-full min-w-0 overflow-hidden border border-divider/60 bg-content1 shadow-none">
       <CardContent className="p-0">
         <div className="overflow-hidden">
+          {incomeRow ? (
+            <table
+              aria-label="Income"
+              className="w-full table-fixed border-separate border-spacing-0"
+            >
+              {columnGroup()}
+              <tbody>{renderDataRow(incomeRow)}</tbody>
+            </table>
+          ) : null}
           <table className="w-full table-fixed border-separate border-spacing-0">
+            {columnGroup()}
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
@@ -178,54 +247,7 @@ export function CategoryTable({
                 </tr>
               ))}
             </thead>
-            <tbody>
-              {table.getRowModel().rows.map((row) => {
-                const item = row.original;
-                const selected = selectedRowId === item.id;
-                const hovered = hoveredRowId === item.id;
-                const rowSurfaceClass = selected
-                  ? "bg-[color-mix(in_oklch,var(--color-accent)_12%,transparent)]"
-                  : hovered
-                    ? "bg-[color-mix(in_oklch,var(--color-accent)_16%,transparent)]"
-                    : "";
-                const cells = row.getVisibleCells();
-                return (
-                  <tr
-                    key={row.id}
-                    className="cursor-pointer"
-                    onMouseEnter={() => setHoveredRowId(item.id)}
-                    onMouseLeave={() =>
-                      setHoveredRowId((prev) =>
-                        prev === item.id ? null : prev,
-                      )
-                    }
-                    onClick={() => onRowClick(item)}
-                  >
-                    {cells.map((cell, ci) => (
-                      <td
-                        key={cell.id}
-                        className={[
-                          "px-3 py-2.5 align-middle transition-[background-color,border-color,color] duration-150",
-                          rowSurfaceClass,
-                          cell.column.id === "progress"
-                            ? "text-center"
-                            : cell.column.id === "category"
-                              ? "text-left"
-                              : "text-left",
-                          ci === 0 ? "rounded-l-xl" : "",
-                          ci === cells.length - 1 ? "rounded-r-xl" : "",
-                        ].join(" ")}
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
+            <tbody>{bodyRows.map((row) => renderDataRow(row))}</tbody>
           </table>
         </div>
       </CardContent>

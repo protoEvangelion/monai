@@ -3,12 +3,20 @@ import { transactions, accounts, plaidItems } from "../db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 import { getAuthOrDevAuth } from "../lib/devAuth";
 import {
+  buildCategorizePrompt,
   isCatchAllCategory,
   isIncomeCategoryName,
   isTransferCategoryName,
   normalizeName,
+  parseTransactionCategoryMap,
   getAllowedLeafCats,
 } from "./categorize.utils";
+import {
+  CURSOR_MODEL_LABEL,
+  CURSOR_PROVIDER_LABEL,
+  cursorCategorizerIdleSeconds,
+  runCursorCategorizerCli,
+} from "../services/cursorCli";
 
 export type CategorizeTransactionsResult = {
   requestedCount: number;
@@ -370,6 +378,108 @@ export const applyAICategorization = createServerFn().handler(async (ctx) => {
     assignments?: Array<{ transactionId: number; category: string }>;
   };
   return applyAICategorizationForUser(userId, assignments ?? []);
+});
+
+/**
+ * Local-only AI categorize: rules first, then the Cursor Agent CLI (`agent`).
+ * Deployed production does not have the CLI, so this refuses to run there.
+ */
+/**
+ * Bun closes a request that sends no bytes for 10 seconds. The Cursor CLI
+ * thinks longer than that and writes nothing back until it is done, so we
+ * tell the local server this one request may stay quiet until the CLI finishes.
+ */
+async function allowLongCursorCategorizeRequest() {
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const request = getRequest() as Request & {
+      runtime?: {
+        bun?: {
+          server?: { timeout?: (request: Request, seconds: number) => void };
+        };
+      };
+    };
+    const extend = request.runtime?.bun?.server?.timeout;
+    if (!extend) {
+      console.warn("[categorize] could not find the Bun request timeout handle.");
+      return;
+    }
+    extend.call(request.runtime?.bun?.server, request, cursorCategorizerIdleSeconds());
+  } catch (error) {
+    console.warn(
+      "[categorize] could not extend the local request timeout:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+export async function runCursorAICategorizationForUser(
+  userId: string,
+  data: {
+    ids?: number[];
+    limit?: number;
+    scope?: "all" | "review";
+    searchQuery?: string;
+  } = {},
+) {
+  if (process.env.VERCEL) {
+    throw new Error("Cursor CLI categorization only runs on your local machine.");
+  }
+
+  await allowLongCursorCategorizeRequest();
+
+  const prepared = await prepareAICategorizationForUser(userId, data);
+  if (!prepared.transactions.length) {
+    return {
+      requestedCount: 0,
+      updatedCount: 0,
+      skippedCount: prepared.skippedByRulesOrType,
+      skipReasons: ["Nothing left after rules."],
+      provider: CURSOR_PROVIDER_LABEL,
+    };
+  }
+
+  const { prompt } = buildCategorizePrompt(prepared.transactions, prepared.categories);
+  console.log(
+    [
+      "[categorize] batch request",
+      `  provider: ${CURSOR_PROVIDER_LABEL}`,
+      `  model: ${CURSOR_MODEL_LABEL}`,
+      `  categories: ${prepared.categories.length}`,
+      `  transactionRows: ${prepared.transactions.length}`,
+    ].join("\n"),
+  );
+
+  const raw = await runCursorCategorizerCli({ prompt });
+  const byTransactionId = parseTransactionCategoryMap(raw);
+  console.log(
+    [
+      "[categorize] batch response",
+      `  provider: ${CURSOR_PROVIDER_LABEL}`,
+      `  model: ${CURSOR_MODEL_LABEL}`,
+      `  categorizedRows: ${byTransactionId.size}`,
+    ].join("\n"),
+  );
+
+  const assignments = [...byTransactionId.entries()].map(([transactionId, category]) => ({
+    transactionId,
+    category,
+  }));
+  const applied = await applyAICategorizationForUser(userId, assignments);
+  return { ...applied, provider: CURSOR_PROVIDER_LABEL };
+}
+
+export const runCursorAICategorization = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = ((ctx as any)?.data ?? {}) as {
+    ids?: number[];
+    limit?: number;
+    scope?: "all" | "review";
+    searchQuery?: string;
+  };
+  return runCursorAICategorizationForUser(userId, data);
 });
 
 /**

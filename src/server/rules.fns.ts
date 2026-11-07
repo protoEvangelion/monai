@@ -7,9 +7,17 @@ import {
   plaidItems,
   transactions,
 } from "../db/schema";
-import { rulePatternMatches } from "./rules.match";
+import { ruleMatches } from "./rules.match";
 
 type TransactionType = "regular" | "income" | "transfer";
+
+/** Blank means "any amount". Otherwise store absolute dollars rounded to cents. */
+function parseRuleAmount(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const raw = typeof value === "number" ? value : Number(String(value).replace(/[$,\s]/g, ""));
+  if (!Number.isFinite(raw)) throw new Error("Amount must be a dollar value");
+  return Math.round(Math.abs(raw) * 100) / 100;
+}
 
 async function getUserAccountIds(db: typeof import("../db").db, userId: string) {
   const userPlaidItems = await db.query.plaidItems.findMany({
@@ -52,7 +60,11 @@ export async function applyCategorizationRules(
     if (tx.isReviewed && tx.categoryId != null && tx.ruleId == null) continue;
 
     const rule = rules.find((item) =>
-      rulePatternMatches(item.pattern, tx.merchantName, tx.name),
+      ruleMatches(item, {
+        merchantName: tx.merchantName,
+        name: tx.name,
+        amount: tx.amount,
+      }),
     );
     if (!rule) continue;
     matched += 1;
@@ -100,13 +112,15 @@ export const createCategorizationRule = createServerFn().handler(async (ctx) => 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = ((ctx as any).data ?? {}) as {
     pattern?: string;
+    amount?: number | string | null;
     categoryId?: number | null;
     transactionType?: TransactionType;
     applyToExisting?: boolean;
   };
 
   const pattern = String(data.pattern ?? "").trim();
-  if (!pattern) throw new Error("Pattern is required");
+  const amount = parseRuleAmount(data.amount);
+  if (!pattern && amount == null) throw new Error("Add match text or an amount");
 
   const transactionType: TransactionType = data.transactionType ?? "regular";
   let categoryId = data.categoryId ?? null;
@@ -126,6 +140,7 @@ export const createCategorizationRule = createServerFn().handler(async (ctx) => 
     .values({
       userId,
       pattern,
+      amount,
       categoryId,
       transactionType,
       updatedAt: new Date(),
@@ -148,6 +163,7 @@ export const updateCategorizationRule = createServerFn().handler(async (ctx) => 
   const data = ((ctx as any).data ?? {}) as {
     id: number;
     pattern?: string;
+    amount?: number | string | null;
     categoryId?: number | null;
     transactionType?: TransactionType;
     applyToExisting?: boolean;
@@ -159,7 +175,8 @@ export const updateCategorizationRule = createServerFn().handler(async (ctx) => 
   if (!existing) throw new Error("Rule not found");
 
   const pattern = data.pattern != null ? String(data.pattern).trim() : existing.pattern;
-  if (!pattern) throw new Error("Pattern is required");
+  const amount = data.amount !== undefined ? parseRuleAmount(data.amount) : existing.amount;
+  if (!pattern && amount == null) throw new Error("Add match text or an amount");
 
   const transactionType: TransactionType = data.transactionType ?? existing.transactionType;
   let categoryId =
@@ -179,6 +196,7 @@ export const updateCategorizationRule = createServerFn().handler(async (ctx) => 
     .update(categorizationRules)
     .set({
       pattern,
+      amount,
       categoryId,
       transactionType,
       updatedAt: new Date(),

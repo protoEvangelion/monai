@@ -8,6 +8,7 @@ import {
   DropdownPopover,
   Button,
 } from "@heroui/react";
+import { buttonVariants } from "@heroui/styles";
 import {
   Loader2Icon,
   MoreVerticalIcon,
@@ -149,21 +150,16 @@ export function CategoryDetailPanel({
             <div className="flex shrink-0 items-center gap-2">
               {isIncome ? null : !child ? (
                 <Dropdown>
-                  <DropdownTrigger>
-                    <Button
-                      isIconOnly
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Group actions"
-                      className="text-default-400"
-                      isDisabled={deletingId === group.id}
-                    >
-                      {deletingId === group.id ? (
-                        <Loader2Icon size={14} className="animate-spin" />
-                      ) : (
-                        <MoreVerticalIcon size={14} />
-                      )}
-                    </Button>
+                  <DropdownTrigger
+                    isDisabled={deletingId === group.id}
+                    aria-label="Group actions"
+                    className={`${buttonVariants({ variant: "ghost", size: "sm", isIconOnly: true })} text-default-400`}
+                  >
+                    {deletingId === group.id ? (
+                      <Loader2Icon size={14} className="animate-spin" />
+                    ) : (
+                      <MoreVerticalIcon size={14} />
+                    )}
                   </DropdownTrigger>
                   <DropdownPopover>
                     <DropdownMenu aria-label="Group actions">
@@ -188,21 +184,16 @@ export function CategoryDetailPanel({
                 </Dropdown>
               ) : (
                 <Dropdown>
-                  <DropdownTrigger>
-                    <Button
-                      isIconOnly
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Category actions"
-                      className="text-default-400"
-                      isDisabled={deletingId === child.id}
-                    >
-                      {deletingId === child.id ? (
-                        <Loader2Icon size={14} className="animate-spin" />
-                      ) : (
-                        <MoreVerticalIcon size={14} />
-                      )}
-                    </Button>
+                  <DropdownTrigger
+                    isDisabled={deletingId === child.id}
+                    aria-label="Category actions"
+                    className={`${buttonVariants({ variant: "ghost", size: "sm", isIconOnly: true })} text-default-400`}
+                  >
+                    {deletingId === child.id ? (
+                      <Loader2Icon size={14} className="animate-spin" />
+                    ) : (
+                      <MoreVerticalIcon size={14} />
+                    )}
                   </DropdownTrigger>
                   <DropdownPopover>
                     <DropdownMenu aria-label="Category actions">

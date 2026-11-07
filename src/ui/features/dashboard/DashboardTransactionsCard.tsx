@@ -12,12 +12,12 @@ export function DashboardTransactionsCard({
   transactions: DashboardTransactionsData;
 }) {
   const reviewTransactions = useMemo(
-    () => transactions.filter((tx) => !tx.isReviewed).slice(0, 100),
+    () => transactions.filter((tx) => !tx.isReviewed),
     [transactions],
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card">
+    <div className="flex h-[min(40rem,70vh)] min-h-[24rem] flex-col overflow-hidden rounded-2xl bg-card xl:h-full">
       <div className="flex items-center justify-between border-b border-divider/30 px-6 py-4">
         <h5 className="font-bold text-sm">Transactions to review</h5>
         <Link
@@ -27,7 +27,7 @@ export function DashboardTransactionsCard({
           View all <ChevronRightIcon size={14} />
         </Link>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <ReviewTable transactions={reviewTransactions} categories={categories} variant="dashboard" />
       </div>
     </div>

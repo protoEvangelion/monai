@@ -37,18 +37,18 @@ export function DashboardScreen({
   });
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-stretch">
-      <div className="xl:col-span-2 h-full self-stretch">
-        <NetWorthCard
-          hasAccounts={accounts.length > 0}
-          netWorth={metrics.netWorth}
-          totalAssets={metrics.totalAssets}
-          totalDebts={metrics.totalDebts}
-          chartData={metrics.netWorthChartData}
-        />
-      </div>
+    <div className="flex flex-col gap-5 xl:min-h-0 xl:flex-1">
+      <div className="grid shrink-0 grid-cols-1 items-stretch gap-5 xl:grid-cols-3">
+        <div className="xl:col-span-2">
+          <NetWorthCard
+            hasAccounts={accounts.length > 0}
+            netWorth={metrics.netWorth}
+            totalAssets={metrics.totalAssets}
+            totalDebts={metrics.totalDebts}
+            chartData={metrics.netWorthChartData}
+          />
+        </div>
 
-      <div className="h-full self-stretch">
         <BudgetSummaryCard
           totalBudgeted={metrics.totalBudgeted}
           totalSpent={metrics.totalSpent}
@@ -61,18 +61,15 @@ export function DashboardScreen({
         />
       </div>
 
-      <div className="xl:col-span-2 h-full self-stretch">
-        <DashboardTransactionsCard transactions={transactions} categories={categories} />
-      </div>
+      <div className="grid min-h-[24rem] grid-cols-1 items-stretch gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-3 xl:grid-rows-[minmax(0,1fr)]">
+        <div className="flex h-full min-h-0 flex-col xl:col-span-2">
+          <DashboardTransactionsCard transactions={transactions} categories={categories} />
+        </div>
 
-      <div className="h-full self-stretch">
-        <TopCategoriesCard topGroups={metrics.topGroups} />
-      </div>
-
-      <div className="hidden xl:block xl:col-span-2" aria-hidden />
-
-      <div>
-        <UpcomingPaymentsCard />
+        <div className="flex min-h-0 flex-col gap-5 overflow-y-auto">
+          <TopCategoriesCard topGroups={metrics.topGroups} />
+          <UpcomingPaymentsCard />
+        </div>
       </div>
     </div>
   );

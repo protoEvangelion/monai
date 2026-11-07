@@ -35,13 +35,14 @@ type Match = {
 function parseArgv(argv: string[]) {
   const dryRun = argv.includes("--dry-run");
   const listTargetsOnly = argv.includes("--list-targets");
-  const includeReviewed = argv.includes("--include-reviewed");
+  const unreviewedOnly = argv.includes("--unreviewed-only");
   const targetsIdx = argv.indexOf("--targets");
   const targets = parseAmazonTargets(targetsIdx >= 0 ? argv[targetsIdx + 1] : "all");
   const reserved = new Set<string>([
     "--dry-run",
     "--list-targets",
     "--include-reviewed",
+    "--unreviewed-only",
     "--targets",
   ]);
   if (targetsIdx >= 0) reserved.add(argv[targetsIdx + 1] ?? "");
@@ -49,10 +50,10 @@ function parseArgv(argv: string[]) {
   const scrapePath =
     positional[0] ?? path.resolve(process.cwd(), "data/amazon-payments-scraped.json");
 
-  return { dryRun, listTargetsOnly, includeReviewed, scrapePath, targets };
+  return { dryRun, listTargetsOnly, scrapePath, targets, unreviewedOnly };
 }
 
-const { dryRun, listTargetsOnly, includeReviewed, scrapePath, targets } = parseArgv(
+const { dryRun, listTargetsOnly, scrapePath, targets, unreviewedOnly } = parseArgv(
   process.argv.slice(2),
 );
 
@@ -81,11 +82,11 @@ const worklist = db
       )
       and (t.note is null or trim(t.note) = '')
       and t.amount > 0
-      ${includeReviewed ? "" : "and t.is_reviewed = 0"}
+      and (? = 0 or t.is_reviewed = 0)
     order by t.date desc
   `,
   )
-  .all() as AmazonWorklistTx[];
+  .all(unreviewedOnly ? 1 : 0) as AmazonWorklistTx[];
 
 const targetedWorklist = filterWorklistByTargets(worklist, targets);
 
@@ -94,7 +95,7 @@ if (listTargetsOnly) {
     JSON.stringify(
       {
         targets,
-        includeReviewed,
+        unreviewedOnly,
         worklist: worklist.length,
         matchedTargets: targetedWorklist.length,
         transactions: targetedWorklist.map((tx) => ({
@@ -184,7 +185,7 @@ console.log(
     {
       scrapePath,
       targets,
-      includeReviewed,
+      unreviewedOnly,
       worklist: worklist.length,
       targetedWorklist: targetedWorklist.length,
       matched: updates.length,

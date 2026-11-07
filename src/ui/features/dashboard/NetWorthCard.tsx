@@ -116,6 +116,7 @@ export function NetWorthCard({
                 key={item}
                 type="button"
                 onClick={() => setRange(item)}
+                aria-pressed={item === range}
                 className={[
                   "rounded-full px-2.5 py-1 text-[10px] font-bold",
                   item === range

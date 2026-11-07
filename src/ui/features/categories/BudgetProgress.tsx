@@ -1,19 +1,26 @@
 export function BudgetProgress({
   spent,
   budget,
+  tone = "spend",
 }: {
   spent: number;
   budget: number;
+  tone?: "spend" | "income";
 }) {
   const isZeroBudgetOver = budget <= 0 && spent > 0;
   const rawPercent = budget > 0 ? (spent / budget) * 100 : spent > 0 ? 100 : 0;
   const clampedPercent = Math.max(0, Math.min(rawPercent, 100));
+  // Income over the plan is the goal, so that fill stays green. Spending over budget stays red.
   const fillClass =
-    isZeroBudgetOver || rawPercent > 100
-      ? "bg-danger"
-      : rawPercent >= 50
-        ? "bg-warning"
-        : "bg-success";
+    tone === "income"
+      ? rawPercent >= 100 || isZeroBudgetOver
+        ? "bg-success"
+        : "bg-[#0ea5e9]"
+      : isZeroBudgetOver || rawPercent > 100
+        ? "bg-danger"
+        : rawPercent >= 50
+          ? "bg-warning"
+          : "bg-success";
 
   return (
     <div className="h-2 w-full overflow-hidden rounded-full border border-default-400/60 bg-default-300/90 shadow-inner">

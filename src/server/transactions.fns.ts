@@ -216,7 +216,7 @@ export const getTransactionsPage = createServerFn().handler(async (ctx) => {
       account,
       category,
       rule: rule
-        ? { id: rule.id, pattern: rule.pattern }
+        ? { id: rule.id, pattern: rule.pattern, amount: rule.amount }
         : null,
     })),
     pageIndex: query.pageIndex,

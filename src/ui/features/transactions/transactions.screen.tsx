@@ -32,7 +32,7 @@ export function TransactionsScreen({
   transactionsPage: TransactionsPageData;
 }) {
   return (
-    <div className="flex max-h-[calc(100dvh-7.5rem)] min-h-[28rem] flex-col overflow-hidden rounded-3xl border border-divider/60 bg-background shadow-sm">
+    <div className="flex h-[calc(100dvh-7.5rem)] min-h-[28rem] flex-col overflow-hidden rounded-3xl border border-divider/60 bg-background shadow-sm">
       <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-divider/60 bg-background/90 px-6 backdrop-blur-xl">
         <h1 className="text-lg font-bold">Transactions</h1>
         <Link

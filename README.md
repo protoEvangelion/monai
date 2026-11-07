@@ -61,7 +61,7 @@ cp .env.example .env.local
 | `PLAID_ENV` | `sandbox` for demos (never `production` on public Vercel) |
 | `DATABASE_URL` | Local: `file:./data/dev.db` |
 | `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | [Turso](https://turso.tech) — required for Vercel |
-| Chrome Prompt API | AI Categorize uses on-device Gemini Nano in Chrome (no server LLM / Cursor) |
+| Cursor CLI (`agent`) | Local AI Categorize. Deployed site still uses Chrome Gemini Nano |
 
 ### 3. Set up the database
 
@@ -169,9 +169,9 @@ historical_balances → daily snapshots for net worth chart
 
 ## 🤖 AI Auto-Categorization
 
-Sync applies **categorization rules** only (no server LLM / Cursor CLI).
+Sync applies **categorization rules** only.
 
-Optional Chrome on-device Gemini Nano (“AI Categorize”) is **off by default**. Set `VITE_ENABLE_BROWSER_AI=1` locally if you want to experiment — not recommended for the public demo yet.
+On your machine, **AI Categorize** runs the Cursor Agent CLI (`agent`). Log in once with `agent login`, or set `CURSOR_API_KEY`. The deployed site cannot run that CLI, so the button there still uses Chrome Gemini Nano.
 
 ---
 

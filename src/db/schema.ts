@@ -99,6 +99,8 @@ export const categorizationRules = sqliteTable(
     id: integer().primaryKey({ autoIncrement: true }),
     userId: text("user_id").notNull(),
     pattern: text().notNull(),
+    /** Absolute dollars. Null matches any amount. */
+    amount: real("amount"),
     categoryId: integer("category_id").references(() => categories.id),
     transactionType: text("transaction_type", { enum: ["regular", "income", "transfer"] })
       .notNull()

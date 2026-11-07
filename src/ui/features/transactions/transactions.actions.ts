@@ -5,6 +5,7 @@ import { AI_CATEGORIZE_MAX_TRANSACTIONS } from "../../../server/plaid.sync.fns";
 import {
   applyAICategorization,
   prepareAICategorization,
+  runCursorAICategorization,
 } from "../../../server/categorize.fns";
 import {
   beginBrowserAiSession,
@@ -35,6 +36,8 @@ export function useTransactionReviewActions({
   const router = useRouter();
   const prepareAICategorizeFn = useServerFn(prepareAICategorization);
   const applyAICategorizeFn = useServerFn(applyAICategorization);
+  const runCursorAICategorizeFn = useServerFn(runCursorAICategorization);
+  const useLocalCursorCli = import.meta.env.DEV;
   const [isAICategorizing, startAITransition] = useTransition();
   const [isSplitting, startSplitTransition] = useTransition();
 
@@ -54,6 +57,54 @@ export function useTransactionReviewActions({
   const handleAICategorize = () => {
     if (!actionIds.length) return;
     const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
+
+    if (useLocalCursorCli) {
+      startAITransition(async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = (await (runCursorAICategorizeFn as any)({
+            data: {
+              ids: idsToCategorize,
+              limit: AI_CATEGORIZE_MAX_TRANSACTIONS,
+            },
+          })) as {
+            updatedCount?: number;
+            skippedCount?: number;
+            skipReasons?: string[];
+          };
+
+          if ((result?.updatedCount ?? 0) === 0) {
+            const reason =
+              Array.isArray(result?.skipReasons) && result.skipReasons.length
+                ? result.skipReasons.slice(0, 3).join("; ")
+                : "No matching categories were applied.";
+            showToast({
+              title: "Nothing was categorized",
+              description: reason,
+              tone: "danger",
+            });
+          } else {
+            showToast({
+              title: `Categorized ${result.updatedCount} transactions`,
+              description:
+                actionIds.length > AI_CATEGORIZE_MAX_TRANSACTIONS
+                  ? "Run AI Categorize again to continue through the remaining transactions."
+                  : "Used the Cursor CLI on this machine.",
+            });
+          }
+
+          resetSelection();
+          void router.invalidate();
+        } catch (error) {
+          showToast({
+            title: "AI categorization failed",
+            description: getErrorMessage(error),
+            tone: "danger",
+          });
+        }
+      });
+      return;
+    }
 
     // Start model create in the same turn as the click — Chrome requires a user
     // gesture when Gemini Nano still needs to download.

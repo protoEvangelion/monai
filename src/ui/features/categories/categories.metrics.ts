@@ -208,12 +208,14 @@ function groupBudgetForMonth({
 
 export function createMonthlySpendingData({
   budgets,
+  incomeCategoryIds,
   selectedChild,
   selectedGroup,
   transactions,
   viewDate,
 }: {
   budgets: LoadedMonthlyBudget[];
+  incomeCategoryIds?: Set<number>;
   selectedChild: CategoryViewChild | null;
   selectedGroup: CategoryViewGroup | null;
   transactions: LoadedTransaction[];
@@ -230,7 +232,8 @@ export function createMonthlySpendingData({
   transactions.forEach((tx) => {
     const month = getMonthKey(tx.date);
     if (isIncome) {
-      if (tx.transactionType !== "income") return;
+      const categorizedIncome = tx.categoryId != null && incomeCategoryIds?.has(tx.categoryId);
+      if (tx.transactionType !== "income" && !categorizedIncome) return;
       spentByMonth.set(month, (spentByMonth.get(month) ?? 0) + Math.abs(tx.amount));
       return;
     }

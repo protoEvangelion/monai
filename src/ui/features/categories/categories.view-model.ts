@@ -7,6 +7,7 @@ import {
   createCategoryYearMetrics,
   createCategoryTableRows,
   createMonthlySpendingData,
+  INCOME_GROUP_ID,
   type CategoryViewGroup,
 } from "./categories.metrics";
 import { centsToDollars, getMonthKey, isSameMonth } from "./categories.utils";
@@ -101,16 +102,18 @@ export function useCategoriesViewModel({
       ),
     [budgetedMonthTransactions, incomeCategoryIds],
   );
-  const actualIncome = useMemo(
+  const incomeTransactions = useMemo(
     () =>
-      budgetedMonthTransactions
-        .filter(
-          (tx) =>
-            tx.transactionType === "income" ||
-            (tx.categoryId && incomeCategoryIds.has(tx.categoryId)),
-        )
-        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
+      budgetedMonthTransactions.filter(
+        (tx) =>
+          tx.transactionType === "income" ||
+          (tx.categoryId != null && incomeCategoryIds.has(tx.categoryId)),
+      ),
     [budgetedMonthTransactions, incomeCategoryIds],
+  );
+  const actualIncome = useMemo(
+    () => incomeTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
+    [incomeTransactions],
   );
 
   const categoryMetrics = useMemo(
@@ -161,6 +164,29 @@ export function useCategoriesViewModel({
     [allocationByCategoryId, categoryMetrics, groups],
   );
 
+  const displayGroups = useMemo<CategoryViewGroup[]>(() => {
+    const incomeGroup: CategoryViewGroup = {
+      id: INCOME_GROUP_ID,
+      userId: groups[0]?.userId ?? "",
+      name: "Income",
+      icon: "💵",
+      budgetAmount: expectedIncome,
+      parentId: null,
+      children: [],
+      spent: actualIncome,
+      budget: expectedIncome,
+      txCount: incomeTransactions.length,
+      activeChildren: 0,
+      transactions: incomeTransactions
+        .slice()
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    };
+    return [
+      incomeGroup,
+      ...derivedGroups.filter((group) => group.name.toLowerCase() !== "income"),
+    ];
+  }, [actualIncome, derivedGroups, expectedIncome, groups, incomeTransactions]);
+
   const totals = useMemo(() => {
     const expenseGroups = derivedGroups.filter((group) => group.name.toLowerCase() !== "income");
     const totalSpent = expenseGroups.reduce((sum, group) => sum + group.spent, 0);
@@ -174,16 +200,16 @@ export function useCategoriesViewModel({
   }, [derivedGroups, monthlyBudget]);
 
   useEffect(() => {
-    if (!derivedGroups.length) {
+    if (!displayGroups.length) {
       setSelectedGroupId(null);
       setSelectedChildId(null);
       setDetailOpen(false);
       return;
     }
-    if (!derivedGroups.some((group) => group.id === selectedGroupId)) {
-      setSelectedGroupId(derivedGroups[0].id);
+    if (!displayGroups.some((group) => group.id === selectedGroupId)) {
+      setSelectedGroupId(displayGroups[0].id);
     }
-  }, [derivedGroups, selectedGroupId]);
+  }, [displayGroups, selectedGroupId]);
 
   useEffect(() => {
     setExpandedGroupIds((prev) => {
@@ -218,12 +244,13 @@ export function useCategoriesViewModel({
 
   useEffect(() => {
     if (!selectedCategoryKey) return;
-    const [kind, rawId] = selectedCategoryKey.split("-");
-    const id = Number(rawId);
+    const separator = selectedCategoryKey.indexOf("-");
+    const kind = separator === -1 ? selectedCategoryKey : selectedCategoryKey.slice(0, separator);
+    const id = Number(separator === -1 ? "" : selectedCategoryKey.slice(separator + 1));
     if (!Number.isFinite(id)) return;
 
     if (kind === "group") {
-      const group = derivedGroups.find((item) => item.id === id);
+      const group = displayGroups.find((item) => item.id === id);
       if (!group) return;
       setSelectedGroupId(group.id);
       setSelectedChildId(null);
@@ -238,10 +265,10 @@ export function useCategoriesViewModel({
       setSelectedChildId(id);
       setDetailOpen(true);
     }
-  }, [derivedGroups, selectedCategoryKey]);
+  }, [displayGroups, selectedCategoryKey]);
 
   const selectedGroup =
-    derivedGroups.find((group) => group.id === selectedGroupId) ?? derivedGroups[0] ?? null;
+    displayGroups.find((group) => group.id === selectedGroupId) ?? displayGroups[0] ?? null;
   const selectedChild = selectedGroup?.children.find((child) => child.id === selectedChildId) ?? null;
   const monthLabel = new Date(viewDate).toLocaleDateString("en-US", {
     month: "short",
@@ -251,12 +278,13 @@ export function useCategoriesViewModel({
     () =>
       createMonthlySpendingData({
         budgets,
+        incomeCategoryIds,
         selectedChild,
         selectedGroup,
         transactions,
         viewDate,
       }),
-    [budgets, selectedChild, selectedGroup, transactions, viewDate],
+    [budgets, incomeCategoryIds, selectedChild, selectedGroup, transactions, viewDate],
   );
   const yearMetrics = useMemo(() => createCategoryYearMetrics(chartData), [chartData]);
 
@@ -283,8 +311,8 @@ export function useCategoriesViewModel({
         : null;
 
   const tableRows = useMemo(
-    () => createCategoryTableRows({ derivedGroups, expandedGroupIds }),
-    [derivedGroups, expandedGroupIds],
+    () => createCategoryTableRows({ derivedGroups: displayGroups, expandedGroupIds }),
+    [displayGroups, expandedGroupIds],
   );
 
   const openDetailsForRow = useCallback((item: CategoryTableRow) => {

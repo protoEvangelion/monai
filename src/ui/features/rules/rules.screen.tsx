@@ -9,6 +9,7 @@ import {
   getCategorizationRules,
 } from "../../../server/rules.fns";
 import { getCategories } from "../../../server/categories.fns";
+import { formatCurrency } from "../../../lib/format";
 import { showToast } from "../../shared/toast";
 
 type RuleRow = Awaited<ReturnType<typeof getCategorizationRules>>[number];
@@ -25,6 +26,7 @@ function RuleForm({
   initial?: {
     id?: number;
     pattern: string;
+    amount: number | null;
     categoryId: number | null;
     transactionType: TransactionType;
   };
@@ -32,6 +34,9 @@ function RuleForm({
   onSaved: () => void;
 }) {
   const [pattern, setPattern] = useState(initial?.pattern ?? "");
+  const [amount, setAmount] = useState(
+    initial?.amount != null ? String(initial.amount) : "",
+  );
   const [transactionType, setTransactionType] = useState<TransactionType>(
     initial?.transactionType ?? "regular",
   );
@@ -56,6 +61,7 @@ function RuleForm({
       try {
         const payload = {
           pattern: pattern.trim(),
+          amount: amount.trim() === "" ? null : amount.trim(),
           transactionType,
           categoryId: transactionType === "regular" ? Number(categoryId) || null : null,
           applyToExisting: true,
@@ -95,7 +101,23 @@ function RuleForm({
           className="h-11 w-full rounded-xl border border-divider bg-background px-3 text-sm font-semibold outline-none focus:border-primary"
         />
         <p className="mt-1 text-xs text-default-400">
-          Fuzzy-matches merchant names on future (and existing) transactions.
+          Matches merchant text without caring about capitalization. Leave blank if you only want an amount.
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+          Amount
+        </label>
+        <input
+          value={amount}
+          inputMode="decimal"
+          onChange={(event) => setAmount(event.target.value)}
+          placeholder="Any amount"
+          className="h-11 w-full rounded-xl border border-divider bg-background px-3 text-sm font-semibold outline-none focus:border-primary"
+        />
+        <p className="mt-1 text-xs text-default-400">
+          Optional. When set, the transaction must be this many dollars, whether money in or money out.
         </p>
       </div>
 
@@ -145,7 +167,7 @@ function RuleForm({
           variant="primary"
           size="sm"
           onPress={save}
-          isDisabled={pending || !pattern.trim()}
+          isDisabled={pending || (!pattern.trim() && !amount.trim())}
         >
           {pending ? <Loader2Icon size={14} className="animate-spin" /> : null}
           {initial?.id ? "Save" : "Create rule"}
@@ -218,7 +240,7 @@ export function RulesScreen({
           categories={categories}
           initial={
             initialPattern
-              ? { pattern: initialPattern, categoryId: null, transactionType: "regular" }
+              ? { pattern: initialPattern, amount: null, categoryId: null, transactionType: "regular" }
               : undefined
           }
           onCancel={() => setCreating(false)}
@@ -244,6 +266,7 @@ export function RulesScreen({
                     initial={{
                       id: rule.id,
                       pattern: rule.pattern,
+                      amount: rule.amount,
                       categoryId: rule.categoryId,
                       transactionType: rule.transactionType,
                     }}
@@ -260,7 +283,10 @@ export function RulesScreen({
                   className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">“{rule.pattern}”</div>
+                    <div className="truncate text-sm font-semibold">
+                      {rule.pattern ? `“${rule.pattern}”` : "Any merchant"}
+                      {rule.amount != null ? ` · ${formatCurrency(rule.amount)}` : ""}
+                    </div>
                     <div className="text-xs text-default-400">
                       {rule.transactionType === "regular"
                         ? `${rule.category?.icon ?? ""} ${rule.category?.name ?? "Category"}`.trim()

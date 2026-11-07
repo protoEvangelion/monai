@@ -1,3 +1,4 @@
+import { Tooltip } from "@mantine/core";
 import {
   ArrowDownCircleIcon,
   CheckIcon,
@@ -7,8 +8,16 @@ import {
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { formatCurrency } from "../../../lib/format";
 import type { CategoryGroup, Tx } from "./transactions.types";
 import { transactionTypeBadgeClass, transactionTypeLabel } from "./transactions.utils";
+
+function ruleHoverLabel(rule: NonNullable<Tx["rule"]>) {
+  const parts: string[] = [];
+  if (rule.pattern.trim()) parts.push(`“${rule.pattern.trim()}”`);
+  if (rule.amount != null) parts.push(formatCurrency(rule.amount));
+  return parts.length ? `Matched rule ${parts.join(" · ")}` : "Matched rule";
+}
 
 export function TransactionCategoryCell({
   catSearch,
@@ -67,7 +76,7 @@ export function TransactionCategoryCell({
           />
           {tx.rule ? (
             <div className="border-b border-[#0ea5e9]/40 bg-[#0ea5e9]/10 px-4 py-2 text-xs font-semibold text-[#0284c7]">
-              Auto-categorized by rule “{tx.rule.pattern}”
+              {ruleHoverLabel(tx.rule)}
             </div>
           ) : null}
           <div className="border-b border-divider px-1.5 py-1.5">
@@ -157,42 +166,46 @@ export function TransactionCategoryCell({
     </div>
   ) : null;
 
+  const categoryButton =
+    tx.transactionType === "regular" ? (
+      <button
+        type="button"
+        className={[
+          "inline-flex max-w-36 cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold uppercase transition-opacity hover:opacity-80",
+          tx.rule ? "border border-dashed border-[#0ea5e9]" : "border border-transparent",
+        ].join(" ")}
+        style={{ backgroundColor: `${color}22`, color }}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onPickerTxIdChange(tx.id);
+        }}
+      >
+        <span>{tx.category?.icon ?? "❓"}</span>
+        <span className="truncate">{tx.category?.name ?? "Uncategorized"}</span>
+      </button>
+    ) : (
+      <button
+        type="button"
+        className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase transition-opacity hover:opacity-80 ${transactionTypeBadgeClass(tx.transactionType)}`}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onPickerTxIdChange(tx.id);
+        }}
+      >
+        {transactionTypeLabel(tx.transactionType)}
+      </button>
+    );
+
   return (
     <>
-      {tx.transactionType === "regular" ? (
-        <button
-          type="button"
-          title={
-            tx.rule
-              ? `Auto-categorized by rule “${tx.rule.pattern}”`
-              : undefined
-          }
-          className={[
-            "inline-flex max-w-36 cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold uppercase transition-opacity hover:opacity-80",
-            tx.rule ? "border border-dashed border-[#0ea5e9]" : "border border-transparent",
-          ].join(" ")}
-          style={{ backgroundColor: `${color}22`, color }}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onPickerTxIdChange(tx.id);
-          }}
-        >
-          <span>{tx.category?.icon ?? "❓"}</span>
-          <span className="truncate">{tx.category?.name ?? "Uncategorized"}</span>
-        </button>
+      {tx.rule ? (
+        <Tooltip label={ruleHoverLabel(tx.rule)} withArrow openDelay={200} position="top" withinPortal>
+          {categoryButton}
+        </Tooltip>
       ) : (
-        <button
-          type="button"
-          className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase transition-opacity hover:opacity-80 ${transactionTypeBadgeClass(tx.transactionType)}`}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onPickerTxIdChange(tx.id);
-          }}
-        >
-          {transactionTypeLabel(tx.transactionType)}
-        </button>
+        categoryButton
       )}
 
       {picker && typeof document !== "undefined" ? createPortal(picker, document.body) : picker}

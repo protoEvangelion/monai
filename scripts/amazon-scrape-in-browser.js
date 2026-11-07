@@ -165,9 +165,10 @@
   };
 
   const buildNote = (order) => {
-    const itemTitles = (order.titles ?? []).filter(
-      (title) => !/^amazon visa$/i.test(stripTags(title)),
-    );
+    const itemTitles = (order.titles ?? []).filter((title) => {
+      const cleaned = stripTags(title);
+      return !/^amazon visa$/i.test(cleaned) && !/^tnf on prime$/i.test(cleaned);
+    });
     let summary;
     if (itemTitles.length) {
       summary = itemTitles.slice(0, 3).map((t) => stripTags(t).replace(/&amp;/g, "&")).join("; ");

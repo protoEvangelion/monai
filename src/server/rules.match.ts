@@ -1,8 +1,12 @@
 /** Fuzzy merchant matching for categorization rules. */
 
+/** English case fold so "AMAZON" and "amazon" always compare the same. */
+function casefold(value: string) {
+  return value.toLocaleLowerCase("en-US");
+}
+
 export function normalizeRuleText(value: string | null | undefined) {
-  return String(value ?? "")
-    .toLowerCase()
+  return casefold(String(value ?? ""))
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -47,4 +51,33 @@ export function rulePatternMatches(
   }
 
   return diceCoefficient(needle, haystack) >= 0.55;
+}
+
+/** Null rule amount matches any transaction. Otherwise compare absolute dollars to the cent. */
+export function ruleAmountMatches(
+  ruleAmount: number | null | undefined,
+  transactionAmount: number,
+) {
+  if (ruleAmount == null || !Number.isFinite(ruleAmount)) return true;
+  const expectedCents = Math.round(Math.abs(ruleAmount) * 100);
+  const actualCents = Math.round(Math.abs(transactionAmount) * 100);
+  return expectedCents === actualCents;
+}
+
+export function ruleMatches(
+  rule: { pattern: string; amount?: number | null },
+  transaction: {
+    merchantName: string | null | undefined;
+    name?: string | null;
+    amount: number;
+  },
+) {
+  const hasPattern = normalizeRuleText(rule.pattern).length > 0;
+  const hasAmount = rule.amount != null && Number.isFinite(rule.amount);
+  if (!hasPattern && !hasAmount) return false;
+  if (hasPattern && !rulePatternMatches(rule.pattern, transaction.merchantName, transaction.name)) {
+    return false;
+  }
+  if (!ruleAmountMatches(rule.amount, transaction.amount)) return false;
+  return true;
 }

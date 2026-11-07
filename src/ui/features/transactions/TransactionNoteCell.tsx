@@ -47,6 +47,11 @@ export function TransactionNoteCell({ tx }: { tx: Tx }) {
       placeholder="Add note..."
       size="xs"
       value={value}
+      styles={{
+        root: { flex: "1 1 auto", width: "100%", minWidth: 0 },
+        wrapper: { width: "100%" },
+        input: { width: "100%" },
+      }}
       onBlur={save}
       onChange={(event) => setValue(event.currentTarget.value)}
       onClick={(event) => event.stopPropagation()}

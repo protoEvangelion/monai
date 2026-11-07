@@ -23,6 +23,14 @@ export function isCursorCategorizerAuthError(error: unknown) {
 
 const CURSOR_CLI_PATH = process.env.CURSOR_CLI_PATH ?? "agent";
 
+/** Seconds the local HTTP server should keep this request open while `agent` thinks. */
+export function cursorCategorizerIdleSeconds() {
+  const timeoutMs = Number(process.env.CURSOR_CATEGORIZER_TIMEOUT_MS ?? 90_000);
+  const cliSeconds = Math.ceil((Number.isFinite(timeoutMs) ? timeoutMs : 90_000) / 1000);
+  // Bun's per-request cap is 255 seconds. Leave a little room after the CLI itself gives up.
+  return Math.min(255, cliSeconds + 15);
+}
+
 function cursorCliEnv() {
   const localBin = path.join(os.homedir(), ".local", "bin");
   const pathValue = process.env.PATH ?? "";

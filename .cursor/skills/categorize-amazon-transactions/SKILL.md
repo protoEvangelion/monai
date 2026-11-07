@@ -1,11 +1,11 @@
 ---
 name: categorize-amazon-transactions
-description: Auto-reconcile unreviewed Amazon charges in Monai that are missing notes against Amazon Your Payments history — scrape, match, add purchase notes, and assign leaf categories without asking which targets to use. Use when the user invokes /categorize-amazon-transactions or asks to annotate/categorize Amazon transactions (optional specific descriptors like AMAZON MKTPL*3H14L0NA3 still supported).
+description: Auto-reconcile Amazon charges in Monai that are missing notes against Amazon Your Payments history — scrape, match, add purchase notes, and assign leaf categories without asking which targets to use. Includes reviewed and already categorized charges. Use when the user invokes /categorize-amazon-transactions or asks to annotate/categorize Amazon transactions (optional specific descriptors like AMAZON MKTPL*3H14L0NA3 still supported).
 ---
 
 # Categorize Amazon Transactions
 
-Reconcile Monai Amazon charges that are **not reviewed** and have **no note** against Amazon payment history. Add a concise purchase note and assign or correct an existing leaf category when item context is clear.
+Reconcile every Monai Amazon charge that has **no note** against Amazon payment history, including reviewed rows and rows that already have a category. Add a concise purchase note. Assign or correct a leaf category only when the row has none and item context is clear. Never clear or replace an existing category just to add the note.
 
 ## Default behavior (no questions)
 
@@ -13,9 +13,9 @@ Reconcile Monai Amazon charges that are **not reviewed** and have **no note** ag
 
 | Default scope | Meaning |
 |---------------|---------|
-| Unreviewed + missing note | Every Amazon charge with `is_reviewed = 0` and empty `note` |
+| Missing note | Every Amazon charge with an empty `note`, whether or not it is reviewed or already categorized |
 
-If the user already named targets (e.g. `AMAZON MKTPL*3H14L0NA3` or ids), use those instead — still limited to unreviewed + missing note unless they explicitly say to include reviewed or replace notes.
+If the user already named targets (e.g. `AMAZON MKTPL*3H14L0NA3` or ids), use those instead — still every matching row with an empty note, including reviewed and categorized rows, unless they explicitly say to replace existing notes.
 
 ### Target formats (optional override)
 
@@ -32,9 +32,13 @@ bun scripts/match-amazon-notes.ts --list-targets --targets all
 bun scripts/match-amazon-notes.ts --list-targets --targets "3H14L0NA3,7349"
 ```
 
-Default SQL filter excludes reviewed rows. Pass `--include-reviewed` only when the user asks to include them.
+Reviewed status and category do not exclude a row. `--include-reviewed` is accepted and ignored; reviewed rows are always in the worklist.
 
-If `--list-targets` returns zero rows, stop and report (nothing left to do, wrong token, or already noted/reviewed).
+### Unreviewed only
+
+When the user, or the dashboard Amazon button, says only unreviewed charges: restrict the worklist with `is_reviewed = 0` and pass `--unreviewed-only` to `scripts/match-amazon-notes.ts` for both `--list-targets` and the match step. Do not add notes to reviewed rows.
+
+If `--list-targets` returns zero rows, stop and report (nothing left to do, wrong token, or already noted).
 
 ## Scrape (In-Browser)
 
@@ -95,7 +99,6 @@ WHERE (
     OR lower(coalesce(t.name, '')) LIKE '%amazon%'
   )
   AND (t.note IS NULL OR trim(t.note) = '')
-  AND t.is_reviewed = 0
   AND t.amount > 0
 ORDER BY t.date DESC;
 "
@@ -114,7 +117,7 @@ ORDER BY p.name, c.name;
 "
 ```
 
-Skip rows that already have any note unless the user explicitly asks to replace existing notes. Skip reviewed rows unless the user passes `--include-reviewed` / asks to include them.
+Skip rows that already have any note unless the user explicitly asks to replace existing notes. Do not skip reviewed rows or rows that already have a `category_id`, unless the request is unreviewed-only.
 
 ## Match Scraped Amazon Data To Monai Rows
 
@@ -142,17 +145,17 @@ Use `suggestedNote` from scrape output when accurate (`buildNote` skips payment-
 Auto-apply notes and categories (no confirmation step). Use `--dry-run` only if the user asks for a preview.
 
 ```bash
-# Default: all unreviewed Amazon charges missing notes
+# Default: every Amazon charge missing a note (reviewed and categorized included)
 bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all
 
-# Optional specific list (still unreviewed-only by default)
+# Dashboard button: unreviewed charges that are missing a note
+bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all --unreviewed-only
+
+# Optional specific list (still includes reviewed and categorized rows)
 bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets "3H14L0NA3,7349"
 
 # Preview only when requested
 bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all --dry-run
-
-# Include reviewed rows only when the user asks
-bun scripts/match-amazon-notes.ts data/amazon-payments-scraped.json --targets all --include-reviewed
 ```
 
 `--targets` defaults to `all` when omitted. `match-amazon-notes.ts` joins on exact amount + date within three days, skips ambiguous matches, then calls `apply-amazon-notes.ts`.
@@ -169,4 +172,4 @@ bun scripts/apply-amazon-notes.ts '[
 
 ## Finish
 
-Report: worklist size (unreviewed missing notes), categorized count, skipped count, brief reasons for skips (date + amount only).
+Report: worklist size (Amazon charges missing notes, including reviewed and categorized), noted count, skipped count, brief reasons for skips (date + amount only).
