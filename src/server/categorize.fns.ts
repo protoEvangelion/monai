@@ -59,7 +59,9 @@ function resolveAssignment(
     if (needle.length >= 3) {
       const fuzzyHits = categoryNames.filter((name) => {
         const hay = compact(name);
-        return hay === needle || hay.startsWith(needle) || needle.startsWith(hay) || hay.includes(needle);
+        return (
+          hay === needle || hay.startsWith(needle) || needle.startsWith(hay) || hay.includes(needle)
+        );
       });
       if (fuzzyHits.length === 1) {
         const id = categoryByNormalizedName.get(normalizeName(fuzzyHits[0]));
@@ -275,9 +277,7 @@ export async function applyAICategorizationForUser(
 
   const uniqueIds = [
     ...new Set(
-      normalizedAssignments
-        .map((a) => a.transactionId)
-        .filter((n) => Number.isInteger(n) && n > 0),
+      normalizedAssignments.map((a) => a.transactionId).filter((n) => Number.isInteger(n) && n > 0),
     ),
   ];
 
@@ -317,9 +317,7 @@ export async function applyAICategorizationForUser(
     }
     if (tx.transactionType !== "regular") {
       skippedCount += 1;
-      skipReasons.push(
-        `tx ${assignment.transactionId}: type is ${tx.transactionType}`,
-      );
+      skipReasons.push(`tx ${assignment.transactionId}: type is ${tx.transactionType}`);
       continue;
     }
 
@@ -334,9 +332,7 @@ export async function applyAICategorizationForUser(
 
     if (!resolved) {
       skippedCount += 1;
-      skipReasons.push(
-        `tx ${assignment.transactionId}: unknown category "${assignment.category}"`,
-      );
+      skipReasons.push(`tx ${assignment.transactionId}: unknown category "${assignment.category}"`);
       continue;
     }
 
@@ -370,6 +366,55 @@ export const applyAICategorization = createServerFn().handler(async (ctx) => {
     assignments?: Array<{ transactionId: number; category: string }>;
   };
   return applyAICategorizationForUser(userId, assignments ?? []);
+});
+
+/**
+ * Server-side AI Gateway categorization. Dynamic-imports the SDK so the
+ * `ai` package stays off the client bundle (this file is imported by UI).
+ */
+export async function runAICategorizationForUser(
+  userId: string,
+  data: {
+    ids?: number[];
+    limit?: number;
+    scope?: "all" | "review";
+    searchQuery?: string;
+  } = {},
+) {
+  const prepared = await prepareAICategorizationForUser(userId, data);
+  if (!prepared.transactions.length) {
+    return {
+      requestedCount: 0,
+      updatedCount: 0,
+      skippedCount: prepared.skippedByRulesOrType,
+      skipReasons:
+        prepared.skippedByRulesOrType > 0
+          ? ["Selected rows were already handled by rules or marked as income/transfer."]
+          : ["No matching transactions."],
+      provider: "vercel-ai-gateway" as const,
+    };
+  }
+
+  const { categorizeTransactionsViaGateway } = await import("./aiGateway");
+  const assignments = await categorizeTransactionsViaGateway(
+    prepared.transactions,
+    prepared.categories,
+  );
+  const applied = await applyAICategorizationForUser(userId, assignments);
+  return { ...applied, provider: "vercel-ai-gateway" as const };
+}
+
+export const runAICategorization = createServerFn().handler(async (ctx) => {
+  const { userId } = await getAuthOrDevAuth();
+  if (!userId) throw new Error("Unauthorized");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = ((ctx as any)?.data ?? {}) as {
+    ids?: number[];
+    limit?: number;
+    scope?: "all" | "review";
+    searchQuery?: string;
+  };
+  return runAICategorizationForUser(userId, data);
 });
 
 /**

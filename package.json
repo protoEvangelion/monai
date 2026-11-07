@@ -13,8 +13,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check": "bun run lint && bun run typecheck && bun run test:e2e",
-    "check:ci": "bun run lint && bun run typecheck",
+    "check": "bun run lint && bun run typecheck && bun run test && bun run test:e2e",
+    "check:ci": "bun run lint && bun run typecheck && bun run test",
     "deploy": "vercel --prod",
     "lint": "oxlint",
     "format": "oxfmt .",
@@ -50,6 +50,7 @@
     "@tanstack/react-start": "^1.169.4",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/router-plugin": "^1.168.48",
+    "ai": "^7.0.164",
     "better-sqlite3": "^12.11.1",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.21",
@@ -94,6 +95,9 @@
     "vercel": "latest",
     "vite": "^8.0.0",
     "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

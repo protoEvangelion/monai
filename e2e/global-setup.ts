@@ -18,7 +18,7 @@ export default async function globalSetup() {
 
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
-  execSync("bunx drizzle-kit push --force", {
+  execSync("bun x drizzle-kit push --force", {
     stdio: "inherit",
     cwd: process.cwd(),
     env: {

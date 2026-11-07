@@ -1,9 +1,11 @@
 # LLM Categorization Spec
 
 ## Goal
+
 Use an LLM to assign categories to transactions after sync, without using hardcoded merchant rules.
 
 ## Scope
+
 - Categorization only.
 - No auto-review.
 - No category creation.
@@ -11,18 +13,21 @@ Use an LLM to assign categories to transactions after sync, without using hardco
 - LLM output should not be "other" or "uncategorized"
 
 ## Trigger Points
+
 - After first account connection and initial transaction sync.
 - After manual Sync.
 - After 24-hour auto-sync.
 - Optional manual run via AI Categorize button (dashboard review mode).
 
 ## Input Data
+
 - Transactions for the user/item that need categorization.
 - Existing leaf categories for the user.
 - Category names are sent to the model.
 - Optional: specific transaction IDs when run from UI (selection-scoped categorization).
 
 ## Prompt Contract (Simple)
+
 Send one super simple prompt:
 
 `We are going to give you a list of transactions & categories. Return valid json with a categories array. Example output: {"categories":[{"transactionId":123,"category":"Restaurants"},{"transactionId":124,"category":"Gas"}]}`
@@ -30,39 +35,59 @@ Send one super simple prompt:
 Categories sent to model: user's leaf categories only (no parent groups, no catch-all categories like Other/Misc/General/Uncategorized).
 
 ## Model Behavior
+
 - Model must return one category per transaction.
 - Returned category names must be from the provided category list.
 - Null/empty category is not allowed.
 - Output must be valid JSON where each item has `transactionId` and `category`.
 - If model output is malformed or invalid, fallback logic assigns a valid existing category.
 
-## Model Selection (Cursor CLI)
-Categorization runs through `agent -p --mode ask --sandbox enabled` in read-only mode.
+## Model Selection (Vercel AI Gateway)
 
-Environment overrides:
+Manual AI Categorize runs on the server through the `ai` package (`streamText({ model })`) with a live `provider/model` string. Default model: `deepseek/deepseek-v4.1-flash`.
+
+Environment:
+
+- `AI_GATEWAY_API_KEY`: local / CI request auth. Never `VITE_*`.
+- `VERCEL_OIDC_TOKEN`: injected on Vercel when AI Gateway is enabled. Optional locally via `vercel env pull`.
+- `AI_CATEGORIZE_MODEL`: optional model override.
+- `VITE_ENABLE_BROWSER_AI=1`: use Chrome Prompt API (Gemini Nano) instead of the gateway.
+
+No `@ai-sdk/gateway` import, custom baseURL, provider packages, or BYOK. Map `GatewayAuthenticationError` to a setup message.
+
+## Model Selection (legacy Cursor CLI)
+
+Unused. Kept only as historical notes:
+
 - `CURSOR_CLI_PATH`: path to the Cursor Agent CLI binary. Defaults to `agent`.
-- `CURSOR_CATEGORIZER_MODEL`: optional model override. If omitted, Cursor uses its configured default model.
+- `CURSOR_CATEGORIZER_MODEL`: optional model override.
 - `CURSOR_CATEGORIZER_TIMEOUT_MS`: optional process timeout. Defaults to `90000`.
-- `CURSOR_API_KEY`: optional API key. Otherwise run `agent login`.
+- `CURSOR_API_KEY`: optional API key.
 
 ## Constraints
+
 - No merchant-specific hardcoded rules.
 - No "invented" categories.
 - No writes to category definitions.
 
 ## Fallback Strategy
+
 When model output is unavailable or invalid:
+
 - Use deterministic heuristic scoring against existing categories.
 - Preserve existing categories if row already has one (don't over-write with heuristic guess).
 - Heuristic fallback only for rows with null category.
 - Always assign a valid existing leaf category.
 
 ## Observability
+
 Log to dev console:
+
 - the exact LLM prompt (`[categorize][prompt]`)
 - the raw LLM response (`[categorize][response]`)
 
 Also log per-decision details (one JSON line per transaction):
+
 - transaction id
 - merchant name
 - amount
@@ -76,43 +101,51 @@ Format: `[categorize] { txId: ..., merchant: ..., categoryId: ..., reason: "mode
 ## UI Implementation (ReviewTable)
 
 ### Loading State
+
 - Uses React 18's `useTransition()` hook for idiomatic TanStack pattern
 - `handleAICategorize` wrapped in `startAITransition()` callback
 - Button shows spinner while pending
 
 ### Selection-Scoped Categorization
+
 - When rows are selected, only those IDs are sent to server
 - Server fn `runAICategorization(data?: { ids: number[] })`
 - If no selection, entire dataset is categorized
 
 ### Button Labels
+
 - `AI Categorize ({count})` where count = selected rows or all unreviewed
 - `Mark Reviewed ({count})`
 - Counts update in real-time as selection changes
 
 ### Dashboard vs Transactions
+
 - **Dashboard** (`/`): Review mode, shows AI Categorize + Mark Reviewed buttons
 - **Transactions** (`/transactions`): Full history (showAll=true), no action buttons
 
 ## E2E Testing
 
 ### Playwright Setup
+
 - Tests in `e2e/review-table.spec.ts`
 - Global setup: `e2e/global-setup.ts` runs once before tests
 - Config: `playwright.config.ts`
 
 ### DB Seeding (Global Setup)
+
 - Runs `drizzle-kit push --force` to initialize schema
 - Creates ephemeral test DB (not production data)
 - Seeds: 1 test account, 2 categories, 3 unreviewed transactions
 - Uses `INSERT OR IGNORE` for idempotent re-runs
 
 ### Local vs CI
+
 - **Local**: Uses `./data/test-e2e.db` (persistent across runs)
 - **CI**: Fresh `./data/test-e2e.db` per workflow run
 - Both set via `DATABASE_URL` in playwright.config.ts
 
 ### Test Coverage
+
 - Select-all checkbox behavior
 - Per-row selection
 - Action button visibility (dashboard vs transactions)
@@ -120,6 +153,7 @@ Format: `[categorize] { txId: ..., merchant: ..., categoryId: ..., reason: "mode
 - Rendering checks on both pages
 
 ## Success Criteria
+
 - ✅ New synced transactions are categorized automatically.
 - ✅ Manual AI Categorize can recategorize selected or all rows.
 - ✅ Categorization does not create or modify categories.
@@ -128,6 +162,7 @@ Format: `[categorize] { txId: ..., merchant: ..., categoryId: ..., reason: "mode
 - ✅ No TypeScript errors after UI refactor.
 
 ## Non-Goals
+
 - Auto-review workflow.
 - Budget adjustments.
 - Rule-based merchant mapping.

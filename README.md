@@ -8,15 +8,15 @@
 
 ## ✨ Features
 
-| Feature | Description |
-|---|---|
-| 📊 **Dashboard** | Net worth chart, budget progress, top categories at a glance |
-| 🔄 **Transaction Review** | Pulse-animated queue of transactions begging for your attention |
-| 🤖 **AI Categorization** | Cursor CLI auto-tags your merchants so you don't have to |
-| ⏳ **Time Travel** | Jump to any past month to audit your past-self's spending crimes |
-| 🏦 **Account Groups** | Credit, Depository, Investment, Loan, Real Estate — all in one place |
-| 🔐 **Auth** | Clerk-powered, zero config |
-| 🌗 **Dark / Light mode** | Your retinas, your rules |
+| Feature                   | Description                                                          |
+| ------------------------- | -------------------------------------------------------------------- |
+| 📊 **Dashboard**          | Net worth chart, budget progress, top categories at a glance         |
+| 🔄 **Transaction Review** | Pulse-animated queue of transactions begging for your attention      |
+| 🤖 **AI Categorization**  | Vercel AI Gateway tags merchants from your leaf categories           |
+| ⏳ **Time Travel**        | Jump to any past month to audit your past-self's spending crimes     |
+| 🏦 **Account Groups**     | Credit, Depository, Investment, Loan, Real Estate — all in one place |
+| 🔐 **Auth**               | Clerk-powered, zero config                                           |
+| 🌗 **Dark / Light mode**  | Your retinas, your rules                                             |
 
 ---
 
@@ -31,7 +31,7 @@ UI           →  HeroUI v3 + Tailwind CSS v4
 State        →  TanStack Query (server) · Zustand (client)
 Charts       →  Recharts
 Animation    →  Framer Motion
-AI           →  Cursor CLI (local only)
+AI           →  Vercel AI Gateway (`ai` SDK, server-only)
 Deploy       →  Vercel (Nitro) + Turso
 Linting      →  oxlint
 TypeScript   →  @typescript/native-preview (tsgo) 🚀
@@ -53,15 +53,17 @@ bun install
 cp .env.example .env.local
 ```
 
-| Variable | Where to get it |
-|---|---|
-| `VITE_CLERK_PUBLISHABLE_KEY` | [clerk.com](https://clerk.com) → your app → API Keys (test key for demos) |
-| `CLERK_SECRET_KEY` | Clerk dashboard → API Keys |
-| `PLAID_CLIENT_ID` / `PLAID_SECRET` | [Plaid](https://dashboard.plaid.com) → **Sandbox** keys for demos |
-| `PLAID_ENV` | `sandbox` for demos (never `production` on public Vercel) |
-| `DATABASE_URL` | Local: `file:./data/dev.db` |
-| `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | [Turso](https://turso.tech) — required for Vercel |
-| Chrome Prompt API | AI Categorize uses on-device Gemini Nano in Chrome (no server LLM / Cursor) |
+| Variable                                  | Where to get it                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `VITE_CLERK_PUBLISHABLE_KEY`              | [clerk.com](https://clerk.com) → your app → API Keys (test key for demos)        |
+| `CLERK_SECRET_KEY`                        | Clerk dashboard → API Keys                                                       |
+| `PLAID_CLIENT_ID` / `PLAID_SECRET`        | [Plaid](https://dashboard.plaid.com) → **Sandbox** keys for demos                |
+| `PLAID_ENV`                               | `sandbox` for demos (never `production` on public Vercel)                        |
+| `DATABASE_URL`                            | Local: `file:./data/dev.db`                                                      |
+| `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | [Turso](https://turso.tech) — required for Vercel                                |
+| `AI_GATEWAY_API_KEY`                      | Local AI Gateway key (project → AI Gateway → API keys). Never `VITE_*`.          |
+| `AI_CATEGORIZE_MODEL`                     | Optional. Default `deepseek/deepseek-v4.1-flash`.                                |
+| `VERCEL_OIDC_TOKEN`                       | Injected on Vercel when AI Gateway is enabled. `vercel env pull` for local OIDC. |
 
 ### 3. Set up the database
 
@@ -79,22 +81,23 @@ bun --bun run dev -- --production # Plaid production + production.db (real data,
 
 `scripts/dev.ts` switches credentials by mode:
 
-| Flag | Plaid | Database |
-|---|---|---|
-| *(default)* / `--sandbox` | sandbox secret + `PLAID_ENV=sandbox` | `PLAID_SANDBOX_DATABASE_URL` → else `TURSO_DATABASE_URL` → else `DATABASE_URL` |
-| `--production` / `--prod` | `PLAID_PRODUCTION_SECRET` | `PLAID_PRODUCTION_DATABASE_URL` (Turso env cleared) |
+| Flag                      | Plaid                                | Database                                                                       |
+| ------------------------- | ------------------------------------ | ------------------------------------------------------------------------------ |
+| _(default)_ / `--sandbox` | sandbox secret + `PLAID_ENV=sandbox` | `PLAID_SANDBOX_DATABASE_URL` → else `TURSO_DATABASE_URL` → else `DATABASE_URL` |
+| `--production` / `--prod` | `PLAID_PRODUCTION_SECRET`            | `PLAID_PRODUCTION_DATABASE_URL` (Turso env cleared)                            |
 
 ### 5. Vercel demo (sandbox only)
 
 **Required env (Production):**
 
-| Var | Notes |
-|---|---|
-| `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Required — local `file:` SQLite will not work on Vercel |
-| `PLAID_ENV=sandbox` | Never production Plaid on a public demo |
-| `PLAID_CLIENT_ID` / `PLAID_SECRET` | Sandbox secret only |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk **test** publishable key (Vite needs `VITE_` prefix) |
-| `CLERK_SECRET_KEY` | Clerk test secret; add your `*.vercel.app` URL to Clerk allowed origins |
+| Var                                       | Notes                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Required — local `file:` SQLite will not work on Vercel                                                 |
+| `PLAID_ENV=sandbox`                       | Never production Plaid on a public demo                                                                 |
+| `PLAID_CLIENT_ID` / `PLAID_SECRET`        | Sandbox secret only                                                                                     |
+| `VITE_CLERK_PUBLISHABLE_KEY`              | Clerk **test** publishable key (Vite needs `VITE_` prefix)                                              |
+| `CLERK_SECRET_KEY`                        | Clerk test secret; add your `*.vercel.app` URL to Clerk allowed origins                                 |
+| AI Gateway                                | Enable AI Gateway on the Vercel project (OIDC / `VERCEL_OIDC_TOKEN`). Locally set `AI_GATEWAY_API_KEY`. |
 
 1. Create Turso DB: `turso auth login` → `turso db create monai-demo` → copy URL + `turso db tokens create monai-demo`
 2. Push schema: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... bun run db:push`
@@ -169,9 +172,16 @@ historical_balances → daily snapshots for net worth chart
 
 ## 🤖 AI Auto-Categorization
 
-Sync applies **categorization rules** only (no server LLM / Cursor CLI).
+Sync applies **categorization rules** only.
 
-Optional Chrome on-device Gemini Nano (“AI Categorize”) is **off by default**. Set `VITE_ENABLE_BROWSER_AI=1` locally if you want to experiment — not recommended for the public demo yet.
+**AI Categorize** (dashboard / selection toolbar) calls Vercel AI Gateway from the server via the `ai` package and a `provider/model` string. Auth:
+
+- Local / CI: `AI_GATEWAY_API_KEY`
+- Vercel: enable AI Gateway on the project so `VERCEL_OIDC_TOKEN` is injected (no key in production)
+
+Optional Chrome on-device Gemini Nano is **off by default**. Set `VITE_ENABLE_BROWSER_AI=1` to use the Prompt API instead of the gateway.
+
+Node 22+ is required (`ai@7` engines).
 
 ---
 

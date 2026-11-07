@@ -5,6 +5,7 @@ import { AI_CATEGORIZE_MAX_TRANSACTIONS } from "../../../server/plaid.sync.fns";
 import {
   applyAICategorization,
   prepareAICategorization,
+  runAICategorization,
 } from "../../../server/categorize.fns";
 import {
   beginBrowserAiSession,
@@ -35,6 +36,7 @@ export function useTransactionReviewActions({
   const router = useRouter();
   const prepareAICategorizeFn = useServerFn(prepareAICategorization);
   const applyAICategorizeFn = useServerFn(applyAICategorization);
+  const runAICategorizeFn = useServerFn(runAICategorization);
   const [isAICategorizing, startAITransition] = useTransition();
   const [isSplitting, startSplitTransition] = useTransition();
 
@@ -51,10 +53,38 @@ export function useTransactionReviewActions({
     await router.invalidate();
   };
 
-  const handleAICategorize = () => {
-    if (!actionIds.length) return;
-    const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
+  const toastCategorizeResult = (
+    result: {
+      updatedCount?: number;
+      skippedCount?: number;
+      skipReasons?: string[];
+    },
+    source: "gateway" | "chrome",
+  ) => {
+    if ((result?.updatedCount ?? 0) === 0) {
+      const reason =
+        Array.isArray(result?.skipReasons) && result.skipReasons.length
+          ? result.skipReasons.slice(0, 3).join("; ")
+          : "No matching categories were applied.";
+      showToast({
+        title: "Nothing was categorized",
+        description: reason,
+        tone: "danger",
+      });
+      return;
+    }
+    showToast({
+      title: `Categorized ${result.updatedCount} transactions`,
+      description:
+        actionIds.length > AI_CATEGORIZE_MAX_TRANSACTIONS
+          ? "Run AI Categorize again to continue through the remaining transactions."
+          : source === "chrome"
+            ? "Used Chrome on-device Gemini Nano."
+            : "Used Vercel AI Gateway.",
+    });
+  };
 
+  const handleBrowserAICategorize = (idsToCategorize: number[]) => {
     // Start model create in the same turn as the click — Chrome requires a user
     // gesture when Gemini Nano still needs to download.
     const canStartSession =
@@ -68,8 +98,7 @@ export function useTransactionReviewActions({
         if (!sessionPromise) {
           showToast({
             title: "Chrome built-in AI required",
-            description:
-              "Open Monai in Chrome with Gemini Nano / Prompt API enabled.",
+            description: "Open Monai in Chrome with Gemini Nano / Prompt API enabled.",
             tone: "danger",
           });
           return;
@@ -153,33 +182,13 @@ export function useTransactionReviewActions({
           ),
         ]);
         console.info("[categorize] apply result", result);
-
-        if ((result?.updatedCount ?? 0) === 0) {
-          const reason =
-            Array.isArray(result?.skipReasons) && result.skipReasons.length
-              ? result.skipReasons.slice(0, 3).join("; ")
-              : "No matching categories were applied.";
-          showToast({
-            title: "Nothing was categorized",
-            description: reason,
-            tone: "danger",
-          });
-        } else {
-          showToast({
-            title: `Categorized ${result.updatedCount} transactions`,
-            description:
-              actionIds.length > AI_CATEGORIZE_MAX_TRANSACTIONS
-                ? "Run AI Categorize again to continue through the remaining transactions."
-                : "Used Chrome on-device Gemini Nano (no Cursor usage).",
-          });
-        }
+        toastCategorizeResult(result, "chrome");
 
         resetSelection();
         void router.invalidate();
       } catch (error) {
         const message = getErrorMessage(error);
-        const needsGesture =
-          /user gesture|NotAllowedError|downloadable|downloading/i.test(message);
+        const needsGesture = /user gesture|NotAllowedError|downloadable|downloading/i.test(message);
         showToast({
           title: "AI categorization failed",
           description: needsGesture
@@ -193,6 +202,56 @@ export function useTransactionReviewActions({
         } catch {
           // ignore
         }
+      }
+    });
+  };
+
+  const handleAICategorize = () => {
+    if (!actionIds.length) return;
+    const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
+
+    if (import.meta.env.VITE_ENABLE_BROWSER_AI === "1") {
+      handleBrowserAICategorize(idsToCategorize);
+      return;
+    }
+
+    startAITransition(async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = (await (runAICategorizeFn as any)({
+          data: {
+            ids: idsToCategorize,
+            limit: AI_CATEGORIZE_MAX_TRANSACTIONS,
+          },
+        })) as {
+          requestedCount?: number;
+          updatedCount?: number;
+          skippedCount?: number;
+          skipReasons?: string[];
+        };
+
+        if ((result?.updatedCount ?? 0) === 0 && (result?.requestedCount ?? 0) === 0) {
+          resetSelection();
+          await router.invalidate();
+          showToast({
+            title: "Nothing left to categorize",
+            description:
+              Array.isArray(result?.skipReasons) && result.skipReasons.length
+                ? result.skipReasons[0]
+                : "No matching transactions.",
+          });
+          return;
+        }
+
+        toastCategorizeResult(result, "gateway");
+        resetSelection();
+        void router.invalidate();
+      } catch (error) {
+        showToast({
+          title: "AI categorization failed",
+          description: getErrorMessage(error),
+          tone: "danger",
+        });
       }
     });
   };

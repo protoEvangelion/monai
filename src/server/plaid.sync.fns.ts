@@ -477,7 +477,7 @@ export async function syncTransactions(
       console.log(`Cleaned up ${cleanupCount} likely pending duplicate transactions for item ${itemId}`);
     }
     if (categorizeAfterSync) {
-      // Rules only on sync — AI runs in the browser via Chrome Prompt API.
+      // Rules only on sync — AI Categorize uses Vercel AI Gateway (or Chrome Nano when enabled).
       const ruleResult = await applyRulesForItem(userId, itemId).catch((error) => {
         console.warn(
           `[rules] apply failed for item ${itemId}:`,

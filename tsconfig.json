@@ -19,5 +19,5 @@
       "#/*": ["./src/*"]
     }
   },
-  "include": ["src", "drizzle.config.ts", "check-clerk.ts", "vite.config.ts"]
+  "include": ["src", "drizzle.config.ts", "check-clerk.ts", "vite.config.ts", "vitest.config.ts"]
 }

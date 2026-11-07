@@ -18,15 +18,8 @@ import {
   useTransactionCategoryActions,
   useTransactionTableColumnPrefs,
 } from "./transactions.hooks";
-import type {
-  CategoryGroup,
-  TransactionTableServerState,
-  Tx,
-} from "./transactions.types";
-import {
-  applyLocalColumnFilters,
-  LOCAL_COLUMN_FILTER_IDS,
-} from "./transactions.utils";
+import type { CategoryGroup, TransactionTableServerState, Tx } from "./transactions.types";
+import { applyLocalColumnFilters, LOCAL_COLUMN_FILTER_IDS } from "./transactions.utils";
 import { useSelectedToolbarTransactions } from "./transactions.selection.hooks";
 import { useTransactionTableState } from "./transactions.table-state.hooks";
 import {
@@ -67,9 +60,7 @@ function toMrtColumnFilters({
   variant: TransactionTableVariant;
 }): ColumnFiltersState {
   const filters: ColumnFiltersState =
-    variant === "category"
-      ? []
-      : [{ id: "reviewStatus", value: showAll ? "all" : "not-reviewed" }];
+    variant === "category" ? [] : [{ id: "reviewStatus", value: showAll ? "all" : "not-reviewed" }];
 
   const categoryValue = lockedCategoryFilter ?? categoryFilter;
   if (categoryValue && categoryValue !== "all") {
@@ -464,10 +455,9 @@ export function ReviewTable({
         "data-testid": `transaction-row-${row.original.id}`,
       }) as HTMLAttributes<HTMLTableRowElement>,
     positionToolbarAlertBanner: "none",
-    renderTopToolbarCustomActions:
-      isDashboardVariant && import.meta.env.VITE_ENABLE_BROWSER_AI === "1"
-        ? () => <DashboardAiCategorizeButton transactions={transactions} />
-        : undefined,
+    renderTopToolbarCustomActions: isDashboardVariant
+      ? () => <DashboardAiCategorizeButton transactions={transactions} />
+      : undefined,
   });
 
   const { actionIds, aiTransactionCount, cappedTransactionIds, selectedIds } =
@@ -611,7 +601,6 @@ export function ReviewTable({
         setNewCategoryName={categoryActions.setNewCategoryName}
         setNewCategoryParentId={categoryActions.setNewCategoryParentId}
       />
-
     </div>
   );
 }

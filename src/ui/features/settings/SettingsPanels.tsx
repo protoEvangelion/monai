@@ -51,8 +51,8 @@ function GeneralSettingsPanel() {
         <h3 className="text-sm font-bold text-foreground">Automation</h3>
         <SettingRow
           title="AI auto-categorization"
-          description="Uses categorization rules on sync. Optional Chrome Nano AI is off unless VITE_ENABLE_BROWSER_AI=1."
-          action={<StatusBadge>Rules</StatusBadge>}
+          description="Rules on sync. AI Categorize uses Vercel AI Gateway. Chrome Nano stays opt-in via VITE_ENABLE_BROWSER_AI=1."
+          action={<StatusBadge>Gateway</StatusBadge>}
         />
       </section>
     </div>
@@ -147,7 +147,11 @@ function AboutSettingsPanel() {
     <div className="space-y-8">
       <section>
         <h3 className="text-sm font-bold text-foreground">About</h3>
-        <SettingRow title="Product" description="Monai" action={<StatusBadge>Local dev</StatusBadge>} />
+        <SettingRow
+          title="Product"
+          description="Monai"
+          action={<StatusBadge>Local dev</StatusBadge>}
+        />
       </section>
       <section>
         <h3 className="text-sm font-bold text-foreground">Help</h3>

@@ -35,7 +35,7 @@ export function DashboardAiCategorizeButton({ transactions }: { transactions: Tx
     <Tooltip label={TOOLTIP} withArrow openDelay={200} position="bottom" withinPortal>
       <button
         type="button"
-        aria-label="AI Categorize"
+        aria-label="AI Categorize unreviewed"
         disabled={isAICategorizing || aiEligibleIds.length === 0}
         onClick={handleAICategorize}
         className={[

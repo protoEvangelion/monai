@@ -40,7 +40,15 @@ const config = defineConfig({
   resolve: { tsconfigPaths: true },
   plugins: [
     devtools(),
-    nitro({ preset: 'vercel' }),
+    nitro({
+      preset: 'vercel',
+      vercel: {
+        functions: {
+          // Longer than the 55s SDK timeout so a couple of categorize batches can finish.
+          maxDuration: 120,
+        },
+      },
+    }),
     tailwindcss(),
     tanstackStart(),
     viteReact(),

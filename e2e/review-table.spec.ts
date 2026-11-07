@@ -69,7 +69,9 @@ test.describe("ReviewTable", () => {
 
     test("shows date as a column", async ({ page }) => {
       await expect(page.getByRole("columnheader", { name: "Date" })).toBeVisible();
-      await expect(page.getByTestId("transaction-row-1").getByTestId("transaction-date")).toBeVisible();
+      await expect(
+        page.getByTestId("transaction-row-1").getByTestId("transaction-date"),
+      ).toBeVisible();
       await expect(page.getByText("Yesterday")).toBeHidden();
     });
 
@@ -141,7 +143,7 @@ test.describe("ReviewTable", () => {
 
     test("AI Categorize button appears after selection", async ({ page }) => {
       await selectAllTransactions(page);
-      await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeVisible();
+      await expectAICategorizeButton(page, 5);
     });
 
     test("shows transaction notes when note column is visible", async ({ page }) => {
@@ -173,7 +175,9 @@ test.describe("ReviewTable", () => {
 
     test("Mark Reviewed button appears after selection", async ({ page }) => {
       await selectAllTransactions(page);
-      await expect(page.getByRole("button", { name: /Mark Reviewed|Mark reviewed/i })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: /Mark Reviewed|Mark reviewed/i }),
+      ).toBeVisible();
     });
 
     test("selecting all updates label and shows counts on buttons", async ({ page }) => {

@@ -56,10 +56,7 @@ export function TransactionSelectionToolbar({
   onSetCategory: (ids: number[], categoryId: number | null) => void;
   onSetDate: (ids: number[], date: string) => void;
   onSetReviewed: (ids: number[], isReviewed: boolean) => void;
-  onSetTransactionType: (
-    ids: number[],
-    transactionType: "regular" | "income" | "transfer",
-  ) => void;
+  onSetTransactionType: (ids: number[], transactionType: "regular" | "income" | "transfer") => void;
   onSplit: (transaction: Tx) => void;
   selectedTransactions: Tx[];
   showMarkReviewed?: boolean;
@@ -68,7 +65,6 @@ export function TransactionSelectionToolbar({
   if (selectedTransactions.length === 0) return null;
 
   const selectedIds = selectedTransactions.map((tx) => tx.id);
-  const browserAiEnabled = import.meta.env.VITE_ENABLE_BROWSER_AI === "1";
   const firstSelectedDate = selectedTransactions[0]?.date
     ? dateInputValue(selectedTransactions[0].date)
     : "";
@@ -77,32 +73,29 @@ export function TransactionSelectionToolbar({
   );
   const allSelectedAreReviewed = selectedTransactions.every((tx) => tx.isReviewed);
   const reviewLabel = allSelectedAreReviewed ? "Mark unreviewed" : "Mark reviewed";
-  const canSplit =
-    selectedTransactions.length === 1 && isSplittable(selectedTransactions[0]);
+  const canSplit = selectedTransactions.length === 1 && isSplittable(selectedTransactions[0]);
   const rulePattern =
     selectedTransactions.length === 1
       ? selectedTransactions[0].merchantName
-      : selectedTransactions[0]?.merchantName ?? "";
+      : (selectedTransactions[0]?.merchantName ?? "");
 
   const toolbar = (
     <FloatingSelectionToolbar
       count={selectedTransactions.length}
       onClearSelection={onClearSelection}
     >
-      {browserAiEnabled ? (
-        <FloatingSelectionToolbarButton
-          label={`AI Categorize ${selectedTransactions.length} selected`}
-          onClick={onAICategorize}
-          disabled={isAICategorizing}
-          variant="ai"
-        >
-          {isAICategorizing ? (
-            <Loader2Icon size={20} className="animate-spin" />
-          ) : (
-            <SparklesIcon size={20} />
-          )}
-        </FloatingSelectionToolbarButton>
-      ) : null}
+      <FloatingSelectionToolbarButton
+        label={`AI Categorize ${selectedTransactions.length} selected`}
+        onClick={onAICategorize}
+        disabled={isAICategorizing}
+        variant="ai"
+      >
+        {isAICategorizing ? (
+          <Loader2Icon size={20} className="animate-spin" />
+        ) : (
+          <SparklesIcon size={20} />
+        )}
+      </FloatingSelectionToolbarButton>
       <FloatingSelectionToolbarButton
         label="Add rule from selection"
         onClick={() =>
@@ -164,9 +157,7 @@ export function TransactionSelectionToolbar({
       </FloatingSelectionToolbarButton>
       <FloatingSelectionToolbarButton
         label={
-          canSplit
-            ? "Split transaction"
-            : "Select exactly one non-transfer transaction to split"
+          canSplit ? "Split transaction" : "Select exactly one non-transfer transaction to split"
         }
         onClick={() => {
           if (!canSplit) return;

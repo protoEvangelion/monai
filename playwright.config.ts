@@ -32,7 +32,9 @@ export default defineConfig({
   webServer: process.env.BASE_URL
     ? undefined
     : {
-      command: process.env.CI ? 'bun vite preview --port 3000' : 'bun run dev',
+      command: process.env.CI
+        ? 'mkdir -p data && bun vite preview --port 3000'
+        : 'mkdir -p data && bun run dev',
       env: testEnv,
       url: localBaseURL,
       reuseExistingServer: process.env.PW_REUSE_SERVER === '1',
