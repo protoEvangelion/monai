@@ -54,7 +54,7 @@ function resolveAssignment(
       return { categoryId: proposedCompactCategoryId, transactionType: "regular" };
     }
 
-    // Fuzzy: unique prefix / contains match against leaf names (Nano often shortens).
+    // Fuzzy: unique prefix / contains match against leaf names (models often shorten).
     const needle = compact(proposedCategoryName);
     if (needle.length >= 3) {
       const fuzzyHits = categoryNames.filter((name) => {
@@ -137,8 +137,7 @@ async function resolveSelectedTransactionIds({
 }
 
 /**
- * Apply rules, then return the transaction rows + leaf categories for browser AI.
- * Does not call any model on the server.
+ * Apply rules, then return the transaction rows + leaf categories for the gateway.
  */
 export async function prepareAICategorizationForUser(
   userId: string,
@@ -224,21 +223,8 @@ export async function prepareAICategorizationForUser(
   };
 }
 
-export const prepareAICategorization = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth();
-  if (!userId) throw new Error("Unauthorized");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = ((ctx as any)?.data ?? {}) as {
-    ids?: number[];
-    limit?: number;
-    scope?: "all" | "review";
-    searchQuery?: string;
-  };
-  return prepareAICategorizationForUser(userId, data);
-});
-
 /**
- * Persist browser AI (or any client) category assignments after validation.
+ * Persist gateway category assignments after validation.
  */
 export async function applyAICategorizationForUser(
   userId: string,
@@ -357,16 +343,6 @@ export async function applyAICategorizationForUser(
     skipReasons,
   };
 }
-
-export const applyAICategorization = createServerFn().handler(async (ctx) => {
-  const { userId } = await getAuthOrDevAuth();
-  if (!userId) throw new Error("Unauthorized");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { assignments } = ((ctx as any)?.data ?? {}) as {
-    assignments?: Array<{ transactionId: number; category: string }>;
-  };
-  return applyAICategorizationForUser(userId, assignments ?? []);
-});
 
 /**
  * Server-side AI Gateway categorization. Dynamic-imports the SDK so the

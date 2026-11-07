@@ -179,8 +179,6 @@ Sync applies **categorization rules** only.
 - Local / CI: `AI_GATEWAY_API_KEY`
 - Vercel: enable AI Gateway on the project so `VERCEL_OIDC_TOKEN` is injected (no key in production)
 
-Optional Chrome on-device Gemini Nano is **off by default**. Set `VITE_ENABLE_BROWSER_AI=1` to use the Prompt API instead of the gateway.
-
 Node 22+ is required (`ai@7` engines).
 
 ---

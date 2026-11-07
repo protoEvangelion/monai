@@ -60,31 +60,6 @@ export function buildCategorizePrompt(
   };
 }
 
-/** Compact prompt for Chrome Gemini Nano's small context window. */
-export function buildNanoCategorizePrompt(
-  batch: CategorizeTransactionRow[],
-  cats: Array<{ name: string }>,
-) {
-  const uniqueCategoryNames = [...new Set(cats.map((c) => c.name))];
-  const categoryOptions = [...new Set(["Transfer", "Income", ...uniqueCategoryNames])];
-  const catsCsv = categoryOptions.join("|");
-  const txsCsv = batch
-    .map((tx) => {
-      const note = tx.note?.trim();
-      const notePart = note ? `|${note.slice(0, 48)}` : "";
-      return `${tx.id}|${tx.merchantName}|${tx.amount}${notePart}`;
-    })
-    .join(";");
-
-  const prompt = [
-    'Map each tx to one category. Transfer=cc/bank moves. Income=pay/deposit/interest. JSON only: {"categories":[{"transactionId":1,"category":"Name"}]}',
-    `C:${catsCsv}`,
-    `T:${txsCsv}`,
-  ].join("\n");
-
-  return { prompt, categoryOptions };
-}
-
 function previewBlock(value: string, maxLength: number) {
   const preview = value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
   return preview

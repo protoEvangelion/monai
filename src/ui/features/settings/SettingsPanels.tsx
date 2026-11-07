@@ -51,7 +51,7 @@ function GeneralSettingsPanel() {
         <h3 className="text-sm font-bold text-foreground">Automation</h3>
         <SettingRow
           title="AI auto-categorization"
-          description="Rules on sync. AI Categorize uses Vercel AI Gateway. Chrome Nano stays opt-in via VITE_ENABLE_BROWSER_AI=1."
+          description="Rules on sync. AI Categorize uses Vercel AI Gateway."
           action={<StatusBadge>Gateway</StatusBadge>}
         />
       </section>

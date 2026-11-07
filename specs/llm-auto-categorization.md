@@ -51,7 +51,6 @@ Environment:
 - `AI_GATEWAY_API_KEY`: local / CI request auth. Never `VITE_*`.
 - `VERCEL_OIDC_TOKEN`: injected on Vercel when AI Gateway is enabled. Optional locally via `vercel env pull`.
 - `AI_CATEGORIZE_MODEL`: optional model override.
-- `VITE_ENABLE_BROWSER_AI=1`: use Chrome Prompt API (Gemini Nano) instead of the gateway.
 
 No `@ai-sdk/gateway` import, custom baseURL, provider packages, or BYOK. Map `GatewayAuthenticationError` to a setup message.
 
