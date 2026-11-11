@@ -1,108 +1,152 @@
-import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { createServerFn } from "@tanstack/react-start";
+import { eq, inArray, and, isNull, or, sql } from "drizzle-orm";
+import { transactions, plaidItems, accounts } from "../db/schema";
 import { getAuthOrDevAuth } from "../lib/devAuth";
+import {
+  matchAmazonNotes,
+  parseAmazonScrape,
+  rowMatchesAmazonTarget,
+  type AmazonWorklistRow,
+} from "./amazon-match";
 
-const AGENT_BIN = process.env.CURSOR_CLI_PATH ?? "agent";
-const PID_FILE = path.resolve(process.cwd(), "tmp/amazon-notes-agent.pid");
-const LOG_FILE = path.resolve(process.cwd(), "tmp/amazon-notes-agent.log");
+export type AmazonReconcileResult = {
+  worklistCount: number;
+  targetedCount: number;
+  matchedCount: number;
+  skippedCount: number;
+  updatedCount: number;
+  updates: Array<{ transactionId: number; note: string; orderId: string }>;
+  skipped: Array<{
+    transactionId: number;
+    merchantName: string;
+    amount: number;
+    reason: string;
+  }>;
+};
 
-const PROMPT = [
-  "Run the categorize-amazon-transactions skill in this repo (.cursor/skills/categorize-amazon-transactions/SKILL.md).",
-  "Scope override from the dashboard Amazon button: only Amazon charges that are not reviewed and have an empty note.",
-  "Skip reviewed charges even when their note is empty.",
-  "Pass --unreviewed-only to scripts/match-amazon-notes.ts for both --list-targets and the match step.",
-  "Do not ask which transactions to use. Start immediately.",
-].join(" ");
+type ReconcileInput = {
+  /** Raw JSON pasted from the Amazon payments scrape snippet. */
+  scrapeJson: string;
+  /** Comma-separated descriptors / ids, or "all". Defaults to "all". */
+  targets?: string;
+  /** Only touch charges that are not reviewed yet. */
+  unreviewedOnly?: boolean;
+  /** Preview without writing. */
+  dryRun?: boolean;
+};
+
+const AMAZON_MATCH_SQL = sql`(
+  lower(${transactions.merchantName}) like '%amazon%'
+  or lower(${transactions.merchantName}) like '%amzn%'
+  or lower(coalesce(${transactions.name}, '')) like '%amazon%'
+)`;
 
 /**
- * Starts the local Cursor agent and returns immediately. The agent follows the
- * Amazon notes skill: it looks up unreviewed Amazon charges with no note,
- * reads Amazon payment history, and writes the purchase note. The web request
- * does not wait for that work to finish.
+ * Fetch Amazon charges that still have no note for the signed-in user.
+ * Runs against whatever DB the app is pointed at (local SQLite or Turso), so
+ * the same code path works in dev and in production.
  */
-export const runAmazonTransactionNotes = createServerFn().handler(async () => {
-  if (process.env.VERCEL) {
-    throw new Error("Amazon notes only run on your local machine.");
-  }
+async function loadAmazonWorklist(userId: string, unreviewedOnly: boolean) {
+  const { db } = await import("../db");
 
+  const items = await db.query.plaidItems.findMany({
+    where: eq(plaidItems.userId, userId),
+    with: { accounts: true },
+  });
+  // Manual accounts (no Plaid item) can also hold Amazon charges.
+  const manualAccounts = await db.query.accounts.findMany({
+    where: and(isNull(accounts.plaidItemId), eq(accounts.userId, userId)),
+  });
+  const accountIds = [
+    ...items.flatMap((item) => item.accounts.map((account) => account.id)),
+    ...manualAccounts.map((account) => account.id),
+  ];
+  if (accountIds.length === 0) return [];
+
+  const rows = await db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      amount: transactions.amount,
+      merchantName: transactions.merchantName,
+    })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.accountId, accountIds),
+        AMAZON_MATCH_SQL,
+        or(isNull(transactions.note), sql`trim(${transactions.note}) = ''`),
+        sql`${transactions.amount} > 0`,
+        unreviewedOnly ? eq(transactions.isReviewed, false) : sql`1 = 1`,
+      ),
+    );
+
+  return rows.map<AmazonWorklistRow>((row) => ({
+    id: row.id,
+    date: row.date instanceof Date ? Math.floor(row.date.getTime() / 1000) : Number(row.date),
+    amount: row.amount,
+    merchantName: row.merchantName,
+  }));
+}
+
+function parseTargets(raw: string | undefined) {
+  const value = raw?.trim();
+  if (!value || value.toLowerCase() === "all") return "all" as const;
+  const list = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : ("all" as const);
+}
+
+/**
+ * Match pasted Amazon payment history against Monai charges and (optionally)
+ * write the purchase notes. Replaces the old fire-and-forget agent spawn: the
+ * request runs to completion and returns a full report the UI can render.
+ */
+export const reconcileAmazonNotes = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();
   if (!userId) throw new Error("Unauthorized");
 
-  const runningPid = readLivePid();
-  if (runningPid) {
-    return { started: false, alreadyRunning: true, pid: runningPid };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const input = ((ctx as any)?.data ?? {}) as Partial<ReconcileInput>;
+  const scrape = parseAmazonScrape(input.scrapeJson);
+  const targets = parseTargets(input.targets);
+
+  const worklist = await loadAmazonWorklist(userId, Boolean(input.unreviewedOnly));
+  const targeted =
+    targets === "all"
+      ? worklist
+      : worklist.filter((row) => targets.some((target) => rowMatchesAmazonTarget(row, target)));
+
+  const { updates, skipped } = matchAmazonNotes(targeted, scrape);
+
+  let updatedCount = 0;
+  if (!input.dryRun && updates.length > 0) {
+    const { db } = await import("../db");
+    for (const update of updates) {
+      // Never overwrite a note that another run (or the user) already wrote.
+      const result = await db
+        .update(transactions)
+        .set({ note: update.note })
+        .where(
+          and(
+            eq(transactions.id, update.transactionId),
+            or(isNull(transactions.note), sql`trim(${transactions.note}) = ''`),
+          ),
+        )
+        .returning({ id: transactions.id });
+      if (result.length > 0) updatedCount += 1;
+    }
   }
 
-  const child = spawn(
-    AGENT_BIN,
-    [
-      "-p",
-      "--trust",
-      "--force",
-      "--approve-mcps",
-      "--sandbox",
-      "disabled",
-      "--workspace",
-      process.cwd(),
-      "--output-format",
-      "text",
-    ],
-    {
-      cwd: process.cwd(),
-      env: agentEnv(),
-      detached: true,
-      stdio: ["pipe", "pipe", "pipe"],
-    },
-  );
-
-  if (!child.pid) {
-    throw new Error("Could not start the Amazon notes skill.");
-  }
-
-  mkdirSync(path.dirname(PID_FILE), { recursive: true });
-  const log = createWriteStream(LOG_FILE, { flags: "w" });
-  child.once("error", () => {
-    clearPid(child.pid);
-  });
-  child.stdout?.pipe(log);
-  child.stderr?.pipe(log);
-  child.stdin?.end(PROMPT);
-  writeFileSync(PID_FILE, String(child.pid));
-  child.once("close", () => {
-    clearPid(child.pid);
-  });
-  child.unref();
-
-  return { started: true, alreadyRunning: false, pid: child.pid };
+  return {
+    worklistCount: worklist.length,
+    targetedCount: targeted.length,
+    matchedCount: updates.length,
+    skippedCount: skipped.length,
+    updatedCount,
+    updates,
+    skipped,
+  } satisfies AmazonReconcileResult;
 });
-
-function agentEnv() {
-  const localBin = path.join(os.homedir(), ".local", "bin");
-  const pathValue = process.env.PATH ?? "";
-  const pathEntries = pathValue.split(path.delimiter);
-  if (pathEntries.includes(localBin)) return process.env;
-  return { ...process.env, PATH: `${localBin}${path.delimiter}${pathValue}` };
-}
-
-function readLivePid() {
-  if (!existsSync(PID_FILE)) return null;
-  const pid = Number(readFileSync(PID_FILE, "utf8").trim());
-  if (!Number.isInteger(pid) || pid <= 0) return null;
-  try {
-    process.kill(pid, 0);
-    return pid;
-  } catch {
-    clearPid(pid);
-    return null;
-  }
-}
-
-function clearPid(pid: number | undefined) {
-  if (!existsSync(PID_FILE)) return;
-  const current = Number(readFileSync(PID_FILE, "utf8").trim());
-  if (pid != null && current !== pid) return;
-  unlinkSync(PID_FILE);
-}

@@ -1,9 +1,22 @@
 
+/*
+ * Cascade layer order — declared up front so every stylesheet lands inside a
+ * layer we control.
+ *
+ * `mantine` sits *first* (lowest priority) because Mantine ships an unlayered
+ * global reset: `input, button, textarea, select { font: inherit }`. Unlayered
+ * CSS beats *all* layered CSS, so that one line used to silently kill
+ * `text-xs` / `text-sm` / `font-semibold` on every `<button>` and field in the
+ * app — the reason Chat / Runs controls rendered at the browser's 16px/400
+ * default instead of the design system's sizes.
+ */
+@layer mantine, theme, base, components, utilities;
+
 @import "tailwindcss";
 @import "@heroui/styles";
-@import "@mantine/core/styles.css";
-@import "@mantine/dates/styles.css";
-@import "mantine-react-table/styles.css";
+@import "@mantine/core/styles.layer.css" layer(mantine);
+@import "@mantine/dates/styles.layer.css" layer(mantine);
+@import "mantine-react-table/styles.css" layer(mantine);
 @import "./bezel/variables.css";
 @import "./ui/themes/bezel-bridge.css";
 

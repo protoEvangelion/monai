@@ -17,6 +17,12 @@ import {
   cursorCategorizerIdleSeconds,
   runCursorCategorizerCli,
 } from "../services/cursorCli";
+import {
+  GATEWAY_MODEL,
+  GATEWAY_PROVIDER_LABEL,
+  gatewayTimeoutSeconds,
+  runGatewayPrompt,
+} from "../services/aiGateway";
 
 export type CategorizeTransactionsResult = {
   requestedCount: number;
@@ -381,15 +387,15 @@ export const applyAICategorization = createServerFn().handler(async (ctx) => {
 });
 
 /**
- * Local-only AI categorize: rules first, then the Cursor Agent CLI (`agent`).
- * Deployed production does not have the CLI, so this refuses to run there.
+ * AI categorize server paths.
+ *
+ * Primary: Vercel AI Gateway via TanStack AI (`runGatewayAICategorizationForUser`).
+ * This is an HTTP call, so it works identically on your machine and on Vercel.
+ *
+ * Fallback: the local Cursor Agent CLI (`runCursorAICategorizationForUser`),
+ * kept for machines that are logged in to `agent` and have no Gateway key.
  */
-/**
- * Bun closes a request that sends no bytes for 10 seconds. The Cursor CLI
- * thinks longer than that and writes nothing back until it is done, so we
- * tell the local server this one request may stay quiet until the CLI finishes.
- */
-async function allowLongCursorCategorizeRequest() {
+async function allowLongCategorizeRequest(seconds: number) {
   try {
     const { getRequest } = await import("@tanstack/react-start/server");
     const request = getRequest() as Request & {
@@ -404,7 +410,7 @@ async function allowLongCursorCategorizeRequest() {
       console.warn("[categorize] could not find the Bun request timeout handle.");
       return;
     }
-    extend.call(request.runtime?.bun?.server, request, cursorCategorizerIdleSeconds());
+    extend.call(request.runtime?.bun?.server, request, seconds);
   } catch (error) {
     console.warn(
       "[categorize] could not extend the local request timeout:",
@@ -413,20 +419,74 @@ async function allowLongCursorCategorizeRequest() {
   }
 }
 
+type CategorizeRequestData = {
+  ids?: number[];
+  limit?: number;
+  scope?: "all" | "review";
+  searchQuery?: string;
+};
+
+/**
+ * Categorize with the Vercel AI Gateway. Same prompt and parser as the CLI
+ * path, so results are interchangeable.
+ */
+export async function runGatewayAICategorizationForUser(
+  userId: string,
+  data: CategorizeRequestData = {},
+) {
+  const prepared = await prepareAICategorizationForUser(userId, data);
+  if (!prepared.transactions.length) {
+    return {
+      requestedCount: 0,
+      updatedCount: 0,
+      skippedCount: prepared.skippedByRulesOrType,
+      skipReasons: ["Nothing left after rules."],
+      provider: GATEWAY_PROVIDER_LABEL,
+    };
+  }
+
+  const { prompt } = buildCategorizePrompt(prepared.transactions, prepared.categories);
+  console.log(
+    [
+      "[categorize] batch request",
+      `  provider: ${GATEWAY_PROVIDER_LABEL}`,
+      `  model: ${GATEWAY_MODEL}`,
+      `  categories: ${prepared.categories.length}`,
+      `  transactionRows: ${prepared.transactions.length}`,
+    ].join("\n"),
+  );
+
+  const raw = await runGatewayPrompt({
+    prompt,
+    threadId: `categorize-${userId}-${Date.now()}`,
+  });
+  const byTransactionId = parseTransactionCategoryMap(raw);
+  console.log(
+    [
+      "[categorize] batch response",
+      `  provider: ${GATEWAY_PROVIDER_LABEL}`,
+      `  model: ${GATEWAY_MODEL}`,
+      `  categorizedRows: ${byTransactionId.size}`,
+    ].join("\n"),
+  );
+
+  const assignments = [...byTransactionId.entries()].map(([transactionId, category]) => ({
+    transactionId,
+    category,
+  }));
+  const applied = await applyAICategorizationForUser(userId, assignments);
+  return { ...applied, provider: GATEWAY_PROVIDER_LABEL };
+}
+
 export async function runCursorAICategorizationForUser(
   userId: string,
-  data: {
-    ids?: number[];
-    limit?: number;
-    scope?: "all" | "review";
-    searchQuery?: string;
-  } = {},
+  data: CategorizeRequestData = {},
 ) {
   if (process.env.VERCEL) {
     throw new Error("Cursor CLI categorization only runs on your local machine.");
   }
 
-  await allowLongCursorCategorizeRequest();
+  await allowLongCategorizeRequest(cursorCategorizerIdleSeconds());
 
   const prepared = await prepareAICategorizationForUser(userId, data);
   if (!prepared.transactions.length) {
@@ -469,17 +529,41 @@ export async function runCursorAICategorizationForUser(
   return { ...applied, provider: CURSOR_PROVIDER_LABEL };
 }
 
+/**
+ * Server-side AI categorize used by the dashboard button.
+ *
+ * Default is the AI Gateway. Set `MONAI_SERVER_AI=cursor-cli` to force the
+ * local CLI instead (useful if the Gateway key is missing).
+ */
+export async function runServerAICategorizationForUser(
+  userId: string,
+  data: CategorizeRequestData = {},
+) {
+  const preferCli = process.env.MONAI_SERVER_AI?.trim() === "cursor-cli";
+
+  if (!preferCli) {
+    try {
+      await allowLongCategorizeRequest(gatewayTimeoutSeconds());
+      return await runGatewayAICategorizationForUser(userId, data);
+    } catch (error) {
+      // Only fall back locally; a missing key in production should surface.
+      if (process.env.VERCEL) throw error;
+      console.warn(
+        "[categorize] gateway path failed, trying Cursor CLI:",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
+  return runCursorAICategorizationForUser(userId, data);
+}
+
 export const runCursorAICategorization = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();
   if (!userId) throw new Error("Unauthorized");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = ((ctx as any)?.data ?? {}) as {
-    ids?: number[];
-    limit?: number;
-    scope?: "all" | "review";
-    searchQuery?: string;
-  };
-  return runCursorAICategorizationForUser(userId, data);
+  const data = ((ctx as any)?.data ?? {}) as CategorizeRequestData;
+  return runServerAICategorizationForUser(userId, data);
 });
 
 /**

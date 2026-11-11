@@ -51,7 +51,7 @@ function GeneralSettingsPanel() {
         <h3 className="text-sm font-bold text-foreground">Automation</h3>
         <SettingRow
           title="AI auto-categorization"
-          description="Sync uses categorization rules. On your machine, AI Categorize runs the Cursor CLI. The deployed site still uses Chrome Nano."
+          description="Sync uses categorization rules. AI Categorize runs through the Vercel AI Gateway, so it behaves the same locally and in production. Chrome on-device AI is the fallback when no Gateway key is configured."
           action={<StatusBadge>Rules</StatusBadge>}
         />
       </section>

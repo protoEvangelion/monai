@@ -38,6 +38,10 @@ Reviewed status and category do not exclude a row. `--include-reviewed` is accep
 
 When the user, or the dashboard Amazon button, says only unreviewed charges: restrict the worklist with `is_reviewed = 0` and pass `--unreviewed-only` to `scripts/match-amazon-notes.ts` for both `--list-targets` and the match step. Do not add notes to reviewed rows.
 
+### Dashboard button (no agent)
+
+The dashboard **Amazon** button opens a paste modal, not an agent run. It asks you to scrape in the browser, then paste the JSON. The server then runs the same matching in-process via `reconcileAmazonNotes` (`src/server/amazon-notes.fns.ts` + `src/server/amazon-match.ts`), which works identically on local SQLite and Turso, so it also works on the deployed site. The modal has a **Targets** field (blank = all) and an **Unreviewed only** toggle.
+
 If `--list-targets` returns zero rows, stop and report (nothing left to do, wrong token, or already noted).
 
 ## Scrape (In-Browser)

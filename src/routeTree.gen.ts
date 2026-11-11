@@ -9,46 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TransactionsRouteImport } from './routes/transactions'
-import { Route as RulesRouteImport } from './routes/rules'
-import { Route as RecurringsRouteImport } from './routes/recurrings'
-import { Route as InvestmentsRouteImport } from './routes/investments'
-import { Route as CategoriesRouteImport } from './routes/categories'
-import { Route as AccountsRouteImport } from './routes/accounts'
-import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
-import { Route as CategoriesNewGroupRouteImport } from './routes/categories.new-group'
+import { Route as AccessDeniedRouteImport } from './routes/access-denied'
+import { Route as AccountsRouteImport } from './routes/accounts'
+import { Route as CategoriesRouteImport } from './routes/categories'
+import { Route as InvestmentsRouteImport } from './routes/investments'
+import { Route as RecurringsRouteImport } from './routes/recurrings'
+import { Route as RulesRouteImport } from './routes/rules'
+import { Route as TransactionsRouteImport } from './routes/transactions'
+import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as CategoriesNewCategoryRouteImport } from './routes/categories.new-category'
+import { Route as CategoriesNewGroupRouteImport } from './routes/categories.new-group'
+import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 
-const TransactionsRoute = TransactionsRouteImport.update({
-  id: '/transactions',
-  path: '/transactions',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RulesRoute = RulesRouteImport.update({
-  id: '/rules',
-  path: '/rules',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecurringsRoute = RecurringsRouteImport.update({
-  id: '/recurrings',
-  path: '/recurrings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InvestmentsRoute = InvestmentsRouteImport.update({
-  id: '/investments',
-  path: '/investments',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CategoriesRoute = CategoriesRouteImport.update({
-  id: '/categories',
-  path: '/categories',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountsRoute = AccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccessDeniedRoute = AccessDeniedRouteImport.update({
@@ -56,25 +32,55 @@ const AccessDeniedRoute = AccessDeniedRouteImport.update({
   path: '/access-denied',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AccountsRoute = AccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SignInSplatRoute = SignInSplatRouteImport.update({
-  id: '/sign-in/$',
-  path: '/sign-in/$',
+const CategoriesRoute = CategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
   getParentRoute: () => rootRouteImport,
+} as any)
+const InvestmentsRoute = InvestmentsRouteImport.update({
+  id: '/investments',
+  path: '/investments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecurringsRoute = RecurringsRouteImport.update({
+  id: '/recurrings',
+  path: '/recurrings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RulesRoute = RulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TransactionsRoute = TransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CategoriesNewCategoryRoute = CategoriesNewCategoryRouteImport.update({
+  id: '/new-category',
+  path: '/new-category',
+  getParentRoute: () => CategoriesRoute,
 } as any)
 const CategoriesNewGroupRoute = CategoriesNewGroupRouteImport.update({
   id: '/new-group',
   path: '/new-group',
   getParentRoute: () => CategoriesRoute,
 } as any)
-const CategoriesNewCategoryRoute = CategoriesNewCategoryRouteImport.update({
-  id: '/new-category',
-  path: '/new-category',
-  getParentRoute: () => CategoriesRoute,
+const SignInSplatRoute = SignInSplatRouteImport.update({
+  id: '/sign-in/$',
+  path: '/sign-in/$',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/recurrings': typeof RecurringsRoute
   '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
+  '/api/chat': typeof ApiChatRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/recurrings': typeof RecurringsRoute
   '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
+  '/api/chat': typeof ApiChatRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/recurrings': typeof RecurringsRoute
   '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
+  '/api/chat': typeof ApiChatRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/recurrings'
     | '/rules'
     | '/transactions'
+    | '/api/chat'
     | '/categories/new-category'
     | '/categories/new-group'
     | '/sign-in/$'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/recurrings'
     | '/rules'
     | '/transactions'
+    | '/api/chat'
     | '/categories/new-category'
     | '/categories/new-group'
     | '/sign-in/$'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/recurrings'
     | '/rules'
     | '/transactions'
+    | '/api/chat'
     | '/categories/new-category'
     | '/categories/new-group'
     | '/sign-in/$'
@@ -168,51 +180,17 @@ export interface RootRouteChildren {
   RecurringsRoute: typeof RecurringsRoute
   RulesRoute: typeof RulesRoute
   TransactionsRoute: typeof TransactionsRoute
+  ApiChatRoute: typeof ApiChatRoute
   SignInSplatRoute: typeof SignInSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/transactions': {
-      id: '/transactions'
-      path: '/transactions'
-      fullPath: '/transactions'
-      preLoaderRoute: typeof TransactionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rules': {
-      id: '/rules'
-      path: '/rules'
-      fullPath: '/rules'
-      preLoaderRoute: typeof RulesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recurrings': {
-      id: '/recurrings'
-      path: '/recurrings'
-      fullPath: '/recurrings'
-      preLoaderRoute: typeof RecurringsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/investments': {
-      id: '/investments'
-      path: '/investments'
-      fullPath: '/investments'
-      preLoaderRoute: typeof InvestmentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/categories': {
-      id: '/categories'
-      path: '/categories'
-      fullPath: '/categories'
-      preLoaderRoute: typeof CategoriesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/accounts': {
-      id: '/accounts'
-      path: '/accounts'
-      fullPath: '/accounts'
-      preLoaderRoute: typeof AccountsRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/access-denied': {
@@ -222,19 +200,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccessDeniedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/accounts': {
+      id: '/accounts'
+      path: '/accounts'
+      fullPath: '/accounts'
+      preLoaderRoute: typeof AccountsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sign-in/$': {
-      id: '/sign-in/$'
-      path: '/sign-in/$'
-      fullPath: '/sign-in/$'
-      preLoaderRoute: typeof SignInSplatRouteImport
+    '/categories': {
+      id: '/categories'
+      path: '/categories'
+      fullPath: '/categories'
+      preLoaderRoute: typeof CategoriesRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/investments': {
+      id: '/investments'
+      path: '/investments'
+      fullPath: '/investments'
+      preLoaderRoute: typeof InvestmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recurrings': {
+      id: '/recurrings'
+      path: '/recurrings'
+      fullPath: '/recurrings'
+      preLoaderRoute: typeof RecurringsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rules': {
+      id: '/rules'
+      path: '/rules'
+      fullPath: '/rules'
+      preLoaderRoute: typeof RulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/transactions': {
+      id: '/transactions'
+      path: '/transactions'
+      fullPath: '/transactions'
+      preLoaderRoute: typeof TransactionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/categories/new-category': {
+      id: '/categories/new-category'
+      path: '/new-category'
+      fullPath: '/categories/new-category'
+      preLoaderRoute: typeof CategoriesNewCategoryRouteImport
+      parentRoute: typeof CategoriesRoute
     }
     '/categories/new-group': {
       id: '/categories/new-group'
@@ -243,12 +263,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CategoriesNewGroupRouteImport
       parentRoute: typeof CategoriesRoute
     }
-    '/categories/new-category': {
-      id: '/categories/new-category'
-      path: '/new-category'
-      fullPath: '/categories/new-category'
-      preLoaderRoute: typeof CategoriesNewCategoryRouteImport
-      parentRoute: typeof CategoriesRoute
+    '/sign-in/$': {
+      id: '/sign-in/$'
+      path: '/sign-in/$'
+      fullPath: '/sign-in/$'
+      preLoaderRoute: typeof SignInSplatRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -276,6 +296,7 @@ const rootRouteChildren: RootRouteChildren = {
   RecurringsRoute: RecurringsRoute,
   RulesRoute: RulesRoute,
   TransactionsRoute: TransactionsRoute,
+  ApiChatRoute: ApiChatRoute,
   SignInSplatRoute: SignInSplatRoute,
 }
 export const routeTree = rootRouteImport

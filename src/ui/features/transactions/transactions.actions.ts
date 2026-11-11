@@ -20,6 +20,7 @@ import {
   updateTransactionsDate,
 } from "../../../server/transactions.fns";
 import { showToast } from "../../shared/toast";
+import { finishRun, logRunEvent, startRun } from "../assistant/runs";
 import { getErrorMessage } from "./transactions.utils";
 
 export function useTransactionReviewActions({
@@ -37,7 +38,6 @@ export function useTransactionReviewActions({
   const prepareAICategorizeFn = useServerFn(prepareAICategorization);
   const applyAICategorizeFn = useServerFn(applyAICategorization);
   const runCursorAICategorizeFn = useServerFn(runCursorAICategorization);
-  const useLocalCursorCli = import.meta.env.DEV;
   const [isAICategorizing, startAITransition] = useTransition();
   const [isSplitting, startSplitTransition] = useTransition();
 
@@ -54,60 +54,46 @@ export function useTransactionReviewActions({
     await router.invalidate();
   };
 
-  const handleAICategorize = () => {
-    if (!actionIds.length) return;
-    const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
+  /** One-shot server categorizer (AI Gateway, or the local CLI if configured). */
+  const runServerCategorize = async (ids: number[]) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await (runCursorAICategorizeFn as any)({
+      data: { ids, limit: AI_CATEGORIZE_MAX_TRANSACTIONS },
+    })) as {
+      updatedCount?: number;
+      skippedCount?: number;
+      skipReasons?: string[];
+      provider?: string;
+    };
 
-    if (useLocalCursorCli) {
-      startAITransition(async () => {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = (await (runCursorAICategorizeFn as any)({
-            data: {
-              ids: idsToCategorize,
-              limit: AI_CATEGORIZE_MAX_TRANSACTIONS,
-            },
-          })) as {
-            updatedCount?: number;
-            skippedCount?: number;
-            skipReasons?: string[];
-          };
-
-          if ((result?.updatedCount ?? 0) === 0) {
-            const reason =
-              Array.isArray(result?.skipReasons) && result.skipReasons.length
-                ? result.skipReasons.slice(0, 3).join("; ")
-                : "No matching categories were applied.";
-            showToast({
-              title: "Nothing was categorized",
-              description: reason,
-              tone: "danger",
-            });
-          } else {
-            showToast({
-              title: `Categorized ${result.updatedCount} transactions`,
-              description:
-                actionIds.length > AI_CATEGORIZE_MAX_TRANSACTIONS
-                  ? "Run AI Categorize again to continue through the remaining transactions."
-                  : "Used the Cursor CLI on this machine.",
-            });
-          }
-
-          resetSelection();
-          void router.invalidate();
-        } catch (error) {
-          showToast({
-            title: "AI categorization failed",
-            description: getErrorMessage(error),
-            tone: "danger",
-          });
-        }
-      });
+  const reportServerResult = (result: {
+    updatedCount?: number;
+    skippedCount?: number;
+    skipReasons?: string[];
+    provider?: string;
+  }) => {
+    if ((result?.updatedCount ?? 0) === 0) {
+      const reason =
+        Array.isArray(result?.skipReasons) && result.skipReasons.length
+          ? result.skipReasons.slice(0, 3).join("; ")
+          : "No matching categories were applied.";
+      showToast({ title: "Nothing was categorized", description: reason, tone: "danger" });
       return;
     }
 
-    // Start model create in the same turn as the click — Chrome requires a user
-    // gesture when Gemini Nano still needs to download.
+    showToast({
+      title: `Categorized ${result.updatedCount} transactions`,
+      description:
+        actionIds.length > AI_CATEGORIZE_MAX_TRANSACTIONS
+          ? "Run AI Categorize again to continue through the remaining transactions."
+          : result.provider === "vercel-ai-gateway"
+            ? "Used Vercel AI Gateway."
+            : "Used the Cursor CLI on this machine.",
+    });
+  };
+
+  /** Chrome on-device Gemini Nano. Needs a user gesture, so it starts immediately. */
+  const runBrowserCategorize = (ids: number[]) => {
     const canStartSession =
       typeof globalThis !== "undefined" &&
       typeof (globalThis as { LanguageModel?: unknown }).LanguageModel !== "undefined";
@@ -120,7 +106,7 @@ export function useTransactionReviewActions({
           showToast({
             title: "Chrome built-in AI required",
             description:
-              "Open Monai in Chrome with Gemini Nano / Prompt API enabled.",
+              "Add AI_GATEWAY_API_KEY for server-side categorization, or open Monai in Chrome with Gemini Nano enabled.",
             tone: "danger",
           });
           return;
@@ -151,10 +137,7 @@ export function useTransactionReviewActions({
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload = await (prepareAICategorizeFn as any)({
-          data: {
-            ids: idsToCategorize,
-            limit: AI_CATEGORIZE_MAX_TRANSACTIONS,
-          },
+          data: { ids, limit: AI_CATEGORIZE_MAX_TRANSACTIONS },
         });
 
         if (!payload?.transactions?.length) {
@@ -204,26 +187,7 @@ export function useTransactionReviewActions({
           ),
         ]);
         console.info("[categorize] apply result", result);
-
-        if ((result?.updatedCount ?? 0) === 0) {
-          const reason =
-            Array.isArray(result?.skipReasons) && result.skipReasons.length
-              ? result.skipReasons.slice(0, 3).join("; ")
-              : "No matching categories were applied.";
-          showToast({
-            title: "Nothing was categorized",
-            description: reason,
-            tone: "danger",
-          });
-        } else {
-          showToast({
-            title: `Categorized ${result.updatedCount} transactions`,
-            description:
-              actionIds.length > AI_CATEGORIZE_MAX_TRANSACTIONS
-                ? "Run AI Categorize again to continue through the remaining transactions."
-                : "Used Chrome on-device Gemini Nano (no Cursor usage).",
-          });
-        }
+        reportServerResult(result);
 
         resetSelection();
         void router.invalidate();
@@ -244,6 +208,55 @@ export function useTransactionReviewActions({
         } catch {
           // ignore
         }
+      }
+    });
+  };
+
+  const handleAICategorize = () => {
+    if (!actionIds.length) return;
+    const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
+
+    startAITransition(async () => {
+      const runId = startRun("AI categorize", "Vercel AI Gateway");
+      logRunEvent(runId, `${idsToCategorize.length} transaction${idsToCategorize.length === 1 ? "" : "s"} queued`);
+      try {
+        const result = await runServerCategorize(idsToCategorize);
+        await router.invalidate();
+        reportServerResult(result);
+        resetSelection();
+
+        if ((result?.updatedCount ?? 0) > 0) {
+          logRunEvent(runId, `Categorized ${result.updatedCount}`);
+          finishRun(runId, {
+            status: "done",
+            summary: `Categorized ${result.updatedCount} transaction${result.updatedCount === 1 ? "" : "s"}.`,
+          });
+        } else {
+          const reason =
+            Array.isArray(result?.skipReasons) && result.skipReasons.length
+              ? result.skipReasons.slice(0, 3).join("; ")
+              : "No matching categories were applied.";
+          finishRun(runId, { status: "failed", summary: reason });
+        }
+        return;
+      } catch (error) {
+        const message = getErrorMessage(error);
+        const gatewayMissing = /AI_GATEWAY_API_KEY|AI Gateway is not configured/i.test(message);
+
+        // No Gateway key: fall back to the on-device model (Chrome only).
+        if (gatewayMissing) {
+          logRunEvent(runId, "No Gateway key — falling back to Chrome on-device AI");
+          finishRun(runId, {
+            status: "failed",
+            summary: "AI Gateway key missing; used Chrome on-device AI instead.",
+          });
+          console.warn("[categorize] no gateway key, falling back to browser AI");
+          runBrowserCategorize(idsToCategorize);
+          return;
+        }
+
+        finishRun(runId, { status: "failed", summary: message });
+        showToast({ title: "AI categorization failed", description: message, tone: "danger" });
       }
     });
   };

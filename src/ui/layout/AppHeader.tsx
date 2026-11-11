@@ -1,5 +1,5 @@
-import { Button } from "@heroui/react";
-import { SunIcon, MoonIcon, MenuIcon, RefreshCwIcon } from "lucide-react";
+import { Button, useOverlayState } from "@heroui/react";
+import { SunIcon, MoonIcon, MenuIcon, RefreshCwIcon, SparklesIcon } from "lucide-react";
 import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useTransition } from "react";
@@ -8,6 +8,7 @@ import { useTimeTravel } from "../hooks/useTimeTravel";
 import { manualSync } from "../../server/plaid.sync.fns";
 import { showToast } from "../shared/toast";
 import { MonthControls } from "../features/categories/MonthControls";
+import { AssistantPanel } from "../features/assistant/AssistantPanel";
 
 export function AppHeader({
   pageTitle: _pageTitle,
@@ -22,6 +23,7 @@ export function AppHeader({
   const manualSyncFn = useServerFn(manualSync);
   const [isSyncing, startSyncTransition] = useTransition();
   const isDarkTheme = theme === "dark";
+  const assistant = useOverlayState();
 
   const handleSync = () => {
     startSyncTransition(async () => {
@@ -94,6 +96,16 @@ export function AppHeader({
         <Button
           variant="secondary"
           size="sm"
+          onPress={() => assistant.open()}
+          className="h-9 shrink-0 rounded-full px-4"
+          aria-label="Open assistant"
+        >
+          <SparklesIcon size={15} />
+          <span className="hidden sm:inline">Assistant</span>
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onPress={handleSync}
           isDisabled={isSyncing}
           className="h-9 shrink-0 rounded-full px-4"
@@ -113,6 +125,8 @@ export function AppHeader({
           {isDarkTheme ? <SunIcon size={17} /> : <MoonIcon size={17} />}
         </Button>
       </div>
+
+      <AssistantPanel state={assistant} />
     </header>
   );
 }
