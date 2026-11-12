@@ -67,7 +67,6 @@ export function TransactionSelectionToolbar({
   if (selectedTransactions.length === 0) return null;
 
   const selectedIds = selectedTransactions.map((tx) => tx.id);
-  const browserAiEnabled = import.meta.env.VITE_ENABLE_BROWSER_AI === "1";
   const firstSelectedDate = selectedTransactions[0]?.date
     ? dateInputValue(selectedTransactions[0].date)
     : "";
@@ -88,20 +87,18 @@ export function TransactionSelectionToolbar({
       count={selectedTransactions.length}
       onClearSelection={onClearSelection}
     >
-      {browserAiEnabled ? (
-        <FloatingSelectionToolbarButton
-          label={`AI Categorize ${selectedTransactions.length} selected`}
-          onClick={onAICategorize}
-          disabled={isAICategorizing}
-          variant="ai"
-        >
-          {isAICategorizing ? (
-            <Loader2Icon size={20} className="animate-spin" />
-          ) : (
-            <SparklesIcon size={20} />
-          )}
-        </FloatingSelectionToolbarButton>
-      ) : null}
+      <FloatingSelectionToolbarButton
+        label={`AI Categorize ${selectedTransactions.length} selected`}
+        onClick={onAICategorize}
+        disabled={isAICategorizing}
+        variant="ai"
+      >
+        {isAICategorizing ? (
+          <Loader2Icon size={20} className="animate-spin" />
+        ) : (
+          <SparklesIcon size={20} />
+        )}
+      </FloatingSelectionToolbarButton>
       <FloatingSelectionToolbarButton
         label="Add rule from selection"
         onClick={() =>

@@ -68,7 +68,7 @@ function resolveAssignment(
       return { categoryId: proposedCompactCategoryId, transactionType: "regular" };
     }
 
-    // Fuzzy: unique prefix / contains match against leaf names (Nano often shortens).
+    // Fuzzy: unique prefix / contains match against leaf names (models often shorten).
     const needle = compact(proposedCategoryName);
     if (needle.length >= 3) {
       const fuzzyHits = categoryNames.filter((name) => {

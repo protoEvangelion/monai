@@ -478,7 +478,7 @@ export async function syncTransactions(
       console.log(`Cleaned up ${cleanupCount} likely pending duplicate transactions for item ${itemId}`);
     }
     if (categorizeAfterSync) {
-      // Rules only on sync — AI runs in the browser via Chrome Prompt API.
+      // Rules only on sync — AI categorization is an explicit user action.
       const ruleResult = await applyRulesForItem(userId, itemId).catch((error) => {
         console.warn(
           `[rules] apply failed for item ${itemId}:`,

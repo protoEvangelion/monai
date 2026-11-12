@@ -2,16 +2,7 @@ import { useTransition, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { AI_CATEGORIZE_MAX_TRANSACTIONS } from "../../../server/plaid.sync.fns";
-import {
-  applyAICategorization,
-  prepareAICategorization,
-  runPiAICategorization,
-} from "../../../server/categorize.fns";
-import {
-  beginBrowserAiSession,
-  categorizeTransactionsInBrowser,
-  getBrowserAiAvailability,
-} from "../../../lib/browserAiCategorize";
+import { runPiAICategorization } from "../../../server/categorize.fns";
 import {
   setTransactionsReviewed,
   setTransactionsType,
@@ -34,8 +25,6 @@ export function useTransactionReviewActions({
   setSelectAllPages: Dispatch<SetStateAction<boolean>>;
 }) {
   const router = useRouter();
-  const prepareAICategorizeFn = useServerFn(prepareAICategorization);
-  const applyAICategorizeFn = useServerFn(applyAICategorization);
   const runPiAICategorizeFn = useServerFn(runPiAICategorization);
   const [isAICategorizing, startAITransition] = useTransition();
   const [isSplitting, startSplitTransition] = useTransition();
@@ -91,126 +80,6 @@ export function useTransactionReviewActions({
     });
   };
 
-  /** Chrome on-device Gemini Nano. Needs a user gesture, so it starts immediately. */
-  const runBrowserCategorize = (ids: number[]) => {
-    const canStartSession =
-      typeof globalThis !== "undefined" &&
-      typeof (globalThis as { LanguageModel?: unknown }).LanguageModel !== "undefined";
-    const sessionPromise = canStartSession ? beginBrowserAiSession() : null;
-
-    startAITransition(async () => {
-      let session: Awaited<NonNullable<typeof sessionPromise>> | null = null;
-      try {
-        if (!sessionPromise) {
-          showToast({
-            title: "Chrome built-in AI required",
-            description:
-              "Add AI_GATEWAY_API_KEY for server-side categorization, or open Monai in Chrome with Gemini Nano enabled.",
-            tone: "danger",
-          });
-          return;
-        }
-
-        const availability = await getBrowserAiAvailability();
-        if (!availability.supported && availability.availability === "unavailable") {
-          showToast({
-            title: "Chrome built-in AI unavailable",
-            description: availability.message,
-            tone: "danger",
-          });
-          return;
-        }
-
-        if (
-          availability.availability === "downloadable" ||
-          availability.availability === "downloading"
-        ) {
-          showToast({
-            title: "Downloading on-device model…",
-            description:
-              "Chrome is fetching Gemini Nano. Keep this tab open — first download can take a few minutes.",
-          });
-        }
-
-        session = await sessionPromise;
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const payload = await (prepareAICategorizeFn as any)({
-          data: { ids, limit: AI_CATEGORIZE_MAX_TRANSACTIONS },
-        });
-
-        if (!payload?.transactions?.length) {
-          resetSelection();
-          await router.invalidate();
-          showToast({
-            title: "Nothing left to categorize",
-            description:
-              payload?.skippedByRulesOrType > 0
-                ? "Selected rows were already handled by rules or marked as income/transfer."
-                : "No matching transactions.",
-          });
-          return;
-        }
-
-        const assignments = await categorizeTransactionsInBrowser(
-          payload.transactions,
-          payload.categories,
-          session,
-        );
-
-        // Free the model before server apply — destroy() can stall and would
-        // otherwise keep the UI transition pending forever.
-        try {
-          session.destroy?.();
-        } catch {
-          // ignore
-        }
-        session = null;
-
-        console.info("[categorize] applying assignments", assignments.length);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const applyPromise = (applyAICategorizeFn as any)({
-          data: { assignments },
-        }) as Promise<{
-          updatedCount?: number;
-          skippedCount?: number;
-          skipReasons?: string[];
-        }>;
-        const result = await Promise.race([
-          applyPromise,
-          new Promise<never>((_, reject) =>
-            window.setTimeout(
-              () => reject(new Error("Saving categories timed out. Try again.")),
-              20_000,
-            ),
-          ),
-        ]);
-        console.info("[categorize] apply result", result);
-        reportServerResult(result);
-
-        resetSelection();
-        void router.invalidate();
-      } catch (error) {
-        const message = getErrorMessage(error);
-        const needsGesture =
-          /user gesture|NotAllowedError|downloadable|downloading/i.test(message);
-        showToast({
-          title: "AI categorization failed",
-          description: needsGesture
-            ? "Chrome needs a fresh click to download Gemini Nano — try AI Categorize again."
-            : message,
-          tone: "danger",
-        });
-      } finally {
-        try {
-          session?.destroy?.();
-        } catch {
-          // ignore
-        }
-      }
-    });
-  };
-
   const handleAICategorize = () => {
     if (!actionIds.length) return;
     const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
@@ -224,17 +93,11 @@ export function useTransactionReviewActions({
 
         return;
       } catch (error) {
-        const message = getErrorMessage(error);
-        const gatewayMissing = /AI_GATEWAY_API_KEY|AI Gateway is not configured/i.test(message);
-
-        // No Gateway key: fall back to the on-device model (Chrome only).
-        if (gatewayMissing) {
-          console.warn("[categorize] no gateway key, falling back to browser AI");
-          runBrowserCategorize(idsToCategorize);
-          return;
-        }
-
-        showToast({ title: "AI categorization failed", description: message, tone: "danger" });
+        showToast({
+          title: "AI categorization failed",
+          description: getErrorMessage(error),
+          tone: "danger",
+        });
       }
     });
   };
