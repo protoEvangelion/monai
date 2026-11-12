@@ -1,72 +1,12 @@
-import {
-  Button,
-  Drawer,
-  ToggleButton,
-  ToggleButtonGroup,
-  useOverlayState,
-} from "@heroui/react";
+import { Button, Drawer, useOverlayState } from "@heroui/react";
 import { SparklesIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AssistantChat } from "./AssistantChat";
-import { AssistantRuns } from "./AssistantRuns";
 
 const MIN_WIDTH = 380;
 const MAX_WIDTH = 960;
 const DEFAULT_WIDTH = 440;
 const EXPANDED_WIDTH = 880;
-const WIDTH_KEY = "monai:assistant-width";
-
-function readStoredWidth() {
-  if (typeof window === "undefined") return DEFAULT_WIDTH;
-  const raw = Number(window.localStorage.getItem(WIDTH_KEY));
-  return Number.isFinite(raw) && raw >= MIN_WIDTH && raw <= MAX_WIDTH
-    ? raw
-    : DEFAULT_WIDTH;
-}
-
-const TABS = [
-  { id: "chat", label: "Chat" },
-  { id: "runs", label: "Runs" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
-
-/**
- * Section switcher.
- *
- * HeroUI's `Tabs` stretches every tab to `w-full`, which makes two tabs read as
- * two giant pills in a 440px rail. `ToggleButtonGroup` is the design-system
- * answer for a compact single-select pair: connected segments, one shared
- * radius, and `aria-pressed` semantics for free.
- */
-function SectionSwitch({
-  value,
-  onChange,
-}: {
-  value: TabId;
-  onChange: (id: TabId) => void;
-}) {
-  return (
-    <ToggleButtonGroup
-      size="sm"
-      selectionMode="single"
-      disallowEmptySelection
-      aria-label="Assistant sections"
-      selectedKeys={[value]}
-      onSelectionChange={(keys) => {
-        const next = [...keys][0];
-        if (next) onChange(next as TabId);
-      }}
-      className="shrink-0"
-    >
-      {TABS.map((tab) => (
-        <ToggleButton key={tab.id} id={tab.id} className="px-2.5 text-xs">
-          {tab.label}
-        </ToggleButton>
-      ))}
-    </ToggleButtonGroup>
-  );
-}
 
 /**
  * Right-hand assistant rail.
@@ -81,7 +21,6 @@ export function AssistantPanel({
   state: ReturnType<typeof useOverlayState>;
 }) {
   const [width, setWidthState] = useState(DEFAULT_WIDTH);
-  const [tab, setTab] = useState<TabId>("chat");
   const [isDragging, setIsDragging] = useState(false);
   const drag = useRef<{
     startX: number;
@@ -89,9 +28,6 @@ export function AssistantPanel({
     moved: boolean;
   } | null>(null);
   const isWide = width > (DEFAULT_WIDTH + EXPANDED_WIDTH) / 2;
-
-  // Restore after mount so SSR and the first client render agree.
-  useEffect(() => setWidthState(readStoredWidth()), []);
 
   const setWidth = useCallback((next: number) => {
     const viewportMax =
@@ -102,11 +38,6 @@ export function AssistantPanel({
       Math.min(Math.max(next, MIN_WIDTH), Math.min(MAX_WIDTH, viewportMax)),
     );
     setWidthState(clamped);
-    try {
-      window.localStorage.setItem(WIDTH_KEY, String(clamped));
-    } catch {
-      // Private mode / quota: the size still applies for this session.
-    }
   }, []);
 
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -204,7 +135,6 @@ export function AssistantPanel({
               <h2 className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">
                 Assistant
               </h2>
-              <SectionSwitch value={tab} onChange={setTab} />
               <Button
                 isIconOnly
                 variant="ghost"
@@ -218,7 +148,7 @@ export function AssistantPanel({
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
-              {tab === "chat" ? <AssistantChat /> : <AssistantRuns />}
+              <AssistantChat />
             </div>
           </Drawer.Dialog>
         </Drawer.Content>

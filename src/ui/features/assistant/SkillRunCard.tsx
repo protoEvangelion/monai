@@ -33,6 +33,8 @@ export type SkillTask = {
   /** Raw text typed after the command, used as a pre-filled target filter. */
   args: string;
   status: SkillTaskStatus;
+  /** Progress lines, newest last. Rendered inline in the thread. */
+  progress?: string[];
   result?: AmazonReconcileResult;
   error?: string;
 };
@@ -213,9 +215,21 @@ export function SkillRunCard({
       )}
 
       {task.status === "running" ? (
-        <Text size="xs" variant="muted">
-          Reading your Amazon charges and writing notes to matching rows…
-        </Text>
+        <div className="flex flex-col gap-1.5">
+          {(task.progress ?? []).map((line, index) => (
+            <div
+              key={`${task.id}-progress-${index}`}
+              className="flex items-start gap-2 text-xs leading-relaxed text-muted"
+            >
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
+              <span className="min-w-0 break-words">{line}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <Spinner size="sm" />
+            <span>Reading your Amazon charges and writing notes…</span>
+          </div>
+        </div>
       ) : null}
 
       {task.status === "failed" ? (

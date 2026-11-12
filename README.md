@@ -12,7 +12,7 @@
 |---|---|
 | 📊 **Dashboard** | Net worth chart, budget progress, top categories at a glance |
 | 🔄 **Transaction Review** | Pulse-animated queue of transactions begging for your attention |
-| 🤖 **AI Categorization** | Cursor CLI auto-tags your merchants so you don't have to |
+| 🤖 **AI Categorization** | Vercel AI Gateway auto-tags your merchants so you don't have to |
 | ⏳ **Time Travel** | Jump to any past month to audit your past-self's spending crimes |
 | 🏦 **Account Groups** | Credit, Depository, Investment, Loan, Real Estate — all in one place |
 | 🔐 **Auth** | Clerk-powered, zero config |
@@ -31,7 +31,7 @@ UI           →  HeroUI v3 + Tailwind CSS v4
 State        →  TanStack Query (server) · Zustand (client)
 Charts       →  Recharts
 Animation    →  Framer Motion
-AI           →  Cursor CLI (local only)
+AI           →  Vercel AI Gateway (+ local `pi` CLI fallback)
 Deploy       →  Vercel (Nitro) + Turso
 Linting      →  oxlint
 TypeScript   →  @typescript/native-preview (tsgo) 🚀
@@ -61,7 +61,8 @@ cp .env.example .env.local
 | `PLAID_ENV` | `sandbox` for demos (never `production` on public Vercel) |
 | `DATABASE_URL` | Local: `file:./data/dev.db` |
 | `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | [Turso](https://turso.tech) — required for Vercel |
-| Cursor CLI (`agent`) | Local AI Categorize. Deployed site still uses Chrome Gemini Nano |
+| `AI_GATEWAY_API_KEY` | Vercel AI Gateway key — AI Categorize and the assistant, locally and on Vercel |
+| `pi` CLI | Optional local fallback for AI Categorize (`MONAI_SERVER_AI=pi-cli`) |
 
 ### 3. Set up the database
 
@@ -176,7 +177,9 @@ historical_balances → daily snapshots for net worth chart
 
 Sync applies **categorization rules** only.
 
-On your machine, **AI Categorize** runs the Cursor Agent CLI (`agent`). Log in once with `agent login`, or set `CURSOR_API_KEY`. The deployed site cannot run that CLI, so the button there still uses Chrome Gemini Nano.
+On your machine and on the deployed site, **AI Categorize** calls the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) with `AI_GATEWAY_API_KEY`.
+
+If that call fails locally, it falls back to the `pi` CLI (`MONAI_SERVER_AI=pi-cli` forces it). The fallback reuses your pi provider/model setup but runs in an isolated agent directory — Monai's system prompt, no tools, no sessions, and thinking pinned to `minimal` — so nothing in your personal `~/.pi/agent` config leaks into a batch job. The deployed site has no `pi` binary, so there it uses the Gateway only.
 
 ---
 

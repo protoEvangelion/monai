@@ -36,14 +36,25 @@ Categories sent to model: user's leaf categories only (no parent groups, no catc
 - Output must be valid JSON where each item has `transactionId` and `category`.
 - If model output is malformed or invalid, fallback logic assigns a valid existing category.
 
-## Model Selection (Cursor CLI)
-Categorization runs through `agent -p --mode ask --sandbox enabled` in read-only mode.
+## Model Selection (Vercel AI Gateway + local `pi` fallback)
+
+Categorization calls the Vercel AI Gateway (`openai/gpt-5.1` by default) over HTTP, so the deployed site and your machine behave the same. See `src/services/aiGateway.ts`.
+
+If that call fails locally, it falls back to the `pi` CLI. `MONAI_SERVER_AI=pi-cli` forces the fallback. `pi` runs as a one-shot, read-only text generator:
+
+```
+pi -p --mode text --thinking minimal --model vmc/cheap-flash \
+   --system-prompt <Monai categorizer prompt> \
+   --no-session --no-tools --no-extensions --no-skills --no-mcp --no-context-files
+```
+
+It uses a dedicated agent directory (`$TMPDIR/monai-pi-categorizer`) so your personal `APPEND_SYSTEM.md`, skills, MCP servers, and `AGENTS.md` never reach the prompt. The directory holds no secrets: `models.json` interpolates `$AI_GATEWAY_API_KEY` from the child process env.
 
 Environment overrides:
-- `CURSOR_CLI_PATH`: path to the Cursor Agent CLI binary. Defaults to `agent`.
-- `CURSOR_CATEGORIZER_MODEL`: optional model override. If omitted, Cursor uses its configured default model.
-- `CURSOR_CATEGORIZER_TIMEOUT_MS`: optional process timeout. Defaults to `90000`.
-- `CURSOR_API_KEY`: optional API key. Otherwise run `agent login`.
+- `PI_CLI_PATH`: path to the `pi` binary. Defaults to `pi` (plus `~/.pi/agent/bin` on `PATH`).
+- `PI_CATEGORIZER_MODEL`: model id. Defaults to `vmc/cheap-flash`.
+- `PI_CATEGORIZER_THINKING`: thinking level. Defaults to `minimal`.
+- `PI_CATEGORIZER_TIMEOUT_MS`: optional process timeout. Defaults to `90000`.
 
 ## Constraints
 - No merchant-specific hardcoded rules.

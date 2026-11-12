@@ -12,11 +12,11 @@ import {
   getAllowedLeafCats,
 } from "./categorize.utils";
 import {
-  CURSOR_MODEL_LABEL,
-  CURSOR_PROVIDER_LABEL,
-  cursorCategorizerIdleSeconds,
-  runCursorCategorizerCli,
-} from "../services/cursorCli";
+  PI_MODEL_LABEL,
+  PI_PROVIDER_LABEL,
+  piCategorizerIdleSeconds,
+  runPiCategorizerCli,
+} from "../services/piCategorizer";
 import {
   GATEWAY_MODEL,
   GATEWAY_PROVIDER_LABEL,
@@ -392,9 +392,17 @@ export const applyAICategorization = createServerFn().handler(async (ctx) => {
  * Primary: Vercel AI Gateway via TanStack AI (`runGatewayAICategorizationForUser`).
  * This is an HTTP call, so it works identically on your machine and on Vercel.
  *
- * Fallback: the local Cursor Agent CLI (`runCursorAICategorizationForUser`),
- * kept for machines that are logged in to `agent` and have no Gateway key.
+ * Fallback: the local `pi` CLI (`runPiAICategorizationForUser`), using the
+ * same agent setup you run interactively but with Monai's system prompt and
+ * thinking pinned to `minimal`.
  */
+
+/** System prompt for the pi path. The batch prompt carries the real rules. */
+const PI_SYSTEM_PROMPT = [
+  "You are Monai's transaction categorizer.",
+  "Follow the user's instructions exactly.",
+  "Reply with only the requested JSON. No prose, no greeting, no summary.",
+].join(" ");
 async function allowLongCategorizeRequest(seconds: number) {
   try {
     const { getRequest } = await import("@tanstack/react-start/server");
@@ -478,15 +486,15 @@ export async function runGatewayAICategorizationForUser(
   return { ...applied, provider: GATEWAY_PROVIDER_LABEL };
 }
 
-export async function runCursorAICategorizationForUser(
+export async function runPiAICategorizationForUser(
   userId: string,
   data: CategorizeRequestData = {},
 ) {
   if (process.env.VERCEL) {
-    throw new Error("Cursor CLI categorization only runs on your local machine.");
+    throw new Error("pi CLI categorization only runs on your local machine.");
   }
 
-  await allowLongCategorizeRequest(cursorCategorizerIdleSeconds());
+  await allowLongCategorizeRequest(piCategorizerIdleSeconds());
 
   const prepared = await prepareAICategorizationForUser(userId, data);
   if (!prepared.transactions.length) {
@@ -495,7 +503,7 @@ export async function runCursorAICategorizationForUser(
       updatedCount: 0,
       skippedCount: prepared.skippedByRulesOrType,
       skipReasons: ["Nothing left after rules."],
-      provider: CURSOR_PROVIDER_LABEL,
+      provider: PI_PROVIDER_LABEL,
     };
   }
 
@@ -503,20 +511,20 @@ export async function runCursorAICategorizationForUser(
   console.log(
     [
       "[categorize] batch request",
-      `  provider: ${CURSOR_PROVIDER_LABEL}`,
-      `  model: ${CURSOR_MODEL_LABEL}`,
+      `  provider: ${PI_PROVIDER_LABEL}`,
+      `  model: ${PI_MODEL_LABEL}`,
       `  categories: ${prepared.categories.length}`,
       `  transactionRows: ${prepared.transactions.length}`,
     ].join("\n"),
   );
 
-  const raw = await runCursorCategorizerCli({ prompt });
+  const raw = await runPiCategorizerCli({ prompt, systemPrompt: PI_SYSTEM_PROMPT });
   const byTransactionId = parseTransactionCategoryMap(raw);
   console.log(
     [
       "[categorize] batch response",
-      `  provider: ${CURSOR_PROVIDER_LABEL}`,
-      `  model: ${CURSOR_MODEL_LABEL}`,
+      `  provider: ${PI_PROVIDER_LABEL}`,
+      `  model: ${PI_MODEL_LABEL}`,
       `  categorizedRows: ${byTransactionId.size}`,
     ].join("\n"),
   );
@@ -526,20 +534,20 @@ export async function runCursorAICategorizationForUser(
     category,
   }));
   const applied = await applyAICategorizationForUser(userId, assignments);
-  return { ...applied, provider: CURSOR_PROVIDER_LABEL };
+  return { ...applied, provider: PI_PROVIDER_LABEL };
 }
 
 /**
  * Server-side AI categorize used by the dashboard button.
  *
- * Default is the AI Gateway. Set `MONAI_SERVER_AI=cursor-cli` to force the
- * local CLI instead (useful if the Gateway key is missing).
+ * Default is the AI Gateway. Set `MONAI_SERVER_AI=pi-cli` to force the local
+ * `pi` CLI instead (useful if the Gateway key is missing).
  */
 export async function runServerAICategorizationForUser(
   userId: string,
   data: CategorizeRequestData = {},
 ) {
-  const preferCli = process.env.MONAI_SERVER_AI?.trim() === "cursor-cli";
+  const preferCli = process.env.MONAI_SERVER_AI?.trim() === "pi-cli";
 
   if (!preferCli) {
     try {
@@ -549,16 +557,16 @@ export async function runServerAICategorizationForUser(
       // Only fall back locally; a missing key in production should surface.
       if (process.env.VERCEL) throw error;
       console.warn(
-        "[categorize] gateway path failed, trying Cursor CLI:",
+        "[categorize] gateway path failed, trying pi CLI:",
         error instanceof Error ? error.message : error,
       );
     }
   }
 
-  return runCursorAICategorizationForUser(userId, data);
+  return runPiAICategorizationForUser(userId, data);
 }
 
-export const runCursorAICategorization = createServerFn().handler(async (ctx) => {
+export const runPiAICategorization = createServerFn().handler(async (ctx) => {
   const { userId } = await getAuthOrDevAuth();
   if (!userId) throw new Error("Unauthorized");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

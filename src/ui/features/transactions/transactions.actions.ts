@@ -5,7 +5,7 @@ import { AI_CATEGORIZE_MAX_TRANSACTIONS } from "../../../server/plaid.sync.fns";
 import {
   applyAICategorization,
   prepareAICategorization,
-  runCursorAICategorization,
+  runPiAICategorization,
 } from "../../../server/categorize.fns";
 import {
   beginBrowserAiSession,
@@ -20,7 +20,6 @@ import {
   updateTransactionsDate,
 } from "../../../server/transactions.fns";
 import { showToast } from "../../shared/toast";
-import { finishRun, logRunEvent, startRun } from "../assistant/runs";
 import { getErrorMessage } from "./transactions.utils";
 
 export function useTransactionReviewActions({
@@ -37,7 +36,7 @@ export function useTransactionReviewActions({
   const router = useRouter();
   const prepareAICategorizeFn = useServerFn(prepareAICategorization);
   const applyAICategorizeFn = useServerFn(applyAICategorization);
-  const runCursorAICategorizeFn = useServerFn(runCursorAICategorization);
+  const runPiAICategorizeFn = useServerFn(runPiAICategorization);
   const [isAICategorizing, startAITransition] = useTransition();
   const [isSplitting, startSplitTransition] = useTransition();
 
@@ -57,7 +56,7 @@ export function useTransactionReviewActions({
   /** One-shot server categorizer (AI Gateway, or the local CLI if configured). */
   const runServerCategorize = async (ids: number[]) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await (runCursorAICategorizeFn as any)({
+    (await (runPiAICategorizeFn as any)({
       data: { ids, limit: AI_CATEGORIZE_MAX_TRANSACTIONS },
     })) as {
       updatedCount?: number;
@@ -88,7 +87,7 @@ export function useTransactionReviewActions({
           ? "Run AI Categorize again to continue through the remaining transactions."
           : result.provider === "vercel-ai-gateway"
             ? "Used Vercel AI Gateway."
-            : "Used the Cursor CLI on this machine.",
+            : "Used the pi CLI on this machine.",
     });
   };
 
@@ -217,27 +216,12 @@ export function useTransactionReviewActions({
     const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
 
     startAITransition(async () => {
-      const runId = startRun("AI categorize", "Vercel AI Gateway");
-      logRunEvent(runId, `${idsToCategorize.length} transaction${idsToCategorize.length === 1 ? "" : "s"} queued`);
       try {
         const result = await runServerCategorize(idsToCategorize);
         await router.invalidate();
         reportServerResult(result);
         resetSelection();
 
-        if ((result?.updatedCount ?? 0) > 0) {
-          logRunEvent(runId, `Categorized ${result.updatedCount}`);
-          finishRun(runId, {
-            status: "done",
-            summary: `Categorized ${result.updatedCount} transaction${result.updatedCount === 1 ? "" : "s"}.`,
-          });
-        } else {
-          const reason =
-            Array.isArray(result?.skipReasons) && result.skipReasons.length
-              ? result.skipReasons.slice(0, 3).join("; ")
-              : "No matching categories were applied.";
-          finishRun(runId, { status: "failed", summary: reason });
-        }
         return;
       } catch (error) {
         const message = getErrorMessage(error);
@@ -245,17 +229,11 @@ export function useTransactionReviewActions({
 
         // No Gateway key: fall back to the on-device model (Chrome only).
         if (gatewayMissing) {
-          logRunEvent(runId, "No Gateway key — falling back to Chrome on-device AI");
-          finishRun(runId, {
-            status: "failed",
-            summary: "AI Gateway key missing; used Chrome on-device AI instead.",
-          });
           console.warn("[categorize] no gateway key, falling back to browser AI");
           runBrowserCategorize(idsToCategorize);
           return;
         }
 
-        finishRun(runId, { status: "failed", summary: message });
         showToast({ title: "AI categorization failed", description: message, tone: "danger" });
       }
     });

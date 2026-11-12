@@ -24,8 +24,8 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { reconcileAmazonNotes } from "../../../server/amazon-notes.fns";
 import { showToast } from "../../shared/toast";
-import { finishRun, logRunEvent, startRun } from "./runs";
-import { SkillRunCard, type SkillTask } from "./SkillRunCard";
+import { consumeRequestedSkill, subscribeAssistantRequests } from "./assistantRequest";
+import { SkillRunCard, type SkillRunInput, type SkillTask } from "./SkillRunCard";
 import { filterSkills, parseSkillDraft, SKILLS, type Skill } from "./skills";
 
 const SUGGESTIONS = [
@@ -79,6 +79,33 @@ export function AssistantChat() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = status === "streaming" || status === "submitted";
 
+  /** Append a fresh skill card to the thread. */
+  const openSkill = (skill: Skill, args = "") => {
+    setTasks((current) => [
+      ...current,
+      {
+        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        skill,
+        args,
+        status: "awaiting",
+        progress: [],
+        createdAt: Date.now(),
+      },
+    ]);
+  };
+
+  // Buttons elsewhere (e.g. the dashboard Amazon button) ask for a skill card.
+  // Consuming here keeps the panel a dumb view of one in-memory session.
+  useEffect(() => {
+    const applyRequest = () => {
+      const skillId = consumeRequestedSkill();
+      const skill = skillId ? SKILLS.find((item) => item.id === skillId) : null;
+      if (skill) openSkill(skill);
+    };
+    applyRequest();
+    return subscribeAssistantRequests(applyRequest);
+  }, []);
+
   useEffect(() => {
     const node = scrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
@@ -103,16 +130,7 @@ export function AssistantChat() {
   const chooseSkill = (skill: Skill) => {
     setDraft("");
     setMenuDismissed(true);
-    setTasks((current) => [
-      ...current,
-      {
-        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        skill,
-        args: "",
-        status: "awaiting",
-        createdAt: Date.now(),
-      },
-    ]);
+    openSkill(skill);
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
@@ -123,46 +141,71 @@ export function AssistantChat() {
     void sendMessage(trimmed);
   };
 
-  /** Run a skill card: server function, run log, toast, then refresh rows. */
-  const runSkill = async (
+  const patchTask = (
     taskId: string,
-    input: { scrapeJson: string; targets: string; unreviewedOnly: boolean },
-  ) => {
+    patch: Partial<SkillTask & { createdAt: number }>,
+  ) =>
+    setTasks((current) =>
+      current.map((task) => (task.id === taskId ? { ...task, ...patch } : task)),
+    );
+
+  /** Progress lines live on the card itself, in the thread. */
+  const pushProgress = (taskId: string, line: string) =>
     setTasks((current) =>
       current.map((task) =>
         task.id === taskId
-          ? { ...task, status: "running", error: undefined, result: undefined }
+          ? { ...task, progress: [...(task.progress ?? []), line] }
           : task,
       ),
     );
 
-    const runId = startRun("Amazon match", "Local matcher");
-    logRunEvent(runId, "Parsing pasted scrape JSON");
+  /** Run a skill card in-process: server function, toast, then refresh rows. */
+  const runSkill = async (taskId: string, input: SkillRunInput) => {
+    // Validate locally first so a bad paste fails instantly instead of after
+    // a round trip, and so the card can report what it actually received.
+    let payments = 0;
+    let orders = 0;
+    try {
+      const parsed = JSON.parse(input.scrapeJson) as {
+        payments?: unknown[];
+        orders?: unknown[];
+      };
+      payments = Array.isArray(parsed.payments) ? parsed.payments.length : 0;
+      orders = Array.isArray(parsed.orders) ? parsed.orders.length : 0;
+      if (!payments) throw new Error("No payments found in that JSON.");
+    } catch (caught) {
+      patchTask(taskId, {
+        status: "failed",
+        error:
+          caught instanceof Error ? caught.message : "Could not read that JSON.",
+        result: undefined,
+      });
+      return;
+    }
+
+    patchTask(taskId, {
+      status: "running",
+      error: undefined,
+      result: undefined,
+      progress: [
+        `Read ${payments} payment${payments === 1 ? "" : "s"} and ${orders} order${
+          orders === 1 ? "" : "s"
+        } from the scrape`,
+      ],
+    });
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const output = await (reconcile as any)({ data: input });
       await router.invalidate();
 
-      logRunEvent(
-        runId,
-        `${output.matchedCount} matched, ${output.updatedCount} noted, ${output.skippedCount} skipped`,
+      pushProgress(
+        taskId,
+        `Matched ${output.matchedCount} · noted ${output.updatedCount} · skipped ${output.skippedCount}`,
       );
+      patchTask(taskId, { status: "done", result: output });
+
       const added = output.updatedCount as number;
-      finishRun(runId, {
-        status: added > 0 ? "done" : "failed",
-        summary:
-          added > 0
-            ? `Added notes to ${added} Amazon charge${added === 1 ? "" : "s"}.`
-            : `No notes added across ${output.targetedCount} charge${output.targetedCount === 1 ? "" : "s"}.`,
-      });
-
-      setTasks((current) =>
-        current.map((task) =>
-          task.id === taskId ? { ...task, status: "done", result: output } : task,
-        ),
-      );
-
       showToast({
         title:
           added > 0
@@ -177,12 +220,7 @@ export function AssistantChat() {
     } catch (caught) {
       const message =
         caught instanceof Error ? caught.message : "Could not read that JSON.";
-      finishRun(runId, { status: "failed", summary: message });
-      setTasks((current) =>
-        current.map((task) =>
-          task.id === taskId ? { ...task, status: "failed", error: message } : task,
-        ),
-      );
+      patchTask(taskId, { status: "failed", error: message });
       showToast({ title: "Amazon match failed", description: message, tone: "danger" });
     }
   };
