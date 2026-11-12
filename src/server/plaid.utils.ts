@@ -176,6 +176,24 @@ export async function refreshAccountBalances(accessToken: string, itemId: number
     }),
   );
 
+  // A local account whose stored plaid_account_id Plaid no longer returns is
+  // orphaned: its balance freezes and its new transactions stop importing.
+  // Plaid re-issues account ids on re-auth and institution migrations.
+  const livePlaidIds = new Set(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (plaidAccounts as any[]).map((plaidAccount: any) => plaidAccount.account_id),
+  );
+  const orphans = localAccounts.filter(
+    (account) => account.plaidAccountId && !livePlaidIds.has(account.plaidAccountId),
+  );
+  if (orphans.length > 0) {
+    console.warn(
+      `[balances] item ${itemId}: ${orphans.length} local account(s) no longer exist in Plaid ` +
+        `(${orphans.map((account) => `#${account.id} ${account.name}`).join(", ")}). ` +
+        "Their new transactions will not import — re-link the item to repair.",
+    );
+  }
+
   console.log(`[balances] refreshed ${updated} accounts for item ${itemId}`);
   return updated;
 }

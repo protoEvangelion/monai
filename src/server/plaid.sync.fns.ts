@@ -394,6 +394,12 @@ export async function syncTransactions(
   const accountMap = new Map(dbAccounts.map((a) => [a.plaidAccountId, a.id]));
   const itemAccountIds = dbAccounts.map((account) => account.id);
   let existingDedupeRows = await loadExistingDedupeRows(db, userId, itemAccountIds);
+  // Transactions whose Plaid account_id we do not have locally were silently
+  // dropped here before. Plaid re-issues account ids on re-auth/institution
+  // migrations, which orphans a local account and stops new rows for it from
+  // ever importing. Collect them so the failure is visible.
+  const unknownAccountIds = new Map<string, number>();
+  let unknownAccountTxns = 0;
   let skippedDuplicateCount = 0;
 
   try {
@@ -434,6 +440,13 @@ export async function syncTransactions(
       const removedCount = await deletePlaidTransactions(db, removedPlaidTransactionIds);
       if (removedCount > 0) {
         console.log(`Removed ${removedCount} deleted Plaid transactions for item ${itemId}`);
+      }
+
+      for (const tx of page.added ?? []) {
+        if (accountMap.has((tx as any).account_id)) continue;
+        const accountId = String((tx as any).account_id);
+        unknownAccountIds.set(accountId, (unknownAccountIds.get(accountId) ?? 0) + 1);
+        unknownAccountTxns += 1;
       }
 
       const incoming = (page.added ?? [])
@@ -502,6 +515,17 @@ export async function syncTransactions(
       hasMore = page.has_more;
 
       await db.update(plaidItems).set({ cursor }).where(eq(plaidItems.id, itemId));
+    }
+
+    if (unknownAccountTxns > 0) {
+      console.warn(
+        `[sync] item ${itemId}: dropped ${unknownAccountTxns} transaction(s) from ` +
+          `${unknownAccountIds.size} Plaid account(s) missing locally: ` +
+          [...unknownAccountIds.entries()]
+            .map(([accountId, count]) => `${accountId} (${count})`)
+            .join(", ") +
+          ". Plaid may have re-issued account ids — re-link the item to repair.",
+      );
     }
 
     console.log(
