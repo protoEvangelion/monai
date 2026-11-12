@@ -5,6 +5,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import {
   plaidPost,
   isMissingPlaidItemError,
+  isPlaidPaginationMutationError,
   isPlaidReconnectRequiredError,
   isPlaidEnvMismatchError,
   deleteLocalItemData,
@@ -356,6 +357,14 @@ async function cleanupLikelyPendingDuplicates(db: typeof import("../db").db, ite
   return deleted.length;
 }
 
+/**
+ * Plaid returns TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION when the
+ * transaction data changes while we are walking the sync pages. Each restart
+ * replays from the last saved cursor, so cap the retries and let a persistent
+ * failure surface instead of looping forever.
+ */
+const MAX_PAGINATION_RESTARTS = 3;
+
 export async function syncTransactions(
   accessToken: string,
   itemId: number,
@@ -370,24 +379,53 @@ export async function syncTransactions(
     where: eq(plaidItems.id, itemId),
   });
   let cursor = fullHistory ? undefined : (item?.cursor ?? undefined);
+  // Cursor saved before this run. Plaid can invalidate an in-flight pagination
+  // sequence when data changes underneath it; restarting from here is safe
+  // because every page is applied idempotently (upsert on plaidTransactionId).
+  const restartCursor = cursor;
+  let paginationRestarts = 0;
   let hasMore = true;
   let addedCount = 0;
-  const metadataCarryovers: TransactionMetadataCarryover[] = [];
+  let metadataCarryovers: TransactionMetadataCarryover[] = [];
 
   const dbAccounts = await db.query.accounts.findMany({
     where: eq(accounts.plaidItemId, itemId),
   });
   const accountMap = new Map(dbAccounts.map((a) => [a.plaidAccountId, a.id]));
   const itemAccountIds = dbAccounts.map((account) => account.id);
-  const existingDedupeRows = await loadExistingDedupeRows(db, userId, itemAccountIds);
+  let existingDedupeRows = await loadExistingDedupeRows(db, userId, itemAccountIds);
   let skippedDuplicateCount = 0;
 
   try {
     while (hasMore) {
-      const page = await plaidPost("/transactions/sync", {
-        access_token: accessToken,
-        ...(cursor ? { cursor } : {}),
-      });
+      let page: Awaited<ReturnType<typeof plaidPost>>;
+      try {
+        page = await plaidPost("/transactions/sync", {
+          access_token: accessToken,
+          ...(cursor ? { cursor } : {}),
+        });
+      } catch (error) {
+        if (
+          isPlaidPaginationMutationError(error) &&
+          paginationRestarts < MAX_PAGINATION_RESTARTS
+        ) {
+          paginationRestarts += 1;
+          console.warn(
+            `Plaid changed transaction data mid-pagination for item ${itemId}; ` +
+              `restarting from the last saved cursor (attempt ${paginationRestarts}/${MAX_PAGINATION_RESTARTS})`,
+          );
+          cursor = restartCursor;
+          hasMore = true;
+          // The aborted attempt already wrote rows, so recount from scratch and
+          // re-read the dedupe snapshot before replaying the pages.
+          addedCount = 0;
+          skippedDuplicateCount = 0;
+          metadataCarryovers = [];
+          existingDedupeRows = await loadExistingDedupeRows(db, userId, itemAccountIds);
+          continue;
+        }
+        throw error;
+      }
 
       const removedPlaidTransactionIds = (page.removed ?? []).map(plaidTransactionId);
       const pageMetadataCarryovers = await getPlaidTransactionMetadata(db, removedPlaidTransactionIds);

@@ -80,6 +80,23 @@ export const isPlaidReconnectRequiredError = (error: unknown) =>
   error instanceof PlaidApiError && error.errorCode === "ITEM_LOGIN_REQUIRED";
 
 /**
+ * Plaid invalidates an in-flight pagination sequence when the underlying
+ * transaction data changes while you are walking `/transactions/sync` pages.
+ * The documented fix is to restart pagination from the last saved cursor, so
+ * this is retryable rather than fatal.
+ */
+export const isPlaidPaginationMutationError = (error: unknown) => {
+  if (
+    error instanceof PlaidApiError &&
+    error.errorCode === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
+  ) {
+    return true;
+  }
+  const msg = (error as { message?: string })?.message ?? "";
+  return /restart pagination/i.test(msg);
+};
+
+/**
  * Plaid access tokens are bound to the environment that created them
  * (sandbox vs production). If the server is configured for the wrong
  * environment, every stored item fails with INVALID_ACCESS_TOKEN — this is a
