@@ -2,15 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  defineTool,
-  ModelRuntime,
-  SessionManager,
-  SettingsManager,
-  type ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { StreamChunk } from "@tanstack/ai";
 import { Type } from "typebox";
 
@@ -120,7 +112,9 @@ const dateRange = Type.Object({
   ),
 });
 
-function buildTools(userId: string): ToolDefinition[] {
+type PiSdk = typeof import("@earendil-works/pi-coding-agent");
+
+function buildTools(userId: string, defineTool: PiSdk["defineTool"]): ToolDefinition[] {
   return [
     defineTool({
       name: "spendingByCategory",
@@ -238,6 +232,18 @@ function seedEntries(turns: ChatTurn[]) {
 async function createSession(userId: string, history: ChatTurn[]) {
   const dir = writeAgentDir();
 
+  // Loaded on demand, never at module scope. A static import of a 26 MB agent
+  // SDK means a bundling or tracing failure takes down every SSR route with an
+  // opaque 500; this way only the chat endpoint is affected.
+  const pi = await import("@earendil-works/pi-coding-agent");
+  const {
+    createAgentSession,
+    DefaultResourceLoader,
+    ModelRuntime,
+    SessionManager,
+    SettingsManager,
+  } = pi;
+
   const modelRuntime = await ModelRuntime.create({
     authPath: path.join(dir, "auth.json"),
     modelsPath: path.join(dir, "models.json"),
@@ -279,7 +285,7 @@ async function createSession(userId: string, history: ChatTurn[]) {
     // Built-in read/bash/edit/write are useless here and would be a security
     // hole; only the finance tools are exposed.
     noTools: "builtin",
-    customTools: buildTools(userId),
+    customTools: buildTools(userId, pi.defineTool),
     sessionManager: SessionManager.inMemory(dir, undefined, seedEntries(history)),
   });
 
