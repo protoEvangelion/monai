@@ -229,8 +229,35 @@ function seedEntries(turns: ChatTurn[]) {
   });
 }
 
+/**
+ * undici (via the pi SDK) captures `worker_threads.markAsUncloneable` at module
+ * init and calls it unguarded when it builds a File/Blob. The Vercel Node 26
+ * runtime does not export it, so every chat request died with
+ *
+ *   webidl.util.markAsUncloneable is not a function
+ *
+ * `require("node:worker_threads")` hands back a mutable CJS exports object, so
+ * we can supply the no-op Node used to provide before the SDK chunk initialises.
+ */
+async function patchWorkerThreads() {
+  try {
+    const { createRequire } = await import("node:module");
+    const require = createRequire(import.meta.url);
+    const workerThreads = require("node:worker_threads") as {
+      markAsUncloneable?: unknown;
+    };
+    if (typeof workerThreads.markAsUncloneable !== "function") {
+      workerThreads.markAsUncloneable = () => {};
+    }
+  } catch {
+    // Best effort; if this ever fails the SDK import surfaces the real error.
+  }
+}
+
 async function createSession(userId: string, history: ChatTurn[]) {
   const dir = writeAgentDir();
+
+  await patchWorkerThreads();
 
   // Loaded on demand, never at module scope. A static import of a 26 MB agent
   // SDK means a bundling or tracing failure takes down every SSR route with an
