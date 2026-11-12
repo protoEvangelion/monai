@@ -1,6 +1,11 @@
 import { eq, inArray } from "drizzle-orm";
 import { accounts, holdings, securities } from "../db/schema";
-import { isMissingPlaidItemError, plaidPost, PlaidApiError } from "./plaid.utils";
+import {
+  isMissingPlaidItemError,
+  mapAccountType,
+  plaidPost,
+  PlaidApiError,
+} from "./plaid.utils";
 
 function isInvestmentsUnavailableError(error: unknown) {
   if (error instanceof PlaidApiError) {
@@ -67,7 +72,12 @@ export async function syncInvestmentsHoldings(accessToken: string, itemId: numbe
         .set({
           name: plaidAccount.name ?? local.name,
           currentBalance: balance,
-          type: local.type === "investment" ? local.type : "investment",
+          // Map the Plaid type like refreshAccountBalances does. This used to
+          // be `local.type === "investment" ? local.type : "investment"`, which
+          // is always "investment" — every account in an item with investment
+          // products (Chase, Fidelity) was relabelled an investment, including
+          // checking, savings, and the credit card.
+          type: mapAccountType(plaidAccount.type) || local.type,
         })
         .where(eq(accounts.id, local.id));
       local.currentBalance = balance;
