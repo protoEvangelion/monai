@@ -18,7 +18,6 @@ import { Route as RecurringsRouteImport } from './routes/recurrings'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as TransactionsRouteImport } from './routes/transactions'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
-import { Route as ApiDbInfoRouteImport } from './routes/api.db-info'
 import { Route as CategoriesNewCategoryRouteImport } from './routes/categories.new-category'
 import { Route as CategoriesNewGroupRouteImport } from './routes/categories.new-group'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
@@ -68,11 +67,6 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDbInfoRoute = ApiDbInfoRouteImport.update({
-  id: '/api/db-info',
-  path: '/api/db-info',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const CategoriesNewCategoryRoute = CategoriesNewCategoryRouteImport.update({
   id: '/new-category',
   path: '/new-category',
@@ -99,7 +93,6 @@ export interface FileRoutesByFullPath {
   '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/db-info': typeof ApiDbInfoRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -114,7 +107,6 @@ export interface FileRoutesByTo {
   '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/db-info': typeof ApiDbInfoRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -130,7 +122,6 @@ export interface FileRoutesById {
   '/rules': typeof RulesRoute
   '/transactions': typeof TransactionsRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/db-info': typeof ApiDbInfoRoute
   '/categories/new-category': typeof CategoriesNewCategoryRoute
   '/categories/new-group': typeof CategoriesNewGroupRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -147,7 +138,6 @@ export interface FileRouteTypes {
     | '/rules'
     | '/transactions'
     | '/api/chat'
-    | '/api/db-info'
     | '/categories/new-category'
     | '/categories/new-group'
     | '/sign-in/$'
@@ -162,7 +152,6 @@ export interface FileRouteTypes {
     | '/rules'
     | '/transactions'
     | '/api/chat'
-    | '/api/db-info'
     | '/categories/new-category'
     | '/categories/new-group'
     | '/sign-in/$'
@@ -177,7 +166,6 @@ export interface FileRouteTypes {
     | '/rules'
     | '/transactions'
     | '/api/chat'
-    | '/api/db-info'
     | '/categories/new-category'
     | '/categories/new-group'
     | '/sign-in/$'
@@ -193,7 +181,6 @@ export interface RootRouteChildren {
   RulesRoute: typeof RulesRoute
   TransactionsRoute: typeof TransactionsRoute
   ApiChatRoute: typeof ApiChatRoute
-  ApiDbInfoRoute: typeof ApiDbInfoRoute
   SignInSplatRoute: typeof SignInSplatRoute
 }
 
@@ -262,13 +249,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/db-info': {
-      id: '/api/db-info'
-      path: '/api/db-info'
-      fullPath: '/api/db-info'
-      preLoaderRoute: typeof ApiDbInfoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/categories/new-category': {
       id: '/categories/new-category'
       path: '/new-category'
@@ -317,7 +297,6 @@ const rootRouteChildren: RootRouteChildren = {
   RulesRoute: RulesRoute,
   TransactionsRoute: TransactionsRoute,
   ApiChatRoute: ApiChatRoute,
-  ApiDbInfoRoute: ApiDbInfoRoute,
   SignInSplatRoute: SignInSplatRoute,
 }
 export const routeTree = rootRouteImport
