@@ -15,7 +15,6 @@ const baseURL = process.env.BASE_URL || localBaseURL
 
 export default defineConfig({
   testDir: './e2e',
-  globalSetup: './e2e/global-setup.ts',
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
@@ -32,10 +31,10 @@ export default defineConfig({
   webServer: process.env.BASE_URL
     ? undefined
     : {
-      command: process.env.CI ? 'bun vite preview --port 3000' : 'bun run dev',
+      command: process.env.CI ? 'bun e2e/prepare.ts && bun vite preview --port 3000' : 'bun e2e/prepare.ts && bun run dev',
       env: testEnv,
       url: localBaseURL,
       reuseExistingServer: process.env.PW_REUSE_SERVER === '1',
-        timeout: 60_000,
+      timeout: 120_000,
       },
 })

@@ -35,19 +35,34 @@ if (mode === "production") {
   env.PLAID_SECRET = env.PLAID_PRODUCTION_SECRET ?? env.PLAID_SECRET;
 } else {
   // Sandbox mode stays local-only so sandbox keys never touch real bank rows.
+  //
+  // Deleting TURSO_DATABASE_URL is not enough. The Vite child process re-loads
+  // .env.local through Bun's auto-dotenv, which put the production Turso URL
+  // straight back — so `bun run dev` and the whole e2e suite were reading (and
+  // could write) production data. MONAI_DATABASE_URL outranks every TURSO_*
+  // value, so pin it to the sandbox database explicitly.
   delete env.TURSO_DATABASE_URL;
+  delete env.TURSO_AUTH_TOKEN;
+  delete env.MONAI_DATABASE_AUTH_TOKEN;
   env.DATABASE_URL = env.PLAID_SANDBOX_DATABASE_URL ?? env.DATABASE_URL;
+  if (env.DATABASE_URL) env.MONAI_DATABASE_URL = env.DATABASE_URL;
   env.PLAID_ENV = env.PLAID_SANDBOX_ENV ?? env.PLAID_ENV ?? "sandbox";
   env.PLAID_SECRET = env.PLAID_SANDBOX_SECRET ?? env.PLAID_SECRET;
 }
 
 env.MONAI_CREDENTIAL_MODE = mode;
 
-const databaseLabel = env.TURSO_DATABASE_URL
-  ? `turso:${String(env.TURSO_DATABASE_URL).replace(/^https?:\/\//, "").replace(/^libsql:\/\//, "").split("/")[0]}`
-  : env.DATABASE_URL
-    ? env.DATABASE_URL.replace(process.cwd(), ".")
-    : "<unset>";
+function describeDatabase(value: string | undefined) {
+  if (!value) return "<unset>";
+  if (/^(libsql|https?):\/\//.test(value)) return value.replace(/^\w+:\/\//, "").split("/")[0];
+  return value.replace(process.cwd(), ".");
+}
+
+const databaseLabel = env.MONAI_DATABASE_URL
+  ? `pinned:${describeDatabase(env.MONAI_DATABASE_URL)}`
+  : env.TURSO_DATABASE_URL
+    ? `turso:${describeDatabase(env.TURSO_DATABASE_URL)}`
+    : describeDatabase(env.DATABASE_URL);
 
 console.log(
   [
@@ -66,8 +81,9 @@ if (mode === "production" && env.PLAID_ENV === "production") {
 
 if (mode === "sandbox" && process.env.TURSO_DATABASE_URL) {
   console.log(
-    "[monai] TURSO_DATABASE_URL is set but ignored in sandbox mode. " +
-      "Run `bun run dev --production` to use the shared Turso bank data.",
+    "[monai] TURSO_DATABASE_URL from .env.local is overridden in sandbox mode " +
+      "(pinned to the local sandbox DB). Run `bun run dev --production` to use " +
+      "the shared Turso bank data.",
   );
 }
 

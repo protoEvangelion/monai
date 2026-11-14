@@ -3,7 +3,11 @@ import { defineConfig } from "drizzle-kit";
 
 config({ path: [".env.local", ".env"] });
 
+// Mirrors src/db/index.ts. MONAI_DATABASE_URL first so callers (the e2e reset)
+// can pin a target: this config loads .env.local, whose TURSO_DATABASE_URL
+// would otherwise win and send `drizzle-kit push` at production.
 const url = (
+  process.env.MONAI_DATABASE_URL?.trim() ||
   process.env.TURSO_DATABASE_URL?.trim() ||
   process.env.DATABASE_URL?.trim() ||
   ""

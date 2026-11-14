@@ -29,11 +29,16 @@ test.describe("ReviewTable", () => {
       await expect(page.getByRole("checkbox", { name: "Select transactions" })).toBeVisible();
     });
 
-    test("AI action appears after selection and Mark Reviewed stays hidden", async ({ page }) => {
-      await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeHidden();
+    test("AI Categorize is always available and Mark Reviewed stays hidden on the full list", async ({ page }) => {
+      // AI Categorize lives in the table toolbar and is always rendered; it
+      // disables itself when nothing is eligible. Mark Reviewed is only offered
+      // on the unreviewed dashboard view, not the full transaction list.
+      const aiButton = page.getByRole("button", { name: "AI Categorize", exact: true });
+      await expect(aiButton).toBeVisible();
+      await expect(page.getByRole("button", { name: /Mark reviewed/i })).toBeHidden();
       await selectAllTransactions(page);
-      await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Mark Reviewed|Mark reviewed/i })).toBeHidden();
+      await expect(aiButton).toBeVisible();
+      await expect(page.getByRole("button", { name: /Mark reviewed/i })).toBeHidden();
     });
 
     test("selecting all transactions updates the label", async ({ page }) => {
@@ -117,15 +122,22 @@ test.describe("ReviewTable", () => {
     });
 
     test("note column supports inline editing", async ({ page }) => {
+      // Uses transaction 2, whose note starts empty and is asserted nowhere
+      // else, so the debounced save cannot leak into another test.
       await toggleOptionalColumns(page, ["Note"]);
-      const noteInput = page.getByTestId("transaction-note-1");
-      await expect(noteInput).toHaveValue("Weekly groceries");
+      const noteInput = page.getByTestId("transaction-note-2");
+      await expect(noteInput).toHaveValue("");
       await noteInput.fill("Updated grocery note");
       await noteInput.blur();
       await expect(noteInput).toHaveValue("Updated grocery note");
-      await noteInput.fill("Weekly groceries");
-      await noteInput.blur();
-      await expect(noteInput).toHaveValue("Weekly groceries");
+
+      // Survives a round trip to the server, not just local state.
+      await page.reload();
+      await waitForReviewTable(page);
+      // Column visibility may persist across the reload, so show all rather
+      // than toggling (which would hide it again).
+      await showAllColumns(page);
+      await expect(page.getByTestId("transaction-note-2")).toHaveValue("Updated grocery note");
     });
   });
 
@@ -139,8 +151,7 @@ test.describe("ReviewTable", () => {
       await expect(page.getByRole("checkbox", { name: "Select transactions" })).toBeVisible();
     });
 
-    test("AI Categorize button appears after selection", async ({ page }) => {
-      await selectAllTransactions(page);
+    test("AI Categorize button is always visible", async ({ page }) => {
       await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeVisible();
     });
 
@@ -165,10 +176,11 @@ test.describe("ReviewTable", () => {
       const picker = page.locator('[role="dialog"]').filter({ hasText: "Transfer" });
       await expect(picker).toBeVisible();
 
-      const text = await picker.innerText();
-      expect(text.indexOf("Income")).toBeGreaterThanOrEqual(0);
-      expect(text.indexOf("Transfer")).toBeGreaterThan(text.indexOf("Income"));
-      expect(text.indexOf("Food")).toBeGreaterThan(text.indexOf("Transfer"));
+      // Group headers are uppercased by CSS, so compare case-insensitively.
+      const text = (await picker.innerText()).toLowerCase();
+      expect(text.indexOf("income")).toBeGreaterThanOrEqual(0);
+      expect(text.indexOf("transfer")).toBeGreaterThan(text.indexOf("income"));
+      expect(text.indexOf("food")).toBeGreaterThan(text.indexOf("transfer"));
     });
 
     test("Mark Reviewed button appears after selection", async ({ page }) => {
