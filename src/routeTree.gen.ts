@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as AccountsRouteImport } from './routes/accounts'
+import { Route as AmazonImportRouteImport } from './routes/amazon-import'
 import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as RecurringsRouteImport } from './routes/recurrings'
@@ -35,6 +36,11 @@ const AccessDeniedRoute = AccessDeniedRouteImport.update({
 const AccountsRoute = AccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AmazonImportRoute = AmazonImportRouteImport.update({
+  id: '/amazon-import',
+  path: '/amazon-import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriesRoute = CategoriesRouteImport.update({
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/access-denied': typeof AccessDeniedRoute
   '/accounts': typeof AccountsRoute
+  '/amazon-import': typeof AmazonImportRoute
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
   '/recurrings': typeof RecurringsRoute
@@ -101,6 +108,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/access-denied': typeof AccessDeniedRoute
   '/accounts': typeof AccountsRoute
+  '/amazon-import': typeof AmazonImportRoute
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
   '/recurrings': typeof RecurringsRoute
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/access-denied': typeof AccessDeniedRoute
   '/accounts': typeof AccountsRoute
+  '/amazon-import': typeof AmazonImportRoute
   '/categories': typeof CategoriesRouteWithChildren
   '/investments': typeof InvestmentsRoute
   '/recurrings': typeof RecurringsRoute
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
     | '/'
     | '/access-denied'
     | '/accounts'
+    | '/amazon-import'
     | '/categories'
     | '/investments'
     | '/recurrings'
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
     | '/'
     | '/access-denied'
     | '/accounts'
+    | '/amazon-import'
     | '/categories'
     | '/investments'
     | '/recurrings'
@@ -160,6 +171,7 @@ export interface FileRouteTypes {
     | '/'
     | '/access-denied'
     | '/accounts'
+    | '/amazon-import'
     | '/categories'
     | '/investments'
     | '/recurrings'
@@ -175,6 +187,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccessDeniedRoute: typeof AccessDeniedRoute
   AccountsRoute: typeof AccountsRoute
+  AmazonImportRoute: typeof AmazonImportRoute
   CategoriesRoute: typeof CategoriesRouteWithChildren
   InvestmentsRoute: typeof InvestmentsRoute
   RecurringsRoute: typeof RecurringsRoute
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       path: '/accounts'
       fullPath: '/accounts'
       preLoaderRoute: typeof AccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/amazon-import': {
+      id: '/amazon-import'
+      path: '/amazon-import'
+      fullPath: '/amazon-import'
+      preLoaderRoute: typeof AmazonImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/categories': {
@@ -291,6 +311,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccessDeniedRoute: AccessDeniedRoute,
   AccountsRoute: AccountsRoute,
+  AmazonImportRoute: AmazonImportRoute,
   CategoriesRoute: CategoriesRouteWithChildren,
   InvestmentsRoute: InvestmentsRoute,
   RecurringsRoute: RecurringsRoute,

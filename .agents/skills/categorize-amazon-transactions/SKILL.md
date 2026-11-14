@@ -52,6 +52,26 @@ Amazon registers a **service worker** (`/service-worker.js`) and authenticated p
 - **`document.cookie` export is incomplete** — HttpOnly cookies are omitted; external requests may fail or redirect.
 - **In-page `fetch(..., { credentials: "include" })` works** — the browser sends the full session (including HttpOnly cookies) and returns server-rendered HTML (~450KB, 20 payments/page).
 
+### Preferred: the bookmarklet (one click)
+
+`/amazon-import` on the deployed site offers a draggable bookmarklet built from
+`scripts/amazon-bookmarklet.js`. Dragged to the bookmarks bar once, it scrapes
+the payments page in the user's own session and navigates to
+`/amazon-import#<base64url payload>`, which runs the same reconcile server
+function and renders the report.
+
+Prefer this when the user is doing it themselves — no DevTools, no extension,
+no cookie handling. The agent-driven CDP path below remains the fallback when
+the scrape has to happen without the user present.
+
+Two constraints worth remembering if it ever stops working:
+
+- React 19 replaces a `javascript:` `href` with a thrower, so the link is set
+  through the DOM (`setAttribute`), not as a prop.
+- The router drops the fragment during hydration, so the route reads
+  `src/lib/initialHash.ts`, captured at module evaluation, rather than
+  `window.location.hash`.
+
 ### Run the scrape
 
 1. Open `https://www.amazon.com/cpe/yourpayments/transactions` while signed in.
