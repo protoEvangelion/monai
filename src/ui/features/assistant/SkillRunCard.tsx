@@ -131,7 +131,11 @@ export function SkillRunCard({
         <>
           <ol className="flex flex-col gap-1.5 text-xs leading-relaxed text-muted">
             <li>
-              1. Open{" "}
+              1. Open the one-click importer and drag the bookmarklet to your
+              bookmarks bar, once.
+            </li>
+            <li>
+              2. On{" "}
               <Link
                 href={AMAZON_PAYMENTS_URL}
                 target="_blank"
@@ -139,17 +143,20 @@ export function SkillRunCard({
                 className="text-xs font-medium"
               >
                 Amazon → Your Payments → Transactions
-              </Link>{" "}
-              while signed in.
+              </Link>
+              , click the bookmark. It returns to Monai with the report.
             </li>
-            <li>
-              2. DevTools → Console → paste the scrape snippet, wait for
-              “done”.
-            </li>
-            <li>3. Paste the copied JSON below.</li>
+            <li>3. Only paste JSON below if you already have it from elsewhere.</li>
           </ol>
 
           <div className="flex flex-wrap gap-1.5">
+            <a
+              href="/amazon-import"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 text-xs font-medium text-primary"
+            >
+              <ShoppingBagIcon size={13} />
+              Open one-click importer
+            </a>
             <Button size="sm" variant="outline" onPress={copySnippet}>
               {copied ? <CheckIcon size={13} /> : <ClipboardCopyIcon size={13} />}
               {copied ? "Snippet copied" : "Copy scrape snippet"}
