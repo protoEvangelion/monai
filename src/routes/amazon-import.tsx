@@ -225,7 +225,8 @@ function Setup() {
             Monai → Amazon
           </a>
           <span className="text-xs text-muted-foreground">
-            Dragging saves the script as a bookmark. It is not a link to this page.
+            Dragging saves the script as a bookmark. It is not a link to this page. The
+            script is embedded in the bookmark, so drag it again after an update.
           </span>
         </li>
         <li className="flex flex-col gap-1">

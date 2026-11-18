@@ -64,18 +64,66 @@
     return Math.abs(Math.round(Number(numeric) * 100 * sign));
   };
 
-  const firstOrderKey = () => {
-    const link = document.querySelector('a[href*="orderID="]');
-    if (!link) return null;
-    const orderId = new URL(link.href).searchParams.get("orderID") || "";
+  /* Amazon renders the payments table in the top document on some accounts and
+   * inside a same-origin iframe on others, so every lookup walks all readable
+   * documents. Cross-origin frames are counted for the diagnostics but cannot
+   * be read. */
+  const readableDocuments = () => {
+    const documents = [document];
+    let frames = 0;
+    let readableFrames = 0;
+
+    for (const frame of document.querySelectorAll("iframe")) {
+      frames += 1;
+      try {
+        const inner = frame.contentDocument;
+        if (inner && inner.body) {
+          documents.push(inner);
+          readableFrames += 1;
+        }
+      } catch {
+        /* cross-origin */
+      }
+    }
+
+    return { documents, frames, readableFrames };
+  };
+
+  const orderLinks = () => {
+    const links = [];
+    for (const doc of readableDocuments().documents) {
+      for (const link of doc.querySelectorAll('a[href*="orderID" i], a[href*="orderId" i]')) {
+        links.push(link);
+      }
+    }
+    return links;
+  };
+
+  const orderIdFromHref = (href) => {
+    const match = String(href).match(/[?&]orderI[dD]=([^&#]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  };
+
+  const AMOUNT_RE = /[-+]?\$[\d,]+\.\d{2}/;
+
+  /* Walk up from the order link until an ancestor looks like a single payment
+   * row: it has an amount and is still small. Requiring "Order #" was too
+   * strict — the label varies by locale and layout. */
+  const rowTextFor = (link) => {
     let node = link;
-    let text = "";
-    for (let depth = 0; depth < 8 && node; depth++) {
-      text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (/[-+]?\$[\d,]+\.\d{2}/.test(text) && /Order #/.test(text)) break;
+    for (let depth = 0; depth < 12 && node; depth++) {
+      const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (text.length > 0 && text.length < 600 && AMOUNT_RE.test(text)) return text;
       node = node.parentElement;
     }
-    const amount = text.match(/[-+]?\$[\d,]+\.\d{2}/)?.[0] || "";
+    return "";
+  };
+
+  const firstOrderKey = () => {
+    const link = orderLinks()[0];
+    if (!link) return null;
+    const orderId = orderIdFromHref(link.href);
+    const amount = rowTextFor(link).match(AMOUNT_RE)?.[0] || "";
     return `${orderId}:${parseAmountCents(amount)}`;
   };
 
@@ -83,18 +131,13 @@
     const rows = [];
     const seen = new Set();
 
-    for (const link of document.querySelectorAll('a[href*="orderID="]')) {
-      let node = link;
-      let text = "";
-      for (let depth = 0; depth < 10 && node; depth++) {
-        text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
-        if (/[-+]?\$[\d,]+\.\d{2}/.test(text) && /Order #/.test(text)) break;
-        node = node.parentElement;
-      }
+    for (const link of orderLinks()) {
+      const orderId = orderIdFromHref(link.href);
+      if (!orderId) continue;
 
-      const amountMatch = text.match(/[-+]?\$[\d,]+\.\d{2}/);
-      const orderId = new URL(link.href).searchParams.get("orderID") || "";
-      if (!amountMatch || !orderId) continue;
+      const text = rowTextFor(link);
+      const amountMatch = text.match(AMOUNT_RE);
+      if (!amountMatch) continue;
 
       const amountCents = parseAmountCents(amountMatch[0]);
       const key = `${orderId}:${amountCents}`;
@@ -107,12 +150,22 @@
         amount_cents: amountCents,
         payment_date:
           text.match(
-            /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4}\b/,
+            /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}, \d{4}\b/,
           )?.[0] || null,
       });
     }
 
     return rows;
+  };
+
+  /* What the page actually looked like, so a failure is actionable instead of
+   * "are you signed in?". */
+  const describePage = () => {
+    const { documents, frames, readableFrames } = readableDocuments();
+    const links = orderLinks().length;
+    const title = (document.title || "").slice(0, 60);
+    const bodyLength = documents.reduce((total, doc) => total + (doc.body?.innerText?.length ?? 0), 0);
+    return `orderID links: ${links} · iframes: ${frames} (${readableFrames} readable) · text: ${bodyLength} chars · title: "${title}"`;
   };
 
   const findNextPageButton = () => {
@@ -220,7 +273,7 @@
   };
 
   try {
-    if (!location.href.includes("/cpe/yourpayments/transactions")) {
+    if (!/yourpayments/i.test(location.href)) {
       fail("open Your Payments → Transactions first.");
       return;
     }
@@ -257,7 +310,8 @@
     }
 
     if (payments.length === 0) {
-      fail("no payments found — are you signed in?");
+      fail(`no payments found · ${describePage()}`);
+      console.warn("[monai-amazon] nothing parsed. Page diagnostics:", describePage());
       return;
     }
 
