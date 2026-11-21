@@ -197,11 +197,15 @@ function Setup() {
   // javascript: href with a "blocked as a security precaution" thrower.
   // Encode the whole source rather than minifying it — a javascript: URL is
   // decoded by the browser, so comments and newlines survive intact.
+  //
+  // The origin is baked in here, not resolved at runtime: the script runs on
+  // amazon.com, where localStorage belongs to Amazon, not to us.
   useEffect(() => {
-    linkRef.current?.setAttribute(
-      "href",
-      `javascript:${encodeURIComponent(bookmarkletSource)}`,
+    const source = bookmarkletSource.replace(
+      '"@@MONAI_ORIGIN@@"',
+      JSON.stringify(window.location.origin),
     );
+    linkRef.current?.setAttribute("href", `javascript:${encodeURIComponent(source)}`);
   }, []);
 
   return (
