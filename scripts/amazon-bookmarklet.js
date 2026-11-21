@@ -38,8 +38,16 @@
   ].join(";");
   badge.textContent = "Monai: starting…";
   document.body.appendChild(badge);
-  const say = (text) => {
+  const say = (text, link) => {
     badge.textContent = `Monai: ${text}`;
+    if (link) {
+      const anchor = document.createElement("a");
+      anchor.href = link;
+      anchor.textContent = "Open payment frame →";
+      anchor.style.cssText =
+        "display:block;margin-top:8px;color:#7dd3fc;font-weight:700;text-decoration:underline;cursor:pointer";
+      badge.appendChild(anchor);
+    }
   };
 
   const fail = (message) => {
@@ -88,6 +96,37 @@
 
     return { documents, frames, readableFrames };
   };
+
+  /* A cross-origin frame's content is unreadable, but its src attribute is not.
+   * If the payments table lives in one, hand the user a link to it — opened
+   * directly it becomes the top document, which this script can read. */
+  const frameSources = () => {
+    const frames = [];
+    for (const frame of document.querySelectorAll("iframe")) {
+      const raw = frame.getAttribute("src");
+      if (!raw) continue;
+      let resolved = raw;
+      try {
+        resolved = new URL(raw, location.href).href;
+      } catch {
+        /* keep raw */
+      }
+      let readable = false;
+      try {
+        readable = Boolean(frame.contentDocument && frame.contentDocument.body);
+      } catch {
+        readable = false;
+      }
+      frames.push({ src: resolved, readable });
+    }
+    return frames;
+  };
+
+  /* The frame that most likely holds the payments table. */
+  const paymentFrame = () =>
+    frameSources().find(
+      (frame) => !frame.readable && /yourpayments|payment|transactions|order/i.test(frame.src),
+    );
 
   const orderLinks = () => {
     const links = [];
@@ -165,7 +204,10 @@
     const links = orderLinks().length;
     const title = (document.title || "").slice(0, 60);
     const bodyLength = documents.reduce((total, doc) => total + (doc.body?.innerText?.length ?? 0), 0);
-    return `orderID links: ${links} · iframes: ${frames} (${readableFrames} readable) · text: ${bodyLength} chars · title: "${title}"`;
+    const sources = frameSources()
+      .map((frame) => frame.src.replace(/^https?:\/\//, "").slice(0, 60))
+      .join(" , ");
+    return `orderID links: ${links} · iframes: ${frames} (${readableFrames} readable) · text: ${bodyLength} chars · title: "${title}"${sources ? ` · frame srcs: ${sources}` : ""}`;
   };
 
   const findNextPageButton = () => {
@@ -273,9 +315,11 @@
   };
 
   try {
-    if (!/yourpayments/i.test(location.href)) {
-      fail("open Your Payments → Transactions first.");
-      return;
+    for (let attempt = 0; attempt < 20 && orderLinks().length === 0; attempt += 1) {
+      // If the table is in an unreadable frame, waiting will not help.
+      if (paymentFrame()) break;
+      say("waiting for the payments table…");
+      await sleep(500);
     }
 
     const payments = [];
@@ -310,6 +354,18 @@
     }
 
     if (payments.length === 0) {
+      const candidate = paymentFrame();
+
+      if (candidate) {
+        badge.style.background = "#0c4a6e";
+        say(
+          "the payments table is inside a frame — open it, then click this bookmark again.",
+          candidate.src,
+        );
+        console.warn("[monai-amazon] payments table is in a frame:", candidate.src);
+        return;
+      }
+
       fail(`no payments found · ${describePage()}`);
       console.warn("[monai-amazon] nothing parsed. Page diagnostics:", describePage());
       return;
