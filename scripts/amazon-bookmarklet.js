@@ -284,6 +284,86 @@
     const list = state?.visibleTransactionResponse?.transactionList;
     if (!Array.isArray(list)) return { payments: [], hasMore: false };
 
+    return { payments: paymentsFromList(list), hasMore: Boolean(state?.hasMore) };
+  };
+
+  /* The page fetches further transactions as you go; the response shape is not
+   * documented, so look for a transactionList anywhere inside it. */
+  const findTransactionList = (node, depth = 0) => {
+    if (!node || depth > 8) return null;
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const hit = findTransactionList(child, depth + 1);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof node !== "object") return null;
+    if (Array.isArray(node.transactionList)) return node.transactionList;
+    for (const value of Object.values(node)) {
+      const hit = findTransactionList(value, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  /* Click "next page" if there is one, otherwise scroll; whatever the page
+   * fetches in response is captured on the way past. */
+  const collectFurtherPages = async (maxPages) => {
+    const captured = [];
+    const originalFetch = window.fetch;
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+
+    const take = (text) => {
+      if (!text || !text.includes("transactionList")) return;
+      try {
+        const list = findTransactionList(JSON.parse(text));
+        if (list) captured.push(list);
+      } catch {
+        /* not JSON */
+      }
+    };
+
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      try {
+        take(await response.clone().text());
+      } catch {
+        /* body already used */
+      }
+      return response;
+    };
+
+    XMLHttpRequest.prototype.send = function patchedSend(...args) {
+      this.addEventListener("load", () => take(this.responseText));
+      return originalSend.apply(this, args);
+    };
+
+    try {
+      for (let page = 0; page < maxPages; page += 1) {
+        const before = captured.length;
+        const control = [...document.querySelectorAll('[role="button"], button, a')].find((el) =>
+          /next page|load more|show more/i.test(
+            `${el.getAttribute("aria-label") || ""} ${el.textContent || ""}`,
+          ),
+        );
+        if (control) control.click();
+        else window.scrollTo(0, document.body.scrollHeight);
+        await sleep(2500);
+        if (captured.length === before) break;
+        say(`reading more payments… ${captured.length} extra page(s)`);
+      }
+    } finally {
+      window.fetch = originalFetch;
+      XMLHttpRequest.prototype.open = originalOpen;
+      XMLHttpRequest.prototype.send = originalSend;
+    }
+
+    return captured.flat();
+  };
+
+  const paymentsFromList = (list) => {
     const payments = [];
     const seen = new Set();
 
@@ -317,7 +397,7 @@
       });
     }
 
-    return { payments, hasMore: Boolean(state?.hasMore) };
+    return payments;
   };
 
   const findNextPageButton = () => {
@@ -444,6 +524,19 @@
       hasMore = fromState.hasMore;
       source = "next-data";
       say(`found ${payments.length} payments in the page data…`);
+
+      if (hasMore) {
+        const extra = await collectFurtherPages(15);
+        const known = new Set(payments.map((payment) => `${payment.order_id}:${payment.amount_cents}`));
+        for (const payment of paymentsFromList(extra)) {
+          const key = `${payment.order_id}:${payment.amount_cents}`;
+          if (known.has(key)) continue;
+          known.add(key);
+          payments.push(payment);
+          if (uniqueOrderCount(payments) >= MAX_UNIQUE_ORDERS) break;
+        }
+        say(`${payments.length} payments collected`);
+      }
     }
 
     const seen = new Set();
@@ -496,7 +589,7 @@
 
     const orders = [];
     const seenOrders = new Set();
-    const toFetch = payments.filter((payment) => {
+    const toFetch = payments.slice(0, 60).filter((payment) => {
       if (seenOrders.has(payment.order_id)) return false;
       seenOrders.add(payment.order_id);
       return true;

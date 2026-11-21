@@ -39,7 +39,7 @@ const NEXT_DATA_PAGE = `<!doctype html><html><head><title>Your Payments</title><
     pageProps: {
       state: {
         transactionResponseState: {
-          hasMore: true,
+          hasMore: false,
           visibleTransactionResponse: {
             transactionList: [
               {
@@ -176,6 +176,73 @@ test.describe('amazon bookmarklet', () => {
       payment_date: 'Nov 20, 2026',
     })
     expect(payload.orders[0]?.suggestedNote).toBe('Amazon: Test Item (ordered Nov 20)')
+  })
+
+  test('follows pagination and merges the extra pages', async ({ page }) => {
+    await routeSink(page)
+    await page.route('**/gp/css/order-details**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: ORDER_PAGE }),
+    )
+    await page.route('**/fixture/api/page2', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            transactionList: [
+              {
+                formattedAmount: '-$30.00',
+                formattedDate: 'Oct 15, 2026',
+                orderData: [
+                  {
+                    orderDetailsUrl:
+                      'https://www.amazon.com/gp/css/order-details?orderID=999-0000001-0000002',
+                  },
+                ],
+                statementDescriptor: 'AMZN Mktp US',
+              },
+              {
+                formattedAmount: '-$44.44',
+                formattedDate: 'Oct 2, 2026',
+                orderData: [
+                  {
+                    orderDetailsUrl:
+                      'https://www.amazon.com/gp/css/order-details?orderID=999-0000003-0000004',
+                  },
+                ],
+                statementDescriptor: 'Amazon.com',
+              },
+            ],
+          },
+        }),
+      }),
+    )
+
+    // One transaction on the page, hasMore, and a control that fetches a page.
+    const pageHtml = NEXT_DATA_PAGE.replace('"hasMore":false', '"hasMore":true').replace(
+      '</body>',
+      `<button aria-label="Next Page">Next Page</button>
+       <script>
+         let clicks = 0
+         document.querySelector('button').addEventListener('click', async () => {
+           clicks += 1
+           if (clicks > 1) return
+           await fetch('/fixture/api/page2').then((response) => response.json())
+         })
+       </script></body>`,
+    )
+    await page.route('**/fixture/paged.html', (route) =>
+      route.fulfill({ contentType: 'text/html', body: pageHtml }),
+    )
+
+    await page.goto('/fixture/paged.html')
+    await injectBookmarklet(page)
+
+    const payload = await readPayload(page)
+    // 2 from the page, 2 captured from the follow-up request.
+    expect(payload.payments).toHaveLength(4)
+    expect(payload.payments.map((payment) => payment.amount_cents)).toEqual([
+      533, 21287, 3000, 4444,
+    ])
   })
 
   test('reports what it saw when no frame looks like the payments table', async ({ page }) => {
