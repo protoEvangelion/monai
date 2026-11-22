@@ -107,3 +107,19 @@ export function isIncomingSyncDuplicate(
   if (dayDiff === 0 && existing.accountId === incoming.accountId) return false;
   return true;
 }
+
+/**
+ * Drop rows from a dedupe snapshot once Plaid removed them.
+ *
+ * Without this, a row deleted earlier in the same sync still claims its own
+ * replacement as a duplicate (Plaid re-issues a transaction with a new id after
+ * a pending -> posted swap), and the replacement is silently skipped.
+ */
+export function withoutRemovedTransactions<T extends { plaidTransactionId: string | null }>(
+  rows: T[],
+  removedPlaidTransactionIds: string[],
+): T[] {
+  const removed = new Set(removedPlaidTransactionIds.filter(Boolean));
+  if (!removed.size) return rows;
+  return rows.filter((row) => !row.plaidTransactionId || !removed.has(row.plaidTransactionId));
+}

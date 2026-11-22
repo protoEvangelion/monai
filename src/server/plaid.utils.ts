@@ -128,6 +128,16 @@ export async function deleteLocalItemData(itemId: number) {
   await db.delete(plaidItems).where(eq(plaidItems.id, itemId));
 }
 
+/**
+ * Pending rows are never stored. A pending Plaid row always turns into either a
+ * posted row with a new transaction_id (Plaid sends removed + added) or a
+ * removal, so keeping it only creates a twin that can make its own posted
+ * replacement look like a duplicate. We accept the 1-3 day posting lag.
+ */
+export function isPostedTransaction(tx: { pending?: boolean } | null | undefined) {
+  return !Boolean(tx?.pending);
+}
+
 export function mapAccountType(plaidType: string): string {
   const map: Record<string, string> = {
     depository: "cash",

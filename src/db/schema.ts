@@ -86,6 +86,7 @@ export const transactions = sqliteTable(
     note: text(),
     isReviewed: integer("is_reviewed", { mode: "boolean" }).notNull().default(false),
     isRecurring: integer("is_recurring", { mode: "boolean" }).notNull().default(false),
+    /** Legacy: pending Plaid rows are no longer stored (see plaid.sync.fns.ts). */
     isPending: integer("is_pending", { mode: "boolean" }).notNull().default(false),
     splitParentId: integer("split_parent_id"),
     ruleId: integer("rule_id"),

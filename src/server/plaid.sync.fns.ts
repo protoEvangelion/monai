@@ -8,27 +8,15 @@ import {
   isPlaidPaginationMutationError,
   isPlaidReconnectRequiredError,
   isPlaidEnvMismatchError,
+  isPostedTransaction,
   deleteLocalItemData,
 } from "./plaid.utils";
 import { AI_CATEGORIZE_MAX_TRANSACTIONS, applyRulesForItem } from "./categorize.fns";
-import { isIncomingSyncDuplicate } from "./transactions.dedupe";
+import { isIncomingSyncDuplicate, withoutRemovedTransactions } from "./transactions.dedupe";
 
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export { AI_CATEGORIZE_MAX_TRANSACTIONS };
 const syncInFlight = new Set<number>();
-
-type TransactionMetadataCarryover = {
-  accountId: number;
-  amount: number;
-  categoryId: number | null;
-  date: Date | string;
-  isReviewed: boolean;
-  merchantName: string;
-  name: string | null;
-  note: string | null;
-  plaidTransactionId: string | null;
-  transactionType: "regular" | "income" | "transfer";
-};
 
 function plaidTransactionDate(tx: any) {
   return new Date(tx.authorized_date ?? tx.date);
@@ -50,7 +38,8 @@ function plaidTransactionFields(tx: any, accountId: number) {
     merchantName: tx.merchant_name ?? tx.name,
     location: tx.location?.address ?? null,
     isRecurring: tx.recurring_transaction_id != null,
-    isPending: Boolean(tx.pending),
+    // Only posted rows reach this function.
+    isPending: false,
   };
 }
 
@@ -59,34 +48,12 @@ function plaidTransactionId(value: any) {
   return String(value?.transaction_id ?? "").trim();
 }
 
-function postedPendingTransactionId(value: any) {
-  if (value?.pending) return "";
-  return String(value?.pending_transaction_id ?? "").trim();
-}
-
-function pendingReplacement(value: any) {
-  const pendingId = postedPendingTransactionId(value);
-  const postedId = plaidTransactionId(value);
-  if (!pendingId || !postedId) return null;
-  return { pendingId, postedId };
-}
-
-function cents(value: number) {
-  return Math.round(value * 100);
-}
-
-function normalizedTransactionName(value: string | null | undefined) {
-  return String(value ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
 type ExistingDedupeRow = {
   accountId: number;
   amount: number;
   date: Date;
   vendor: string;
+  plaidTransactionId: string | null;
   claimed: boolean;
 };
 
@@ -101,9 +68,10 @@ async function loadExistingDedupeRows(
     date: number | Date;
     merchant_name: string;
     name: string | null;
+    plaid_transaction_id: string | null;
   }>(sql`
     select t.account_id as account_id, t.merchant_name as merchant_name, t.name as name,
-      t.amount as amount, t.date as date
+      t.amount as amount, t.date as date, t.plaid_transaction_id as plaid_transaction_id
     from transactions t
     join accounts a on a.id = t.account_id
     left join plaid_items p on p.id = a.plaid_item_id
@@ -118,6 +86,7 @@ async function loadExistingDedupeRows(
       amount: row.amount,
       date,
       vendor: row.merchant_name || row.name || "",
+      plaidTransactionId: row.plaid_transaction_id ?? null,
       claimed: false,
     } satisfies ExistingDedupeRow;
   });
@@ -167,84 +136,21 @@ function filterDuplicateIncomingTransactions(
     }
 
     kept.push(row);
-    existingRows.push({ ...candidate, claimed: true });
+    existingRows.push({
+      ...candidate,
+      plaidTransactionId: row.tx.transaction_id ?? null,
+      claimed: true,
+    });
   }
 
   return { kept, skipped };
 }
 
-function hasUserMetadata(row: TransactionMetadataCarryover) {
-  return Boolean(
-    row.categoryId !== null ||
-      row.isReviewed ||
-      row.note ||
-      row.transactionType !== "regular",
-  );
-}
-
-function metadataMatchesPlaidTransaction(
-  metadata: TransactionMetadataCarryover,
-  tx: any,
-  accountId: number,
-) {
-  if (metadata.accountId !== accountId) return false;
-  if (cents(metadata.amount) !== cents(Number(tx.amount))) return false;
-
-  const metadataDate = new Date(metadata.date).getTime();
-  const txDate = plaidTransactionDate(tx).getTime();
-  if (Number.isNaN(metadataDate) || Number.isNaN(txDate)) return false;
-  if (Math.abs(metadataDate - txDate) > 4 * 24 * 60 * 60 * 1000) return false;
-
-  const metadataNames = [
-    normalizedTransactionName(metadata.merchantName),
-    normalizedTransactionName(metadata.name),
-  ].filter(Boolean);
-  const txNames = [
-    normalizedTransactionName(tx.merchant_name),
-    normalizedTransactionName(tx.name),
-  ].filter(Boolean);
-
-  return metadataNames.some((metadataName) => txNames.includes(metadataName));
-}
-
-function metadataDateDistance(metadata: TransactionMetadataCarryover, tx: any) {
-  return Math.abs(new Date(metadata.date).getTime() - plaidTransactionDate(tx).getTime());
-}
-
-function findMetadataCarryover({
-  accountId,
-  metadataRows,
-  tx,
-}: {
-  accountId: number;
-  metadataRows: TransactionMetadataCarryover[];
-  tx: any;
-}) {
-  const pendingId = postedPendingTransactionId(tx);
-  const directMatch = pendingId
-    ? metadataRows.find((metadata) => metadata.plaidTransactionId === pendingId)
-    : undefined;
-  if (directMatch && hasUserMetadata(directMatch)) return directMatch;
-
-  return metadataRows
-    .filter(hasUserMetadata)
-    .filter((metadata) => metadataMatchesPlaidTransaction(metadata, tx, accountId))
-    .sort((a, b) => metadataDateDistance(a, tx) - metadataDateDistance(b, tx))[0];
-}
-
-async function getPlaidTransactionMetadata(
+/** Delete Plaid rows by transaction id, along with any split legs hanging off them. */
+async function deletePlaidTransactions(
   db: typeof import("../db").db,
   plaidTransactionIds: string[],
 ) {
-  const uniqueIds = [...new Set(plaidTransactionIds.filter(Boolean))];
-  if (!uniqueIds.length) return [];
-
-  return db.query.transactions.findMany({
-    where: inArray(transactions.plaidTransactionId, uniqueIds),
-  });
-}
-
-async function deletePlaidTransactions(db: typeof import("../db").db, plaidTransactionIds: string[]) {
   const uniqueIds = [...new Set(plaidTransactionIds.filter(Boolean))];
   if (!uniqueIds.length) return 0;
 
@@ -266,94 +172,25 @@ async function deletePlaidTransactions(db: typeof import("../db").db, plaidTrans
   return deleted.length;
 }
 
-async function mergePendingMetadataIntoPosted(
-  db: typeof import("../db").db,
-  pendingId: number,
-  postedId: number,
-) {
-  const [pending, posted] = await Promise.all([
-    db.query.transactions.findFirst({ where: eq(transactions.id, pendingId) }),
-    db.query.transactions.findFirst({ where: eq(transactions.id, postedId) }),
-  ]);
-
-  if (!pending || !posted) return;
-  // Only merge when the "pending" row is actually pending — avoid deleting posted twins.
-  if (!pending.isPending) return;
-
-  await db
-    .update(transactions)
-    .set({
-      categoryId: posted.categoryId ?? pending.categoryId,
-      isReviewed: posted.isReviewed || pending.isReviewed,
-      note: posted.note ?? pending.note,
-      isPending: false,
-      transactionType:
-        posted.transactionType === "regular" && pending.transactionType !== "regular"
-          ? pending.transactionType
-          : posted.transactionType,
-    })
-    .where(eq(transactions.id, postedId));
-}
-
-async function replacePendingTransactions(
-  db: typeof import("../db").db,
-  replacements: { pendingId: string; postedId: string }[],
-) {
-  let replacedCount = 0;
-
-  for (const replacement of replacements) {
-    const [pending, posted] = await Promise.all([
-      db.query.transactions.findFirst({
-        where: eq(transactions.plaidTransactionId, replacement.pendingId),
-      }),
-      db.query.transactions.findFirst({
-        where: eq(transactions.plaidTransactionId, replacement.postedId),
-      }),
-    ]);
-
-    if (!pending || !posted) continue;
-    if (!pending.isPending) continue;
-
-    await mergePendingMetadataIntoPosted(db, pending.id, posted.id);
-    await db.delete(transactions).where(eq(transactions.id, pending.id));
-    replacedCount += 1;
-  }
-
-  return replacedCount;
-}
-
-async function cleanupLikelyPendingDuplicates(db: typeof import("../db").db, itemId: number) {
-  const duplicateRows = await db.all<{ pending_id: number; posted_id: number }>(sql`
-    select pending.id as pending_id, posted.id as posted_id
-    from transactions pending
-    join transactions posted
-      on posted.account_id = pending.account_id
-     and lower(posted.merchant_name) = lower(pending.merchant_name)
-     and round(abs(posted.amount), 2) = round(abs(pending.amount), 2)
-     and posted.id <> pending.id
-     and pending.is_pending = 1
-     and posted.is_pending = 0
-     and posted.date >= pending.date
-     and posted.date <= pending.date + (4 * 24 * 60 * 60)
-    join accounts account
-      on account.id = pending.account_id
-    where account.plaid_item_id = ${itemId}
+/**
+ * Pending rows are not stored any more. Remove any left over from before this
+ * rule (they are either already replaced by a posted row or were voided).
+ */
+async function purgePendingTransactions(db: typeof import("../db").db, itemId: number) {
+  const stale = await db.all<{ id: number }>(sql`
+    select t.id as id
+    from transactions t
+    join accounts a on a.id = t.account_id
+    where a.plaid_item_id = ${itemId} and t.is_pending = 1
   `);
-  const pairs = Array.from(
-    new Map(duplicateRows.map((row) => [row.pending_id, row.posted_id])).entries(),
-  );
+  const ids = stale.map((row) => row.id);
+  if (!ids.length) return 0;
 
-  if (!pairs.length) return 0;
-
-  for (const [pendingId, postedId] of pairs) {
-    await mergePendingMetadataIntoPosted(db, pendingId, postedId);
-  }
-
+  await db.delete(transactions).where(inArray(transactions.splitParentId, ids));
   const deleted = await db
     .delete(transactions)
-    .where(inArray(transactions.id, pairs.map(([pendingId]) => pendingId)))
+    .where(inArray(transactions.id, ids))
     .returning({ id: transactions.id });
-
   return deleted.length;
 }
 
@@ -386,7 +223,6 @@ export async function syncTransactions(
   let paginationRestarts = 0;
   let hasMore = true;
   let addedCount = 0;
-  let metadataCarryovers: TransactionMetadataCarryover[] = [];
 
   const dbAccounts = await db.query.accounts.findMany({
     where: eq(accounts.plaidItemId, itemId),
@@ -426,7 +262,6 @@ export async function syncTransactions(
           // re-read the dedupe snapshot before replaying the pages.
           addedCount = 0;
           skippedDuplicateCount = 0;
-          metadataCarryovers = [];
           existingDedupeRows = await loadExistingDedupeRows(db, userId, itemAccountIds);
           continue;
         }
@@ -434,23 +269,31 @@ export async function syncTransactions(
       }
 
       const removedPlaidTransactionIds = (page.removed ?? []).map(plaidTransactionId);
-      const pageMetadataCarryovers = await getPlaidTransactionMetadata(db, removedPlaidTransactionIds);
-      metadataCarryovers.push(...pageMetadataCarryovers);
-
       const removedCount = await deletePlaidTransactions(db, removedPlaidTransactionIds);
       if (removedCount > 0) {
+        // Deleted rows must also leave the dedupe snapshot, otherwise a
+        // replacement re-issued with a new id can be rejected as a duplicate
+        // of the row we just removed.
+        existingDedupeRows = withoutRemovedTransactions(
+          existingDedupeRows,
+          removedPlaidTransactionIds,
+        );
         console.log(`Removed ${removedCount} deleted Plaid transactions for item ${itemId}`);
       }
 
       for (const tx of page.added ?? []) {
+        if (!isPostedTransaction(tx)) continue;
         if (accountMap.has((tx as any).account_id)) continue;
         const accountId = String((tx as any).account_id);
         unknownAccountIds.set(accountId, (unknownAccountIds.get(accountId) ?? 0) + 1);
         unknownAccountTxns += 1;
       }
 
+      // Pending rows are skipped on purpose: they are replaced by a posted row
+      // with a different transaction_id, and storing both is what used to make
+      // the posted row look like a duplicate of its own pending twin.
       const incoming = (page.added ?? [])
-        .filter((tx: any) => accountMap.has(tx.account_id))
+        .filter((tx: any) => isPostedTransaction(tx) && accountMap.has(tx.account_id))
         .map((tx: any) => ({
           accountId: accountMap.get(tx.account_id)!,
           tx,
@@ -461,55 +304,30 @@ export async function syncTransactions(
       );
       skippedDuplicateCount += skipped;
 
-      const inserted = await Promise.all(
-        kept.map(({ accountId, tx }) => {
-          const values = plaidTransactionFields(tx, accountId);
-          const metadata = findMetadataCarryover({
-            accountId,
-            metadataRows: metadataCarryovers,
-            tx,
+      const upsertPosted = (accountId: number, tx: any) => {
+        const values = plaidTransactionFields(tx, accountId);
+        return db
+          .insert(transactions)
+          .values(values)
+          .onConflictDoUpdate({
+            target: transactions.plaidTransactionId,
+            set: values,
           });
-          return db
-            .insert(transactions)
-            .values({
-              ...values,
-              categoryId: metadata?.categoryId ?? null,
-              isReviewed: metadata?.isReviewed ?? false,
-              note: metadata?.note ?? null,
-              transactionType: metadata?.transactionType ?? "regular",
-            })
-            .onConflictDoUpdate({
-              target: transactions.plaidTransactionId,
-              set: values,
-            });
-        }),
+      };
+
+      const inserted = await Promise.all(
+        kept.map(({ accountId, tx }) => upsertPosted(accountId, tx)),
       );
       addedCount += inserted.length;
 
+      // Upsert, not update: if Plaid ever flips pending -> posted on the same
+      // transaction_id, there is no local pending row to update, so the row
+      // has to be created here or the transaction would never appear.
       await Promise.all(
-        page.modified
-          .filter((tx: any) => accountMap.has(tx.account_id))
-          .map((tx: any) =>
-            db
-              .update(transactions)
-              .set(plaidTransactionFields(tx, accountMap.get(tx.account_id)!))
-              .where(eq(transactions.plaidTransactionId, tx.transaction_id)),
-          ),
+        (page.modified ?? [])
+          .filter((tx: any) => isPostedTransaction(tx) && accountMap.has(tx.account_id))
+          .map((tx: any) => upsertPosted(accountMap.get(tx.account_id)!, tx)),
       );
-
-      const pendingReplacementCount = await replacePendingTransactions(
-        db,
-        [...(page.added ?? []), ...(page.modified ?? [])]
-          .map(pendingReplacement)
-          .filter((replacement): replacement is { pendingId: string; postedId: string } =>
-            Boolean(replacement),
-          ),
-      );
-      if (pendingReplacementCount > 0) {
-        console.log(
-          `Replaced ${pendingReplacementCount} pending transactions with posted transactions for item ${itemId}`,
-        );
-      }
 
       cursor = page.next_cursor;
       hasMore = page.has_more;
@@ -535,9 +353,9 @@ export async function syncTransactions(
           : ""),
     );
     await db.update(plaidItems).set({ lastSyncedAt: new Date() }).where(eq(plaidItems.id, itemId));
-    const cleanupCount = await cleanupLikelyPendingDuplicates(db, itemId);
-    if (cleanupCount > 0) {
-      console.log(`Cleaned up ${cleanupCount} likely pending duplicate transactions for item ${itemId}`);
+    const purgedCount = await purgePendingTransactions(db, itemId);
+    if (purgedCount > 0) {
+      console.log(`Removed ${purgedCount} stale pending transaction(s) for item ${itemId}`);
     }
     if (categorizeAfterSync) {
       // Rules only on sync — AI categorization is an explicit user action.
