@@ -114,7 +114,10 @@ export const mrtDateRangeFilterFn: FilterFn<Tx> = (row, _columnId, filterValue, 
 export const mrtAmountRangeFilterFn: FilterFn<Tx> = (row, _columnId, filterValue, addMeta) => {
   if (!filterValue) return true;
   if (Array.isArray(filterValue)) {
-    const [min, max] = filterValue as [number, number];
+    // MRT's range filter hands back the raw input values, which are strings.
+    // Number.isFinite("40") is false, so coerce before comparing.
+    const min = Number(filterValue[0]);
+    const max = Number(filterValue[1]);
     const amount = Math.abs(row.original.amount);
     if (Number.isFinite(min) && min > 0 && amount < min) return false;
     if (Number.isFinite(max) && max > 0 && amount > max) return false;

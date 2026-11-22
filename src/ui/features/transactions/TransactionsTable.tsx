@@ -86,6 +86,9 @@ function toMrtColumnFilters({
   }
 
   if (amountFilter && (amountFilter.min || amountFilter.max)) {
+    // Both bounds must be numbers: MRT discards a range whose max is below its
+    // min or empty. An unset bound falls back to 0 / the ceiling, and
+    // mrtAmountRangeFilterFn ignores non-positive bounds.
     filters.push({
       id: "amount",
       value: [
@@ -284,7 +287,6 @@ export function ReviewTable({
         filteredGroups,
         lockedCategoryFilter,
         lockedDateRange,
-        maxAmount,
         onCategoryChange: categoryActions.handleCategoryChange,
         onCategorySearchChange: setCatSearch,
         onCreateCategory: categoryActions.openCreateCategoryModal,

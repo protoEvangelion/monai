@@ -20,6 +20,9 @@ export const accounts = sqliteTable("accounts", {
   userId: text("user_id"), // set for manual (non-Plaid) accounts
   plaidItemId: integer("plaid_item_id").references(() => plaidItems.id),
   plaidAccountId: text("plaid_account_id").unique(),
+  // Last four digits as Plaid reports them, e.g. "9835". Names are not reliable
+  // ("CREDIT CARD", "CHASE SAVINGS"), so this is the only source of a card tail.
+  mask: text("mask"),
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 

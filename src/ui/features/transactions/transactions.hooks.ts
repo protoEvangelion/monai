@@ -12,6 +12,7 @@ export const OPTIONAL_TRANSACTION_COLUMNS = [
   { id: "merchantName", label: "Merchant" },
   { id: "datetime", label: "Datetime" },
   { id: "location", label: "Location" },
+  { id: "cardLast4", label: "Card" },
 ] as const;
 
 export const TRANSACTION_COLUMN_ORDER_OPTIONS = [
@@ -23,6 +24,7 @@ export const TRANSACTION_COLUMN_ORDER_OPTIONS = [
   { id: "merchantName", label: "Merchant" },
   { id: "datetime", label: "Datetime" },
   { id: "location", label: "Location" },
+  { id: "cardLast4", label: "Card" },
 ] as const;
 
 export const DEFAULT_TRANSACTION_COLUMN_ORDER = [
@@ -36,6 +38,7 @@ export const DEFAULT_TRANSACTION_COLUMN_VISIBILITY = {
   merchantName: false,
   datetime: false,
   location: false,
+  cardLast4: false,
 };
 
 const TRANSACTION_TABLE_COLUMNS_STORAGE_KEY = "monai:transactions-table-columns";

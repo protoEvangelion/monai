@@ -30,10 +30,15 @@ async function seedAccounts(accessToken: string, itemId: number) {
           currentBalance: acc.balances.current ?? 0,
           plaidItemId: itemId,
           plaidAccountId: acc.account_id,
+          mask: acc.mask ?? null,
         })
         .onConflictDoUpdate({
           target: accounts.plaidAccountId,
-          set: { name: acc.name, currentBalance: acc.balances.current ?? 0 },
+          set: {
+            name: acc.name,
+            currentBalance: acc.balances.current ?? 0,
+            mask: acc.mask ?? null,
+          },
         }),
     ),
   );

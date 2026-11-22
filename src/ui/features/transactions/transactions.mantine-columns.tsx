@@ -25,7 +25,6 @@ type CreateMrtTransactionColumnsArgs = {
   categories: CategoryGroup[];
   catSearch: string;
   filteredGroups: CategoryGroup[];
-  maxAmount: number;
   onCategoryChange: (txId: number, categoryId: number | null) => void;
   onCategorySearchChange: (value: string) => void;
   onCreateCategory: (tx: Tx) => void;
@@ -64,7 +63,6 @@ export function createMrtTransactionColumns({
   categories,
   catSearch,
   filteredGroups,
-  maxAmount,
   onCategoryChange,
   onCategorySearchChange,
   onCreateCategory,
@@ -82,7 +80,9 @@ export function createMrtTransactionColumns({
     id: "date",
     accessorKey: "date",
     header: "Date",
-    size: isMinimal ? 100 : 120,
+    // Wide enough for BOTH date-range inputs; at 150px the "Max" box was
+    // clipped out of existence and only "Min" showed.
+    size: isMinimal ? 110 : 190,
     filterVariant: "date-range",
     enableColumnFilter: !lockedDateRange,
     filterFn: mrtDateRangeFilterFn,
@@ -105,7 +105,8 @@ export function createMrtTransactionColumns({
     id: "name",
     accessorFn: (row) => transactionDisplayName(row),
     header: "Name",
-    size: isMinimal ? 160 : 220,
+    // Room for the text filter input plus a real amount of name.
+    size: isMinimal ? 160 : 260,
     filterVariant: "text",
     Cell: ({ row }) => {
       const name = transactionDisplayName(row.original);
@@ -142,11 +143,15 @@ export function createMrtTransactionColumns({
   const amountColumn: MRT_ColumnDef<Tx> = {
     accessorKey: "amount",
     header: "Amount",
-    size: isMinimal ? 100 : 120,
-    filterVariant: "range-slider",
-    mantineFilterRangeSliderProps: {
+    // Wide enough for two number inputs: the range slider variant rendered no
+    // inputs at this width, so there was no way to type an amount.
+    size: isMinimal ? 150 : 180,
+    minSize: 150,
+    filterVariant: "range",
+    mantineFilterTextInputProps: {
+      type: "number",
+      placeholder: "",
       min: 0,
-      max: Math.max(100, Math.ceil(maxAmount)),
       step: 1,
     },
     filterFn: mrtAmountRangeFilterFn,
@@ -164,11 +169,33 @@ export function createMrtTransactionColumns({
     ),
   };
 
+  // Hidden by default; enabled from "Show/Hide columns". Plaid's mask is the
+  // only reliable source: account names are things like "CREDIT CARD".
+  const cardLast4Column: MRT_ColumnDef<Tx> = {
+    id: "cardLast4",
+    accessorFn: (row) => row.account?.mask ?? "",
+    header: "Card",
+    size: isMinimal ? 90 : 110,
+    enableColumnFilter: false,
+    Cell: ({ row }) => {
+      const mask = row.original.account?.mask;
+      if (!mask) return <span className="text-default-400">—</span>;
+      return (
+        <span
+          className="font-mono text-xs text-default-600 tabular-nums"
+          title={row.original.account?.name ?? undefined}
+        >
+          ****{mask}
+        </span>
+      );
+    },
+  };
+
   const categoryColumn: MRT_ColumnDef<Tx> = {
     id: "category",
     accessorFn: (row) => row.category?.name ?? "",
     header: "Category",
-    size: 160,
+    size: 200,
     enableSorting: false,
     enableColumnFilter: !lockedCategoryFilter,
     filterFn: categoryFilterFn,
@@ -234,7 +261,7 @@ export function createMrtTransactionColumns({
     id: "note",
     accessorKey: "note",
     header: "Note",
-    size: 220,
+    size: 240,
     filterVariant: "text",
     Cell: ({ row }) => <TransactionNoteCell tx={row.original} />,
   });
@@ -274,12 +301,13 @@ export function createMrtTransactionColumns({
         </Text>
       ),
     },
+    cardLast4Column,
     {
       id: "reviewStatus",
       accessorFn: (row) => (row.isReviewed ? "reviewed" : "not-reviewed"),
       header: "Review",
-      size: 96,
-      minSize: 80,
+      size: 130,
+      minSize: 110,
       enableSorting: false,
       enableResizing: false,
       filterFn: reviewStatusFilterFn,

@@ -16,6 +16,9 @@ const baseURL = process.env.BASE_URL || localBaseURL
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  // The dev server renders each route on demand; a cold first paint can take
+  // well over the 5s default.
+  expect: { timeout: 15_000 },
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {

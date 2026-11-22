@@ -14,6 +14,7 @@ export type Tx = {
   transactionType: "regular" | "income" | "transfer";
   categoryId?: number | null;
   accountId?: number;
+  account?: { id: number; name: string; mask?: string | null } | null;
   category: { id: number; name: string; icon: string | null } | null;
   rule?: { id: number; pattern: string; amount?: number | null } | null;
 };

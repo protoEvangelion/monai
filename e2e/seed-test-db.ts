@@ -20,10 +20,10 @@ db.exec(`
 
   UPDATE plaid_items SET last_synced_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000 WHERE id = 1;
 
-  INSERT OR IGNORE INTO accounts (id, name, type, current_balance, plaid_item_id)
-  VALUES (1, 'Test Checking', 'cash', 1000, 1);
+  INSERT OR IGNORE INTO accounts (id, name, type, current_balance, plaid_item_id, mask)
+  VALUES (1, 'Test Checking', 'cash', 1000, 1, '9835');
 
-  UPDATE accounts SET plaid_item_id = 1 WHERE id = 1;
+  UPDATE accounts SET plaid_item_id = 1, mask = '9835' WHERE id = 1;
 `);
 
 db.exec(`

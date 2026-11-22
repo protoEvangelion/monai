@@ -170,6 +170,7 @@ export async function refreshAccountBalances(accessToken: string, itemId: number
           name: plaidAccount.name ?? local.name,
           currentBalance: balance,
           type: mapAccountType(plaidAccount.type) || local.type,
+          mask: plaidAccount.mask ?? local.mask ?? null,
         })
         .where(eq(accounts.id, local.id));
       updated += 1;

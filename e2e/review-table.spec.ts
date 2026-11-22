@@ -66,6 +66,34 @@ test.describe("ReviewTable", () => {
       await expect(incomeRow).not.toContainText("Groceries");
     });
 
+    test("card column is hidden by default and shows the account mask", async ({ page }) => {
+      const cardHeader = page.getByRole("columnheader", { name: /^Card/ });
+      await expect(cardHeader).toHaveCount(0);
+
+      await showAllColumns(page);
+      await expect(cardHeader).toBeVisible();
+      await expect(page.getByText("****9835").first()).toBeVisible();
+    });
+
+    test("amount column filters by a min and max", async ({ page }) => {
+      // The amount filter used to be a range slider with no inputs at this
+      // width, so there was no way to type an amount at all.
+      const header = page.getByRole("columnheader", { name: /Amount/i }).first();
+      const min = header.locator("input").first();
+      await expect(min).toBeVisible();
+
+      await expect(page.getByTestId("transaction-row-1")).toBeVisible(); // 42.50
+      await expect(page.getByTestId("transaction-row-2")).toBeVisible(); // 18.75
+
+      // Typed rather than filled: the filter is controlled, and a single
+      // programmatic fill can be overwritten by the derived state.
+      await min.click();
+      await min.pressSequentially("40", { delay: 40 });
+
+      await expect(page.getByTestId("transaction-row-2")).toBeHidden();
+      await expect(page.getByTestId("transaction-row-1")).toBeVisible();
+    });
+
     test("shows transaction notes when note column is visible", async ({ page }) => {
       await toggleOptionalColumns(page, ["Note"]);
       await expect(page.getByRole("columnheader", { name: "Note" })).toBeVisible();
@@ -153,6 +181,34 @@ test.describe("ReviewTable", () => {
 
     test("AI Categorize button is always visible", async ({ page }) => {
       await expect(page.getByRole("button", { name: /AI Categorize/ })).toBeVisible();
+    });
+
+    test("card column is hidden by default and shows the account mask", async ({ page }) => {
+      const cardHeader = page.getByRole("columnheader", { name: /^Card/ });
+      await expect(cardHeader).toHaveCount(0);
+
+      await showAllColumns(page);
+      await expect(cardHeader).toBeVisible();
+      await expect(page.getByText("****9835").first()).toBeVisible();
+    });
+
+    test("amount column filters by a min and max", async ({ page }) => {
+      // The amount filter used to be a range slider with no inputs at this
+      // width, so there was no way to type an amount at all.
+      const header = page.getByRole("columnheader", { name: /Amount/i }).first();
+      const min = header.locator("input").first();
+      await expect(min).toBeVisible();
+
+      await expect(page.getByTestId("transaction-row-1")).toBeVisible(); // 42.50
+      await expect(page.getByTestId("transaction-row-2")).toBeVisible(); // 18.75
+
+      // Typed rather than filled: the filter is controlled, and a single
+      // programmatic fill can be overwritten by the derived state.
+      await min.click();
+      await min.pressSequentially("40", { delay: 40 });
+
+      await expect(page.getByTestId("transaction-row-2")).toBeHidden();
+      await expect(page.getByTestId("transaction-row-1")).toBeVisible();
     });
 
     test("shows transaction notes when note column is visible", async ({ page }) => {
