@@ -10,6 +10,8 @@
  * rows are skipped rather than force-matched.
  */
 
+import { decodeHtmlEntities } from "../lib/html-entities";
+
 export type AmazonScrapePayment = {
   order_id: string;
   amount_cents: number;
@@ -181,7 +183,7 @@ export function matchAmazonNotes(
 
     updates.push({
       transactionId: row.id,
-      note: order.suggestedNote,
+      note: decodeHtmlEntities(order.suggestedNote),
       orderId: order.order_id,
     });
   }

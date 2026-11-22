@@ -14,8 +14,14 @@ import { openaiCompatibleText } from "@tanstack/ai-openai/compatible";
 export const GATEWAY_BASE_URL =
   process.env.AI_GATEWAY_BASE_URL?.trim() || "https://ai-gateway.vercel.sh/v1";
 
+/**
+ * Gateway model tag (`vendor/model` or a custom alias). `vmc/cheap-flash` is a
+ * user-defined alias in the Vercel AI Gateway and is what categorization uses
+ * by default: categorization is extraction, not reasoning, so the cheap fast
+ * model is the right tool. Override with `AI_GATEWAY_MODEL`.
+ */
 export const GATEWAY_MODEL =
-  process.env.AI_GATEWAY_MODEL?.trim() || "openai/gpt-5.1";
+  process.env.AI_GATEWAY_MODEL?.trim() || "vmc/cheap-flash";
 
 export const GATEWAY_PROVIDER_LABEL = "vercel-ai-gateway";
 

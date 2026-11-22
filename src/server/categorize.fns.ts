@@ -134,6 +134,9 @@ async function resolveSelectedTransactionIds({
       uniqueSelectedIds = candidates
         .filter((tx) => (scope === "review" ? !tx.isReviewed : true))
         .filter((tx) => tx.transactionType === "regular")
+        // A note means a human (or the Amazon matcher) already annotated this
+        // row, so leave it alone rather than re-categorizing over their work.
+        .filter((tx) => !tx.note?.trim())
         .filter((tx) => !query || tx.merchantName.toLowerCase().includes(query))
         .filter(
           (tx) =>
@@ -204,6 +207,8 @@ export async function prepareAICategorizationForUser(
       if (!selectedSet.has(tx.id)) continue;
       if (tx.ruleId != null) continue;
       if (tx.transactionType !== "regular") continue;
+      // Skip anything already carrying a note: already-handled rows stay put.
+      if (tx.note?.trim()) continue;
       payloadTransactions.push({
         id: tx.id,
         merchantName: tx.merchantName,

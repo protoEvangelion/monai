@@ -29,11 +29,11 @@ export const PI_CATEGORIZER_MODEL =
 export const PI_MODEL_LABEL = PI_CATEGORIZER_MODEL;
 
 /**
- * Batch categorization is extraction, not reasoning: "minimal" keeps the JSON
+ * Batch categorization is extraction, not reasoning: "off" keeps the JSON
  * answer cheap and fast. Override with PI_CATEGORIZER_THINKING.
  */
 export const PI_THINKING_LEVEL =
-  process.env.PI_CATEGORIZER_THINKING?.trim() || "minimal";
+  process.env.PI_CATEGORIZER_THINKING?.trim() || "off";
 
 const PI_CLI_PATH = process.env.PI_CLI_PATH?.trim() || "pi";
 

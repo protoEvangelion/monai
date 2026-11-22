@@ -355,7 +355,10 @@ export function ReviewTable({
     data: tableData,
     getRowId: (row) => String(row.id),
     enableColumnActions: false,
-    enableColumnResizing: true,
+    enableColumnResizing: false,
+    // Ordering stays on for the column-settings modal, but the drag handle
+    // renders as a "⋮⋮⋮" glyph jammed against the sort icon, so hide it.
+    enableColumnDragging: false,
     enableColumnOrdering: !isCategoryVariant,
     enableHiding: !isCategoryVariant,
     enableSorting: true,
@@ -369,7 +372,11 @@ export function ReviewTable({
     enableStickyHeader: true,
     enableColumnPinning: true,
     columnFilterDisplayMode: "subheader",
-    layoutMode: "grid",
+    // "grid-no-grow" keeps header/filter cells in the same grid tracks as the
+    // body (so they line up) but stops columns stretching past their declared
+    // `size`. "grid" rescaled a 120px Date column to 182px; "semantic" let the
+    // table grow past the card and clip Amount.
+    layoutMode: "grid-no-grow",
     initialState: {
       density: isCategoryVariant ? "xs" : "md",
       showColumnFilters: true,
@@ -422,14 +429,18 @@ export function ReviewTable({
       "aria-label": `Select transaction ${row.original.merchantName}`,
       style: { cursor: "pointer" },
     }),
-    mantineTableProps: {
-      style: { tableLayout: "fixed" },
-    },
+    // MRT zeroes out Mantine's th padding; without this the header labels butt
+    // into the column border. Match the body padding so header text lines up
+    // with the cells underneath it.
     mantineTableHeadCellProps: {
       style: {
-        alignItems: "flex-start",
-        justifyContent: "flex-start",
-        verticalAlign: "top",
+        padding: "0.5rem 0.75rem",
+        verticalAlign: "middle",
+      },
+    },
+    mantineTableBodyCellProps: {
+      style: {
+        padding: "0.5rem 0.75rem",
       },
     },
     mantinePaperProps: {

@@ -8,11 +8,14 @@ import type { Tx } from "./transactions.types";
 function isUncategorizedReviewTx(tx: Tx) {
   if (tx.isReviewed) return false;
   if (tx.transactionType !== "regular") return false;
+  // Already annotated (by you or the Amazon matcher) — don't overwrite it.
+  if (tx.note?.trim()) return false;
   if (tx.categoryId == null) return true;
   return tx.category?.name ? isCatchAllCategory(tx.category.name) : false;
 }
 
-const TOOLTIP = "Only categorize unreviewed & uncategorized transactions";
+const TOOLTIP =
+  "Categorize every unreviewed, uncategorized transaction currently loaded (rows with a note are skipped)";
 
 /** Renders in the MRT top toolbar (same row as Show/Hide filters). */
 export function DashboardAiCategorizeButton({ transactions }: { transactions: Tx[] }) {

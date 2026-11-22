@@ -19,7 +19,10 @@ export default defineConfig({
   // The dev server renders each route on demand; a cold first paint can take
   // well over the 5s default.
   expect: { timeout: 15_000 },
-  retries: process.env.CI ? 1 : 0,
+  // The suite runs against a dev server that compiles routes on demand, so a
+  // cold route can stall a client-side transition. One retry covers that
+  // without hiding a real failure (a genuine break fails both attempts).
+  retries: 1,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL,

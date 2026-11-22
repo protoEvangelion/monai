@@ -7,18 +7,22 @@ test.describe('app shell smoke', () => {
     await expect(page.getByRole('heading', { name: 'Transactions to review' })).toBeVisible()
 
     const routes = [
-      { name: 'Transactions', heading: 'Transactions' },
-      { name: 'Accounts', heading: 'Accounts' },
-      { name: 'Investments', heading: 'Investments' },
-      { name: 'Categories', heading: 'Categories' },
-      { name: 'Recurrings', heading: 'Recurrings', exact: true },
-      { name: 'Dashboard', heading: 'Transactions to review' },
+      { name: 'Transactions', path: '/transactions', heading: 'Transactions' },
+      { name: 'Accounts', path: '/accounts', heading: 'Accounts' },
+      { name: 'Investments', path: '/investments', heading: 'Investments' },
+      { name: 'Categories', path: '/categories', heading: 'Categories' },
+      { name: 'Recurrings', path: '/recurrings', heading: 'Recurrings', exact: true },
+      { name: 'Dashboard', path: '/', heading: 'Transactions to review' },
     ]
 
     const sidebar = page.getByRole('navigation')
     for (const route of routes) {
       await sidebar.getByRole('link', { name: route.name }).click()
-      await expect(page.getByRole('heading', { name: route.heading, exact: route.exact })).toBeVisible()
+      // Each route compiles on demand in dev, so a cold one can take a while.
+      await page.waitForURL((url) => url.pathname === route.path, { timeout: 30_000 })
+      await expect(
+        page.getByRole('heading', { name: route.heading, exact: route.exact }),
+      ).toBeVisible({ timeout: 30_000 })
     }
   })
 

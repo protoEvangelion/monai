@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from "./html-entities";
+
 export type CategoryOption = { id: number; name: string; parentId: number | null };
 export type CategorizeTransactionRow = {
   id: number;
@@ -47,7 +49,7 @@ export function buildCategorizePrompt(
     id: tx.id,
     merchant: tx.merchantName,
     amount: tx.amount,
-    ...(tx.note?.trim() ? { note: tx.note.trim() } : {}),
+    ...(tx.note?.trim() ? { note: decodeHtmlEntities(tx.note).trim() } : {}),
   }));
 
   const line1 =

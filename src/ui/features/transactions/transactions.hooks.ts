@@ -233,11 +233,9 @@ export function useTransactionActionSelection({
       ? selectedIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS)
       : pageRows.map((row) => row.original.id);
   const actionIds = markIds;
-  const aiTransactionCount = Math.min(actionIds.length, AI_CATEGORIZE_MAX_TRANSACTIONS);
-  const aiCountLabel =
-    actionIds.length > aiTransactionCount
-      ? `${aiTransactionCount}/${actionIds.length}`
-      : aiTransactionCount;
+  // One click now walks every eligible row, so the label is the real total.
+  const aiTransactionCount = actionIds.length;
+  const aiCountLabel = actionIds.length;
   const total = totalRows ?? filteredRows.length;
 
   const toggleAll = () => {

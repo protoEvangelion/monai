@@ -72,8 +72,8 @@ export function useTransactionReviewActions({
     showToast({
       title: `Categorized ${result.updatedCount} transactions`,
       description:
-        actionIds.length > AI_CATEGORIZE_MAX_TRANSACTIONS
-          ? "Run AI Categorize again to continue through the remaining transactions."
+        (result.skippedCount ?? 0) > 0
+          ? `${result.skippedCount} skipped (already noted, rule-matched, or not an expense).`
           : result.provider === "vercel-ai-gateway"
             ? "Used Vercel AI Gateway."
             : "Used the pi CLI on this machine.",
@@ -82,13 +82,31 @@ export function useTransactionReviewActions({
 
   const handleAICategorize = () => {
     if (!actionIds.length) return;
-    const idsToCategorize = actionIds.slice(0, AI_CATEGORIZE_MAX_TRANSACTIONS);
+    // Walk every eligible row currently loaded, not just the first batch. Each
+    // request stays capped so the prompt and the server timeout stay sane; we
+    // just chain the batches until the whole view is done in one click.
+    const batches: number[][] = [];
+    for (let i = 0; i < actionIds.length; i += AI_CATEGORIZE_MAX_TRANSACTIONS) {
+      batches.push(actionIds.slice(i, i + AI_CATEGORIZE_MAX_TRANSACTIONS));
+    }
 
     startAITransition(async () => {
       try {
-        const result = await runServerCategorize(idsToCategorize);
+        let updatedCount = 0;
+        let skippedCount = 0;
+        let provider: string | undefined;
+        const skipReasons: string[] = [];
+
+        for (const batch of batches) {
+          const result = await runServerCategorize(batch);
+          updatedCount += result.updatedCount ?? 0;
+          skippedCount += result.skippedCount ?? 0;
+          if (result.provider) provider = result.provider;
+          if (Array.isArray(result.skipReasons)) skipReasons.push(...result.skipReasons);
+        }
+
         await router.invalidate();
-        reportServerResult(result);
+        reportServerResult({ updatedCount, skippedCount, skipReasons, provider });
         resetSelection();
 
         return;

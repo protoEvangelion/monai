@@ -45,7 +45,16 @@ if (mode === "production") {
   delete env.TURSO_AUTH_TOKEN;
   delete env.MONAI_DATABASE_AUTH_TOKEN;
   env.DATABASE_URL = env.PLAID_SANDBOX_DATABASE_URL ?? env.DATABASE_URL;
-  if (env.DATABASE_URL) env.MONAI_DATABASE_URL = env.DATABASE_URL;
+  // An explicit MONAI_DATABASE_URL (e.g. a snapshot copy passed on the command
+  // line) outranks the sandbox default. Without this check a `MONAI_DATABASE_URL=./data/copy.db`
+  // run was silently pinned back to ./data/dev.db and looked like empty data.
+  if (env.DATABASE_URL && !process.env.MONAI_DATABASE_URL) {
+    env.MONAI_DATABASE_URL = env.DATABASE_URL;
+  }
+  // Localhost should not make you sign in. Opt out with MONAI_DEV_AUTH_BYPASS=0.
+  if (process.env.MONAI_DEV_AUTH_BYPASS === undefined) {
+    env.MONAI_DEV_AUTH_BYPASS = "1";
+  }
   env.PLAID_ENV = env.PLAID_SANDBOX_ENV ?? env.PLAID_ENV ?? "sandbox";
   env.PLAID_SECRET = env.PLAID_SANDBOX_SECRET ?? env.PLAID_SECRET;
 }
