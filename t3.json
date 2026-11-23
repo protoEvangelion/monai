@@ -1,0 +1,12 @@
+{
+  "$schema": "https://t3.codes/schema/t3.json",
+  "scripts": [
+    {
+      "name": "Link env files",
+      "icon": "configure",
+      "runOnWorktreeCreate": true,
+      "async": false,
+      "command": "for f in .env.local .env; do [ -f \"$T3CODE_PROJECT_ROOT/$f\" ] && ln -sfn \"$T3CODE_PROJECT_ROOT/$f\" \"$T3CODE_WORKTREE_PATH/$f\"; done"
+    }
+  ]
+}
