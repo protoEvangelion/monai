@@ -134,7 +134,7 @@ export function CategoryActionPicker({
             ) : null}
             {groups.map((group) => (
               <div key={group.id} className="px-1.5 pb-1.5">
-                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-default-400">
+                <div className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-default-400">
                   {group.icon} {group.name}
                 </div>
                 {group.children.map((category) => (

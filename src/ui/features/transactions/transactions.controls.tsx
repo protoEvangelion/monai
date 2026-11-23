@@ -67,7 +67,7 @@ export function IconActionButton({
 }) {
   const variantClass =
     variant === "ai"
-      ? "bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 text-white shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35"
+      ? "bg-linear-to-br from-teal-700 via-blue-700 to-indigo-700 text-white shadow-md shadow-blue-900/25 hover:shadow-lg hover:shadow-blue-900/35"
       : "bg-foreground text-background shadow-sm hover:opacity-90";
   const badgeClass =
     variant === "ai"
@@ -90,7 +90,7 @@ export function IconActionButton({
         {children}
         <span
           className={[
-            "absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border px-1 text-[10px] font-black leading-none tabular-nums",
+            "absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border px-1 text-[11px] font-black leading-none tabular-nums",
             badgeClass,
           ].join(" ")}
         >

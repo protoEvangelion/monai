@@ -208,7 +208,7 @@ export function CategoryTable({
   );
 
   return (
-    <Card className="w-full min-w-0 overflow-hidden border border-divider/60 bg-content1 shadow-none">
+    <Card className="w-full min-w-0 overflow-hidden bg-content1 shadow-none">
       <CardContent className="p-0">
         <div className="overflow-hidden">
           {incomeRow ? (

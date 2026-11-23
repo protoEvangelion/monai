@@ -50,7 +50,7 @@ export function TransactionsDataGrid({
                         key={header.id}
                         scope="col"
                         className={[
-                          "border-b border-separator/30 py-2 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-muted",
+                          "border-b border-separator/30 py-2 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-muted",
                           meta?.headerClassName ?? "px-3",
                         ].join(" ")}
                       >

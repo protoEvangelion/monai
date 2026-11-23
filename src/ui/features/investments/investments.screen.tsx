@@ -54,7 +54,7 @@ function Sparkline({ values, positive }: { values: number[]; positive: boolean }
       <Line
         type="linear"
         dataKey="balance"
-        stroke={positive ? "#17c964" : "#f31260"}
+        stroke={positive ? "var(--chart-net-worth)" : "var(--chart-debts)"}
         strokeWidth={1.75}
         dot={false}
         isAnimationActive={false}
@@ -108,7 +108,14 @@ function BalanceChart({
         </div>
       </div>
 
-      <div ref={ref} className="mt-4 h-48 w-full min-w-0">
+      <div
+        ref={ref}
+        className="mt-4 h-48 w-full min-w-0"
+        role="img"
+        aria-label={`Investment balance history over the last ${filtered.length} points, latest ${formatCurrency(
+          Number(filtered[filtered.length - 1]?.balance ?? 0),
+        )}.`}
+      >
         {filtered.length < 2 || size.width === 0 || size.height === 0 ? (
           <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-divider/70 bg-background/50 px-6 text-center text-sm text-default-400">
             {filtered.length
@@ -117,6 +124,7 @@ function BalanceChart({
           </div>
         ) : (
           <LineChart
+            accessibilityLayer={false}
             width={size.width}
             height={size.height}
             data={filtered}
@@ -137,10 +145,11 @@ function BalanceChart({
             <Line
               type="linear"
               dataKey="balance"
-              stroke="#17c964"
+              stroke="var(--chart-net-worth)"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 4, strokeWidth: 0, fill: "#17c964" }}
+              isAnimationActive={false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: "var(--chart-net-worth)" }}
             />
           </LineChart>
         )}
@@ -153,7 +162,7 @@ function BalanceChart({
             type="button"
             onClick={() => onRangeChange(item)}
             className={[
-              "rounded-full px-3 py-1 text-xs font-bold",
+              "flex min-h-8 items-center rounded-full px-3 text-xs font-bold",
               item === range ? "bg-content2 text-foreground" : "text-default-400 hover:text-foreground",
             ].join(" ")}
           >
@@ -239,7 +248,7 @@ function AccountDetailPanel({
                   <Line
                     type="linear"
                     dataKey="balance"
-                    stroke="#17c964"
+                    stroke="var(--chart-net-worth)"
                     strokeWidth={2}
                     dot={filtered.length <= 8}
                     isAnimationActive={false}
@@ -258,7 +267,7 @@ function AccountDetailPanel({
                   type="button"
                   onClick={() => setRange(item)}
                   className={[
-                    "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                    "rounded-full px-2 py-0.5 text-[11px] font-bold",
                     item === range ? "bg-content2 text-foreground" : "text-default-400",
                   ].join(" ")}
                 >
@@ -398,7 +407,7 @@ export function InvestmentsScreen({ data }: { data: InvestmentsData }) {
           {data.topMovers.length ? (
             <section>
               <h2 className="mb-2 text-sm font-bold">Top movers</h2>
-              <div className="flex gap-3 overflow-x-auto pb-1">
+              <div className="flex gap-3 overflow-x-auto pb-1 pr-1">
                 {data.topMovers.map((mover) => {
                   const gainLabel = formatPercent(mover.gainPercent);
                   const positive = (mover.gainPercent ?? 0) >= 0;
@@ -437,7 +446,7 @@ export function InvestmentsScreen({ data }: { data: InvestmentsData }) {
                 change · balance
               </span>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-divider/60 bg-content1">
+            <div className="overflow-hidden rounded-2xl bg-content1">
               {data.accounts.length ? (
                 data.accounts.map((account) => {
                   const changeLabel = formatPercent(account.changePercent);

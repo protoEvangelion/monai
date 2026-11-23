@@ -31,7 +31,7 @@ export function AccountGroupsList({
                 {formatCurrency(total)}
               </div>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-divider/60 bg-content1">
+            <div className="overflow-hidden rounded-2xl bg-content1">
               {group.accounts.map((account) => (
                 <button
                   key={account.id}

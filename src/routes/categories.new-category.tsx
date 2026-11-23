@@ -8,6 +8,7 @@ const authStateFn = createServerFn().handler(async () => {
 })
 
 export const Route = createFileRoute("/categories/new-category")({
+  head: () => ({ meta: [{ title: "New category - Monai" }] }),
   component: NewCategoryRoute,
   beforeLoad: async () => await authStateFn(),
 })

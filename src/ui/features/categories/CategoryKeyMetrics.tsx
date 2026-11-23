@@ -5,7 +5,7 @@ import type { CategoryYearMetric } from "./categories.metrics";
 export function CategoryKeyMetrics({ metrics }: { metrics: CategoryYearMetric[] }) {
   return (
     <div className="border-b border-divider/30 px-5 py-4">
-      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 text-[10px] font-bold uppercase tracking-[0.14em] text-default-400">
+      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 text-[11px] font-bold uppercase tracking-[0.14em] text-default-400">
         <div className="flex items-center gap-1.5">
           <span>Key metrics</span>
           <span

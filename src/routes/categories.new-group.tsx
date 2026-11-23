@@ -8,6 +8,7 @@ const authStateFn = createServerFn().handler(async () => {
 })
 
 export const Route = createFileRoute("/categories/new-group")({
+  head: () => ({ meta: [{ title: "New group - Monai" }] }),
   component: NewGroupRoute,
   beforeLoad: async () => await authStateFn(),
 })

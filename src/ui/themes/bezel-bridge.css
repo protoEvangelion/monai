@@ -96,11 +96,111 @@
   --text-5xl: 3rem;
   --text-6xl: 3.75rem;
 
+  /*
+   * Contrast pass (dark). Bezel's tones are beautiful and unreadable: muted
+   * text measured 3.5:1 on the card, income green 2.9:1, warning amber 2.9:1.
+   * Every value below is checked against `--card` (#312156) and `--page`
+   * (#231740) at 4.5:1 or better, and each *-foreground is chosen so the same
+   * token still works as a solid fill (light fill + dark ink).
+   */
+  --muted-foreground: #b3a6d6; /* 6.3:1 on card, 4.9:1 on the sidebar tone */
+  --primary: #2dd4bf; /* 7.6:1 as text on card */
+  --primary-foreground: #0d1220;
+  --success: #6ee7a0; /* 8.0:1 as text */
+  --success-foreground: #0b2e1a;
+  --destructive: #ff9aab; /* 7.1:1 as text */
+  --destructive-foreground: #3b0713;
+  --warning: #f3c08a; /* 8.6:1 as text */
+  --warning-foreground: #3d2407;
+  --info: #9ec5ff; /* 8.0:1 as text */
+  --info-foreground: #0a1f45;
+
+  /* Tinted chip fills — the `*-soft` classes 40+ call sites already use. */
+  --success-soft: color-mix(in oklch, var(--success) 18%, var(--card));
+  --warning-soft: color-mix(in oklch, var(--warning) 18%, var(--card));
+  --danger-soft: color-mix(in oklch, var(--destructive) 18%, var(--card));
+  --info-soft: color-mix(in oklch, var(--info) 18%, var(--card));
+
+  /* Chart series — semantic, so a palette change moves the charts too. */
+  --chart-net-worth: var(--success);
+  --chart-assets: var(--info);
+  --chart-debts: var(--destructive);
+
+  /* Inset field tone: one step *below* the card so placeholders can pass AA. */
+  --field-inset: color-mix(in oklch, var(--card) 72%, var(--page));
+
+  /*
+   * Muted text ladder. Declared as its own variable so `.light` can restate
+   * the steps: the light mixes land too close to the white card to pass AA,
+   * and `@theme inline` inlines the color-mix expression, so overriding
+   * `--color-default-N` in the light block alone would never apply.
+   */
+  --default-300: color-mix(in oklch, var(--muted-foreground) 85%, var(--default));
+  --default-400: var(--muted-foreground);
+  --default-500: color-mix(in oklch, var(--muted-foreground) 88%, var(--foreground));
+  --default-600: color-mix(in oklch, var(--muted-foreground) 70%, var(--foreground));
+
   color-scheme: dark;
   font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
 }
 
+/**
+ * Light theme.
+ *
+ * Bezel exports zero light overrides (gap #5 in the header), so `--page` was
+ * literally `color-mix(background 52%, black)` and the toggle only flipped
+ * `color-scheme`: users got dark surfaces with light native controls. This
+ * block is the missing palette. Values are checked for AA against `--card`
+ * (#ffffff) and `--page` (#f4f0fb).
+ */
 .light {
+  --background: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #241c3a;
+  --popover: #ffffff;
+  --popover-foreground: #241c3a;
+  --foreground: #241c3a; /* 14.4:1 on page */
+  --muted-foreground: #6a5f85; /* 5.9:1 on white, 5.2:1 on page */
+  --input: #ddd5ee;
+  --ring: #5a4a86;
+  --sidebar-ring: #5a4a86;
+  --sidebar: #f2ecfa;
+  --sidebar-border: #ddd5ee;
+  --sidebar-accent: #e8e0f6;
+  --sidebar-foreground: #241c3a;
+  --sidebar-accent-foreground: #241c3a;
+  --accent: #115e59;
+  --accent-foreground: #ffffff;
+  --primary: #115e59; /* 5.7:1 on its own 18% tint, 7.6:1 on white */
+  --primary-foreground: #ffffff;
+  --secondary: #ece5f9;
+  --secondary-foreground: #241c3a;
+  --tertiary: #d9f99d;
+  --tertiary-foreground: #241c3a;
+  --success: #14532d; /* 6.7:1 on the soft tint */
+  --success-foreground: #ffffff;
+  --destructive: #991b1b; /* 6.0:1 on the soft tint */
+  --destructive-foreground: #ffffff;
+  --warning: #92400e;
+  --warning-foreground: #ffffff;
+  --info: #1e3a8a;
+  --info-foreground: #ffffff;
+
+  /*
+   * The dark scale mixes toward the card, which in light lands too close to the
+   * surface to pass AA (300 measured 4.4:1). Restate the light steps as
+   * explicit descending inks instead.
+   */
+  --default-300: #5a5172;
+  --default-400: #514868;
+  --default-500: #4a4260;
+  --default-600: #3d3651;
+
+  /* `--page` is derived by mixing with black, which light cannot use. */
+  --page: #f4f0fb;
+  --chrome: #fbf9ff;
+  --raised: #ffffff;
+
   color-scheme: light;
 }
 
@@ -156,8 +256,16 @@ body,
   --color-danger-foreground: var(--danger-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-info-soft: var(--info-soft);
+  --color-chart-net-worth: var(--chart-net-worth);
+  --color-chart-assets: var(--chart-assets);
+  --color-chart-debts: var(--chart-debts);
+  --color-field-inset: var(--field-inset);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-ring: var(--ring);
@@ -181,16 +289,18 @@ body,
    * definitions Tailwind generates nothing and every "muted" label silently
    * inherits the full-brightness foreground.
    *
-   * Backgrounds lift off the page; text/icon steps fade the foreground toward
-   * `--muted-foreground` so 500 stays the standard secondary text tone.
+   * Backgrounds lift off the page. Text steps are mixes toward the *surface*
+   * but floored at 85% muted: the old 40%/75% mixes measured 2.4:1 and 4.0:1
+   * on the card, so the "dim" end of the scale was unreadable. The scale stays
+   * monotonic and every step clears 4.5:1 in both themes.
    */
   --color-default-50: color-mix(in oklch, var(--page) 94%, var(--foreground));
   --color-default-100: color-mix(in oklch, var(--page) 88%, var(--foreground));
   --color-default-200: color-mix(in oklch, var(--page) 80%, var(--foreground));
-  --color-default-300: color-mix(in oklch, var(--muted-foreground) 40%, var(--default));
-  --color-default-400: color-mix(in oklch, var(--muted-foreground) 75%, var(--default));
-  --color-default-500: var(--muted-foreground);
-  --color-default-600: color-mix(in oklch, var(--foreground) 60%, var(--muted-foreground));
+  --color-default-300: var(--default-300);
+  --color-default-400: var(--default-400);
+  --color-default-500: var(--default-500);
+  --color-default-600: var(--default-600);
   --color-default-700: var(--foreground);
 
   /*
@@ -232,14 +342,45 @@ body,
   border-radius: var(--radius-md);
 }
 
+/*
+ * Bare `<input placeholder>` elements were using the UA default (a translucent
+ * gray that measured 3.1:1 on the inset field). One token, everywhere.
+ */
+:where(input, textarea)::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
+/*
+ * Reduced motion — per effect, not a blanket kill.
+ *
+ * The old rule set `animation-duration: 0.01ms` on `*`, which erased the
+ * brand's pulse indicators along with the slow stuff. Users who ask for less
+ * motion still need to see that something is happening, so decorative motion
+ * is removed and state-change motion (fades, color) is kept but shortened.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 0.15s !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.15s !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Transform-driven decoration is the part that triggers vestibular issues. */
+  [class*="animate-"],
+  .motion-safe\:animate-in {
+    animation: none !important;
+    transition-property: color, background-color, border-color, opacity !important;
+    transform: none !important;
+  }
+
+  /* Loading spinners are the one exception: motion *is* the state. */
+  .animate-spin {
+    animation: spin 1.2s linear infinite !important;
   }
 }
 
@@ -271,6 +412,16 @@ body,
 
 .mrt-table-paper tbody {
   background-color: var(--card) !important;
+}
+
+/* MRT's sort/filter icon buttons ship at 18x18; WCAG 2.5.8 wants 24x24. */
+.mrt-table-paper [class*="MRT_TableHeadCell"] button,
+.mrt-table-paper [class*="MRT_TableHeadCell"] [role="button"] {
+  display: inline-flex;
+  min-width: 24px;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
 }
 
 .mrt-table-paper td::before,
@@ -321,7 +472,8 @@ body,
 .mrt-table-paper .mantine-Input-input,
 .mrt-table-paper input:not([type="checkbox"]),
 .mrt-table-paper select {
-  background-color: var(--sidebar-accent) !important;
+  /* Inset tone, not the raised sidebar accent: placeholders need the depth. */
+  background-color: var(--field-inset) !important;
   color: var(--foreground) !important;
   border: none !important;
   border-radius: var(--radius-md) !important;
@@ -354,11 +506,13 @@ body,
 .mrt-table-paper .mantine-Checkbox-root,
 .mrt-table-paper .mantine-Checkbox-inner,
 .mrt-table-paper .mantine-Checkbox-input {
-  width: 16px !important;
-  height: 16px !important;
-  min-width: 16px !important;
-  min-height: 16px !important;
-  max-height: 16px !important;
+  /* 20px box inside a 40px row hit area: WCAG 2.5.8 needs 24, spacing covers
+     the rest, and the label click target spans the cell. */
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
 }
 
 .mrt-table-paper .mantine-Checkbox-input {

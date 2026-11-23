@@ -263,7 +263,7 @@ export function AmountRangeFilterButton({
         <PopoverContent className="w-64 rounded-2xl border border-divider p-3 shadow-xl">
           <div className="grid gap-3">
             <div>
-              <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+              <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
                 Minimum
               </label>
               <input
@@ -278,7 +278,7 @@ export function AmountRangeFilterButton({
               />
             </div>
             <div>
-              <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+              <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
                 Maximum
               </label>
               <input

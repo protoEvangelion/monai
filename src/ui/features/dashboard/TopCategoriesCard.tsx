@@ -3,16 +3,22 @@ import { ChevronRightIcon } from "lucide-react";
 import { formatCurrency } from "../../../lib/format";
 import type { DashboardTopGroup } from "./dashboard.types";
 
-const COLORS = ["#17c964", "#006FEE", "#9333ea", "#f5a524", "#f31260"];
+const COLORS = [
+  "var(--chart-net-worth)",
+  "var(--chart-assets)",
+  "#9333ea",
+  "#f5a524",
+  "var(--chart-debts)",
+];
 
 export function TopCategoriesCard({ topGroups }: { topGroups: DashboardTopGroup[] }) {
   return (
     <div className="shrink-0 overflow-hidden rounded-2xl bg-card">
       <div className="flex items-center justify-between border-b border-divider/30 px-5 py-4">
-        <h5 className="font-bold text-sm">Top categories</h5>
+        <h2 className="font-bold text-sm">Top categories</h2>
         <Link
           to="/categories"
-          className="flex items-center gap-1 text-xs text-default-400 hover:text-foreground transition-colors"
+          className="flex min-h-6 items-center gap-1 text-xs text-default-400 transition-colors hover:text-foreground"
         >
           View all <ChevronRightIcon size={14} />
         </Link>
@@ -31,7 +37,7 @@ export function TopCategoriesCard({ topGroups }: { topGroups: DashboardTopGroup[
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-default-300 text-xs">▶</span>
                 <span
-                  className="w-5 h-5 rounded-full text-[10px] font-bold text-white flex items-center justify-center shrink-0"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-background"
                   style={{ backgroundColor: COLORS[i % COLORS.length] }}
                 >
                   {cat.txCount}

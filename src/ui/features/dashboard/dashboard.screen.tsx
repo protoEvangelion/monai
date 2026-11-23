@@ -38,6 +38,9 @@ export function DashboardScreen({
 
   return (
     <div className="flex flex-col gap-5 xl:min-h-0 xl:flex-1">
+      {/* The dashboard had no h1 and its cards started at h5, so the document
+          outline was unusable for screen-reader navigation. */}
+      <h1 className="sr-only">Dashboard</h1>
       <div className="grid shrink-0 grid-cols-1 items-stretch gap-5 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <NetWorthCard

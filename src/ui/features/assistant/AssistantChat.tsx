@@ -49,7 +49,7 @@ function useChatConnection() {
 function AssistantAvatar({ size = 24 }: { size?: number }) {
   return (
     <span
-      className="mt-0.5 flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 text-white shadow-sm"
+      className="mt-0.5 flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-teal-700 via-blue-700 to-indigo-700 text-white shadow-sm"
       style={{ height: size, width: size }}
     >
       <SparklesIcon size={Math.round(size / 2)} />

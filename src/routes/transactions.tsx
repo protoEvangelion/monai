@@ -40,6 +40,7 @@ function cleanTransactionsSearch(search: TransactionsSearch): TransactionsSearch
 }
 
 export const Route = createFileRoute("/transactions")({
+  head: () => ({ meta: [{ title: "Transactions - Monai" }] }),
   component: TransactionsRoute,
   beforeLoad: async () => await authStateFn(),
   validateSearch: (search: Record<string, unknown>): TransactionsSearch => ({

@@ -176,7 +176,7 @@ export function CategoryModal(props: {
                 <>
                   {props.groups?.length ? (
                     <div className="grid gap-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+                      <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
                         Group
                       </label>
                       <select

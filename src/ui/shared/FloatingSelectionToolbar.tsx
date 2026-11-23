@@ -16,7 +16,7 @@ export function floatingSelectionButtonClass({
   variant?: FloatingSelectionButtonVariant;
 } = {}) {
   const variantClass = {
-    ai: "border-transparent bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 text-white shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35",
+    ai: "border-transparent bg-linear-to-br from-teal-700 via-blue-700 to-indigo-700 text-white shadow-md shadow-blue-900/25 hover:shadow-lg hover:shadow-blue-900/35",
     danger:
       "border-divider/60 bg-background text-foreground hover:border-danger/40 hover:text-danger",
     default:

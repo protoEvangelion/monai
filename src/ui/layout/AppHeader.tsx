@@ -2,7 +2,7 @@ import { Button, useOverlayState } from "@heroui/react";
 import { SunIcon, MoonIcon, MenuIcon, RefreshCwIcon, SparklesIcon } from "lucide-react";
 import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { useTimeTravel } from "../hooks/useTimeTravel";
 import { manualSync } from "../../server/plaid.sync.fns";
@@ -23,6 +23,8 @@ export function AppHeader({
   const router = useRouter();
   const manualSyncFn = useServerFn(manualSync);
   const [isSyncing, startSyncTransition] = useTransition();
+  // Toasts are visual only; this mirrors the same status for screen readers.
+  const [syncStatus, setSyncStatus] = useState("");
   const isDarkTheme = theme === "dark";
   const assistant = useOverlayState();
   const openAssistant = assistant.open;
@@ -36,6 +38,13 @@ export function AppHeader({
       try {
         const result = await manualSyncFn();
         await router.invalidate();
+        setSyncStatus(
+          result.failures.length === 0
+            ? `Sync complete. Updated ${result.synced} of ${result.total} institutions.`
+            : `Sync finished with ${result.failures.length} problem${result.failures.length === 1 ? "" : "s"}. ${result.failures
+                .map((f) => f.institution)
+                .join(", ")}.`,
+        );
 
         if (result.failures.length === 0) {
           showToast({
@@ -65,6 +74,7 @@ export function AppHeader({
           tone: "danger",
         });
       } catch (error) {
+        setSyncStatus("Sync failed.");
         showToast({
           title: "Sync failed",
           description:
@@ -76,8 +86,8 @@ export function AppHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 bg-chrome px-4 xl:px-8">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 bg-chrome px-3 sm:gap-3 sm:px-4 xl:px-8">
+      <div className="flex shrink-0 items-center gap-3">
         <Button
           variant="ghost"
           isIconOnly
@@ -90,7 +100,12 @@ export function AppHeader({
         </Button>
       </div>
 
-      <div className="flex shrink-0 justify-center">
+      {/*
+        Center cluster gets the free space and may shrink; the right cluster is
+        `shrink-0`. Before this, both sides were `flex-1` with shrink-0 children,
+        so at 390px the month label painted underneath the Assistant button.
+      */}
+      <div className="flex min-w-0 flex-1 justify-center">
         <MonthControls
           compact
           viewDate={viewDate}
@@ -98,12 +113,12 @@ export function AppHeader({
         />
       </div>
 
-      <div className="flex h-full min-w-0 flex-1 items-center justify-end gap-3">
+      <div className="flex h-full shrink-0 items-center justify-end gap-2 sm:gap-3">
         <Button
           variant="secondary"
           size="sm"
           onPress={() => assistant.open()}
-          className="h-9 shrink-0 rounded-full px-4"
+          className="h-9 shrink-0 rounded-full px-3 sm:px-4"
           aria-label="Open assistant"
         >
           <SparklesIcon size={15} />
@@ -114,7 +129,7 @@ export function AppHeader({
           size="sm"
           onPress={handleSync}
           isDisabled={isSyncing}
-          className="h-9 shrink-0 rounded-full px-4"
+          className="h-9 shrink-0 rounded-full px-3 sm:px-4"
           aria-label="Sync transactions"
         >
           <RefreshCwIcon size={15} className={isSyncing ? "animate-spin" : ""} />
@@ -132,6 +147,9 @@ export function AppHeader({
         </Button>
       </div>
 
+      <p aria-live="polite" role="status" className="sr-only">
+        {isSyncing ? "Syncing transactions" : syncStatus}
+      </p>
       <AssistantPanel state={assistant} />
     </header>
   );

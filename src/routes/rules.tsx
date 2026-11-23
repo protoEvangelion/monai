@@ -10,6 +10,7 @@ const authStateFn = createServerFn().handler(async () => {
 });
 
 export const Route = createFileRoute("/rules")({
+  head: () => ({ meta: [{ title: "Rules - Monai" }] }),
   component: RulesRoute,
   beforeLoad: async () => await authStateFn(),
   validateSearch: (search: Record<string, unknown>) => ({

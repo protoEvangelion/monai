@@ -88,10 +88,10 @@ export function NetWorthCard({
 
   return (
     <div className="h-full overflow-hidden rounded-2xl bg-card">
-      <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-3">
-        <div>
+      <div className="flex flex-col gap-3 px-6 pt-5 pb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <div
-            className={`text-5xl font-black leading-tight tracking-tight ${
+            className={`text-4xl font-black leading-tight tracking-tight sm:text-5xl ${
               hasAccounts ? "text-foreground" : "text-foreground/20"
             }`}
           >
@@ -103,14 +103,19 @@ export function NetWorthCard({
               : "Connect accounts to see net worth"}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-col items-start gap-2 sm:items-end">
           <Link
             to="/accounts"
-            className="mt-1 flex items-center gap-1 text-xs text-default-400 transition-colors hover:text-foreground"
+            className="flex min-h-6 items-center gap-1 text-xs text-default-400 transition-colors hover:text-foreground sm:mt-1"
           >
             Accounts <ChevronRightIcon size={14} />
           </Link>
-          <div className="flex flex-wrap justify-end gap-1">
+          {/* Scrolls instead of stacking, so the control never leaves the card. */}
+          <div
+            role="group"
+            aria-label="Net worth time range"
+            className="flex max-w-full flex-nowrap justify-start gap-1 overflow-x-auto sm:justify-end"
+          >
             {ranges.map((item) => (
               <button
                 key={item}
@@ -118,7 +123,7 @@ export function NetWorthCard({
                 onClick={() => setRange(item)}
                 aria-pressed={item === range}
                 className={[
-                  "rounded-full px-2.5 py-1 text-[10px] font-bold",
+                  "flex min-h-8 shrink-0 items-center rounded-full px-3 text-[11px] font-bold tracking-wide",
                   item === range
                     ? "bg-content2 text-foreground"
                     : "text-default-400 hover:text-foreground",
@@ -131,7 +136,16 @@ export function NetWorthCard({
         </div>
       </div>
 
-      <div ref={ref} className="h-[180px] w-full min-w-0">
+      <div
+        ref={ref}
+        className="h-[180px] w-full min-w-0"
+        role="img"
+        aria-label={
+          hasAccounts
+            ? `Net worth history for ${range}: currently ${formatCurrency(netWorth)}, ${formatCurrency(totalAssets)} in assets and ${formatCurrency(totalDebts)} in debts over the visible range.`
+            : "Net worth chart, no accounts connected"
+        }
+      >
         {!hasAccounts ? (
           <div className="flex h-full items-center justify-center">
             <p className="text-sm text-default-300">Connect accounts to see net worth</p>
@@ -141,27 +155,28 @@ export function NetWorthCard({
             width={size.width}
             height={size.height}
             data={filteredData}
-            margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
+            accessibilityLayer={false}
+            margin={{ top: 6, right: 0, left: 0, bottom: 8 }}
           >
             <ChartTooltip
               content={({ payload }) =>
                 payload?.length ? (
                   <div className="rounded-lg border border-divider bg-background/90 px-2 py-1 text-xs shadow-md">
                     <div className="mb-1">{payload[0].payload.dateLabel}</div>
-                    <div className="text-[#17c964]">
+                    <div className="text-chart-net-worth">
                       Net worth:{" "}
                       {formatCurrency(
                         (payload.find((item) => item.dataKey === "netWorth")?.value as number) ||
                           0,
                       )}
                     </div>
-                    <div className="text-[#006FEE]">
+                    <div className="text-chart-assets">
                       Assets:{" "}
                       {formatCurrency(
                         (payload.find((item) => item.dataKey === "assets")?.value as number) || 0,
                       )}
                     </div>
-                    <div className="text-[#f31260]">
+                    <div className="text-chart-debts">
                       Debts:{" "}
                       {formatCurrency(
                         (payload.find((item) => item.dataKey === "debts")?.value as number) || 0,
@@ -171,29 +186,35 @@ export function NetWorthCard({
                 ) : null
               }
             />
+            {/* `isAnimationActive={false}`: the draw-in leaves the paths at
+                `stroke-dasharray: 0px, Npx`, so the line never becomes visible
+                after the width measurement re-renders the chart. */}
             <Line
               type="linear"
               dataKey="assets"
-              stroke="#006FEE"
+              stroke="var(--chart-assets)"
               strokeWidth={1.75}
               dot={false}
-              activeDot={{ r: 3, strokeWidth: 0, fill: "#006FEE" }}
+              isAnimationActive={false}
+              activeDot={{ r: 3, strokeWidth: 0, fill: "var(--chart-assets)" }}
             />
             <Line
               type="linear"
               dataKey="debts"
-              stroke="#f31260"
+              stroke="var(--chart-debts)"
               strokeWidth={1.75}
               dot={false}
-              activeDot={{ r: 3, strokeWidth: 0, fill: "#f31260" }}
+              isAnimationActive={false}
+              activeDot={{ r: 3, strokeWidth: 0, fill: "var(--chart-debts)" }}
             />
             <Line
               type="linear"
               dataKey="netWorth"
-              stroke="#17c964"
+              stroke="var(--chart-net-worth)"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 4, strokeWidth: 0, fill: "#17c964" }}
+              isAnimationActive={false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: "var(--chart-net-worth)" }}
             />
           </LineChart>
         ) : null}

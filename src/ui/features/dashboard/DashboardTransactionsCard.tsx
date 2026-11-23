@@ -19,10 +19,10 @@ export function DashboardTransactionsCard({
   return (
     <div className="flex h-[min(40rem,70vh)] min-h-[24rem] flex-col overflow-hidden rounded-2xl bg-card xl:h-full">
       <div className="flex items-center justify-between border-b border-divider/30 px-6 py-4">
-        <h5 className="font-bold text-sm">Transactions to review</h5>
+        <h2 className="font-bold text-sm">Transactions to review</h2>
         <Link
           to="/transactions"
-          className="flex items-center gap-1 text-xs text-default-400 hover:text-foreground transition-colors"
+          className="flex min-h-6 items-center gap-1 text-xs text-default-400 transition-colors hover:text-foreground"
         >
           View all <ChevronRightIcon size={14} />
         </Link>

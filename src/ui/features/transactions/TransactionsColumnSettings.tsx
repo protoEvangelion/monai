@@ -71,7 +71,7 @@ export function TransactionsColumnSettings({
       </PopoverTrigger>
       <PopoverContent className="w-72 rounded-2xl border border-divider p-2 shadow-xl">
         <div className="flex flex-col gap-1">
-          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+          <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
             Columns
           </div>
           {orderedColumns.map((column) => {

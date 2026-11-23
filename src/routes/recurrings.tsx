@@ -9,6 +9,7 @@ const authStateFn = createServerFn().handler(async () => {
 });
 
 export const Route = createFileRoute("/recurrings")({
+  head: () => ({ meta: [{ title: "Recurrings - Monai" }] }),
   component: RecurringsRoute,
   beforeLoad: async () => await authStateFn(),
   loader: async () => ({

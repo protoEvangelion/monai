@@ -129,7 +129,7 @@ export function AssistantPanel({
             </button>
 
             <div className="flex shrink-0 items-center gap-2 border-b border-divider bg-content1 py-2 pr-2 pl-4">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 text-white shadow-sm">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-teal-700 via-blue-700 to-indigo-700 text-white shadow-sm">
                 <SparklesIcon size={13} />
               </span>
               <h2 className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">

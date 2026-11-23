@@ -114,7 +114,7 @@ export function TransactionCategoryCell({
           <div className="min-h-0 flex-1 overflow-y-auto py-1">
             {filteredGroups.map((group) => (
               <div key={group.id} className="px-1.5 pb-1.5">
-                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-default-400">
+                <div className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-default-400">
                   {group.icon} {group.name}
                 </div>
                 {group.children.map((category) => (
@@ -174,7 +174,12 @@ export function TransactionCategoryCell({
           "inline-flex max-w-36 cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold uppercase transition-opacity hover:opacity-80",
           tx.rule ? "border border-dashed border-[#0ea5e9]" : "border border-transparent",
         ].join(" ")}
-        style={{ backgroundColor: `${color}22`, color }}
+        // Lighten the categorical hue toward the foreground so every chip clears
+        // AA as text on its own 13% tint, instead of only the darker hues doing so.
+        style={{
+          backgroundColor: `color-mix(in oklch, ${color} 18%, var(--card))`,
+          color: `color-mix(in oklch, ${color} 55%, var(--foreground))`,
+        }}
         onMouseDown={(event) => event.preventDefault()}
         onClick={(event) => {
           event.stopPropagation();

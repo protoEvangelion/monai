@@ -4,7 +4,7 @@ export function UpcomingPaymentsCard() {
   return (
     <div className="rounded-2xl bg-card p-5">
       <div className="flex items-center justify-between mb-3">
-        <h5 className="font-bold text-sm">Next two weeks</h5>
+        <h2 className="font-bold text-sm">Next two weeks</h2>
         <span className="flex items-center gap-1 text-xs text-default-400">
           Recurrings <ChevronRightIcon size={14} />
         </span>

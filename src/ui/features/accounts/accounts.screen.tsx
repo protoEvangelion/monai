@@ -70,7 +70,7 @@ export function AccountsScreen({
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] gap-0 overflow-hidden rounded-3xl border border-divider/60 bg-background/70 shadow-sm">
+    <div className="flex min-h-[calc(100vh-8rem)] gap-0 overflow-hidden rounded-3xl bg-background/70">
       <section className="min-w-0 flex-1 overflow-y-auto">
         <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-divider/60 bg-background/90 px-6 backdrop-blur-xl">
           <h1 className="text-lg font-bold">Accounts</h1>

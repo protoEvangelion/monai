@@ -174,7 +174,7 @@ export function RecurringsScreen({ transactions }: { transactions: TransactionsD
                         {transaction.category?.icon ?? "🏷️"}
                       </span>
                     ) : (
-                      <span className="justify-self-center rounded-full bg-default-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-default-600">
+                      <span className="justify-self-center rounded-full bg-default-100 px-1.5 py-0.5 text-[11px] font-bold uppercase text-default-600">
                         {transactionTypeLabel(transaction.transactionType)}
                       </span>
                     )}

@@ -91,7 +91,7 @@ function RuleForm({
   return (
     <div className="space-y-3 rounded-2xl border border-divider/60 bg-content1 p-4">
       <div>
-        <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+        <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
           Match text
         </label>
         <input
@@ -106,7 +106,7 @@ function RuleForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+        <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
           Amount
         </label>
         <input
@@ -123,7 +123,7 @@ function RuleForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
             Type
           </label>
           <select
@@ -138,7 +138,7 @@ function RuleForm({
         </div>
         {transactionType === "regular" ? (
           <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+            <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
               Category
             </label>
             <select
@@ -251,7 +251,7 @@ export function RulesScreen({
         />
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-divider/60 bg-content1">
+      <div className="overflow-hidden rounded-2xl bg-content1">
         {rules.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-default-400">
             No rules yet. Add one to remember merchants like “Disney+”.

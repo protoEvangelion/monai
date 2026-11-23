@@ -2,6 +2,7 @@ import { SignOutButton } from "@clerk/tanstack-react-start";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/access-denied")({
+  head: () => ({ meta: [{ title: "Access denied - Monai" }] }),
   component: AccessDeniedPage,
 });
 

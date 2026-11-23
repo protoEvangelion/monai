@@ -12,6 +12,7 @@ const authStateFn = createServerFn().handler(async () => {
 });
 
 export const Route = createFileRoute("/")({
+  head: () => ({ meta: [{ title: "Dashboard - Monai" }] }),
   component: DashboardRoute,
   beforeLoad: async () => await authStateFn(),
   loader: async () => {

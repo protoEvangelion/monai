@@ -34,7 +34,7 @@ function SpendingChartTooltip({
   return (
     <div className="rounded-xl border border-divider bg-background px-3 py-2 text-sm text-foreground shadow-lg">
       <p className="mb-1.5 font-semibold">{datum.label}</p>
-      <p className="text-[#60a5fa]">Budget level : {formatCurrency(datum.budget)}</p>
+      <p className="text-info">Budget level : {formatCurrency(datum.budget)}</p>
       <p className="text-foreground">Spent : {formatCurrency(datum.spent)}</p>
     </div>
   );
@@ -87,7 +87,12 @@ export function SpendingChart({
   return (
     <div
       ref={containerRef}
-      className="h-56 w-full min-w-0 overflow-hidden rounded-2xl border border-divider/40 bg-default-50"
+      role="img"
+      aria-label={`Monthly spending against budget for ${data.length} months. ${data
+        .slice(-1)
+        .map((d) => `${d.label}: ${formatCurrency(d.spent)} spent of ${formatCurrency(d.budget)} budgeted.`)
+        .join("")}`}
+      className="h-56 w-full min-w-0 overflow-hidden rounded-2xl bg-default-50"
     >
       {size.width > 0 && size.height > 0 ? (
         <ComposedChart
@@ -95,6 +100,7 @@ export function SpendingChart({
           height={size.height}
           data={data}
           margin={{ top: 12, right: 16, left: 12, bottom: 12 }}
+          accessibilityLayer={false}
           style={onMonthSelect ? { cursor: "pointer" } : undefined}
           onClick={(state) => {
             selectMonthAtIndex(
@@ -104,7 +110,7 @@ export function SpendingChart({
         >
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="rgba(148, 163, 184, 0.35)"
+            stroke="color-mix(in oklch, var(--foreground) 16%, transparent)"
             vertical={false}
           />
           <XAxis
@@ -113,7 +119,7 @@ export function SpendingChart({
             tickLine={false}
             interval={0}
             minTickGap={4}
-            tick={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontWeight: 600 }}
             tickMargin={8}
           />
           <YAxis hide />
@@ -135,13 +141,13 @@ export function SpendingChart({
                 cursor={onMonthSelect ? "pointer" : undefined}
                 fill={
                   entry.spent > entry.budget && entry.budget > 0
-                    ? "#ef4444"
+                    ? "var(--chart-debts)"
                     : entry.spent > 0
-                      ? "#22c55e"
-                      : "#94a3b8"
+                      ? "var(--chart-net-worth)"
+                      : "var(--muted-foreground)"
                 }
                 opacity={entry.isSelectedMonth ? 1 : 0.82}
-                stroke={entry.isSelectedMonth ? "#0f172a" : undefined}
+                stroke={entry.isSelectedMonth ? "var(--foreground)" : undefined}
                 strokeWidth={entry.isSelectedMonth ? 1.5 : 0}
               />
             ))}
@@ -151,10 +157,10 @@ export function SpendingChart({
               type="monotone"
               dataKey="budget"
               name="Budget level"
-              stroke="#60a5fa"
+              stroke="var(--chart-assets)"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 4, strokeWidth: 0, fill: "#60a5fa" }}
+              activeDot={{ r: 4, strokeWidth: 0, fill: "var(--chart-assets)" }}
               isAnimationActive={false}
             />
           ) : null}

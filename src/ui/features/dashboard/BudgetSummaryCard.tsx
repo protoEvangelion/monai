@@ -25,10 +25,10 @@ export function BudgetSummaryCard({
   return (
     <div className="h-full rounded-2xl bg-card p-5">
       <div className="flex items-center justify-between mb-5">
-        <h5 className="font-bold text-sm">Zero-based budget</h5>
+        <h2 className="font-bold text-sm">Zero-based budget</h2>
         <Link
           to="/categories"
-          className="flex items-center gap-1 text-xs text-default-400 hover:text-foreground transition-colors"
+          className="flex min-h-6 items-center gap-1 text-xs text-default-400 transition-colors hover:text-foreground"
         >
           Categories <ChevronRightIcon size={14} />
         </Link>
@@ -40,17 +40,17 @@ export function BudgetSummaryCard({
       ) : (
         <div className="space-y-4">
           <div
-            className={`rounded-2xl border px-4 py-3 ${
+            className={`border-l-2 py-1 pl-3 ${
               isZeroBasedBalanced
-                ? "border-success/40 bg-success/10 text-success"
+                ? "border-success text-success"
                 : remainingToAssignCents < 0
-                  ? "border-danger/40 bg-danger/10 text-danger"
-                  : "border-warning/40 bg-warning/10 text-warning"
+                  ? "border-danger text-danger"
+                  : "border-warning text-warning"
             }`}
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">
+                <div className="text-[11px] font-bold uppercase tracking-widest opacity-90">
                   {isZeroBasedBalanced
                     ? "Ready"
                     : remainingToAssignCents < 0
@@ -69,7 +69,7 @@ export function BudgetSummaryCard({
 
           <div className="flex justify-between">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-default-400 mb-1">
+              <div className="text-[11px] font-bold uppercase tracking-widest text-default-400 mb-1">
                 Expected income
               </div>
               <div className="text-2xl font-black text-foreground tabular-nums">
@@ -80,7 +80,7 @@ export function BudgetSummaryCard({
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-default-400 mb-1">
+              <div className="text-[11px] font-bold uppercase tracking-widest text-default-400 mb-1">
                 Budgeted
               </div>
               <div className="text-2xl font-black text-foreground tabular-nums">
@@ -89,7 +89,7 @@ export function BudgetSummaryCard({
             </div>
           </div>
           <div>
-            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-default-400 mb-2">
+            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-default-400 mb-2">
               <span>Spent</span>
               <span>
                 {totalBudgeted > 0 ? Math.min((totalSpent / totalBudgeted) * 100, 999).toFixed(0) : "0"}

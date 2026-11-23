@@ -6,6 +6,9 @@ import { useTheme } from "../../hooks/useTheme";
 const bezelMantineTheme = createTheme({
   fontFamily: "Outfit, ui-sans-serif, system-ui, sans-serif",
   primaryColor: "teal",
+  // Shade 6 (#0d9488) measured 3.7:1 as text on white. Light uses shade 8,
+  // dark uses shade 4 so Mantine's primary text clears AA in both themes.
+  primaryShade: { light: 8, dark: 4 },
   defaultRadius: "md",
   colors: {
     // Bezel primary teal ramp (approx from base.color.teal)

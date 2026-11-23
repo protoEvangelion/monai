@@ -27,3 +27,7 @@ tmp
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# impeccable design skill (local tooling, installed per machine)
+.pi
+.impeccable

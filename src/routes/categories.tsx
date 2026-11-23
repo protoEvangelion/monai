@@ -39,6 +39,7 @@ function cleanCategoriesSearch(search: CategoriesSearch): CategoriesSearch {
 }
 
 export const Route = createFileRoute("/categories")({
+  head: () => ({ meta: [{ title: "Categories - Monai" }] }),
   component: CategoriesRoute,
   beforeLoad: async () => await authStateFn(),
   validateSearch: (search: Record<string, unknown>): CategoriesSearch => ({

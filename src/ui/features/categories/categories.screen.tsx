@@ -88,7 +88,7 @@ export function CategoriesScreen({
         </div>
         <div className="flex items-center gap-3 justify-self-start sm:justify-self-end">
           <Dropdown>
-            <DropdownTrigger className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_16px_color-mix(in_oklch,var(--color-accent)_45%,transparent)] transition-all hover:brightness-95 hover:shadow-[0_0_22px_color-mix(in_oklch,var(--color-accent)_60%,transparent)] active:scale-95">
+            <DropdownTrigger className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:brightness-95 active:scale-[0.98]">
               <CirclePlusIcon size={14} />
               New
             </DropdownTrigger>
@@ -136,7 +136,7 @@ export function CategoriesScreen({
       />
 
       {groups.length === 0 ? (
-        <Card className="w-full bg-background/60 backdrop-blur-md border-divider/50">
+        <Card className="w-full border-divider/50 bg-background/60 backdrop-blur-md">
           <CardContent className="flex flex-col items-center justify-center py-20 gap-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-default-100 flex items-center justify-center">
               <PieChartIcon size={28} className="text-default-400" />

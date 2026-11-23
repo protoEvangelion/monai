@@ -43,7 +43,7 @@ export function DashboardAiCategorizeButton({ transactions }: { transactions: Tx
         onClick={handleAICategorize}
         className={[
           "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold tracking-wide text-white transition-all duration-200",
-          "bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 shadow-md shadow-blue-500/20",
+          "bg-linear-to-br from-teal-700 via-blue-700 to-indigo-700 shadow-md shadow-blue-900/20",
           "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-500/30 active:translate-y-0",
           "disabled:cursor-not-allowed disabled:opacity-45 disabled:transform-none disabled:shadow-none",
         ].join(" ")}
@@ -55,7 +55,7 @@ export function DashboardAiCategorizeButton({ transactions }: { transactions: Tx
         )}
         AI Categorize
         {aiEligibleIds.length > 0 ? (
-          <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-white/30 bg-white/95 px-1 text-[9px] font-black tabular-nums text-blue-700">
+          <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-white/30 bg-white/95 px-1 text-[11px] font-black tabular-nums text-blue-700">
             {aiEligibleIds.length}
           </span>
         ) : null}

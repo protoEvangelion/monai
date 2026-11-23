@@ -202,7 +202,7 @@ export function AppSidebar({
                 <div key={section.title} className="space-y-1">
                   <button
                     type="button"
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-default-400 transition-colors hover:bg-primary/10"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-default-400 transition-colors hover:bg-primary/10"
                     onClick={() => toggleSection(section.title)}
                     aria-expanded={expandedSections.has(section.title)}
                   >

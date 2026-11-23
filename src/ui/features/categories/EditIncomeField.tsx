@@ -18,7 +18,7 @@ export function EditIncomeField({
   return (
     <div className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-2 shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--color-accent)_12%,transparent)] md:w-1/2">
       <label className="min-w-0 flex-1 cursor-text">
-        <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-default-500">
+        <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-default-500">
           <PencilIcon size={10} />
           Edit income
         </span>
@@ -33,7 +33,7 @@ export function EditIncomeField({
           />
         </span>
         {incomeChanged ? (
-          <span className="mt-1 block text-[10px] font-semibold text-primary">
+          <span className="mt-1 block text-[11px] font-semibold text-primary">
             Unsaved change
           </span>
         ) : null}

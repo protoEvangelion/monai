@@ -130,7 +130,7 @@ export function TransactionSelectionToolbar({
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-64 rounded-2xl border border-divider p-3 shadow-xl">
-          <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-default-400">
+          <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-default-400">
             Transaction date
           </label>
           <input

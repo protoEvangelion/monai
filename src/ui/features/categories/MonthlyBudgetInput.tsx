@@ -37,7 +37,7 @@ export function MonthlyBudgetInput({
 
   return (
     <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
-      <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-default-400">
         Budgeted
       </p>
       <div className="mt-1 flex items-center gap-2">

@@ -27,6 +27,7 @@ const authStateFn = createServerFn().handler(async () => {
 });
 
 export const Route = createFileRoute("/amazon-import")({
+  head: () => ({ meta: [{ title: "Amazon import - Monai" }] }),
   component: AmazonImportRoute,
   beforeLoad: async () => await authStateFn(),
 });
@@ -136,7 +137,7 @@ function Report({ result }: { result: AmazonReconcileResult }) {
           ["Skipped", result.skippedCount],
         ].map(([label, value]) => (
           <div key={label} className="rounded-xl border border-divider bg-content1 px-3 py-2">
-            <dt className="text-[10px] font-bold tracking-[0.14em] text-default-400 uppercase">
+            <dt className="text-[11px] font-bold tracking-[0.14em] text-default-400 uppercase">
               {label}
             </dt>
             <dd className="text-lg font-semibold tabular-nums">{value}</dd>
@@ -224,7 +225,7 @@ function Setup() {
             ref={linkRef}
             href="#"
             onClick={(event) => event.preventDefault()}
-            className="inline-flex w-fit items-center gap-2 rounded-xl bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-500/20"
+            className="inline-flex w-fit items-center gap-2 rounded-xl bg-linear-to-br from-teal-700 via-blue-700 to-indigo-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-900/20"
           >
             Monai → Amazon
           </a>

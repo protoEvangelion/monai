@@ -45,7 +45,7 @@ export function AccountSummaryCard({
   );
 
   return (
-    <div className="rounded-3xl border border-divider/60 bg-content1 p-6">
+    <div className="rounded-3xl bg-content1 p-6">
       <div className="flex items-start justify-between">
         <div>
           <div className="text-sm font-semibold text-default-400">Net worth</div>
@@ -65,9 +65,17 @@ export function AccountSummaryCard({
           <SettingsIcon size={16} />
         </button>
       </div>
-      <div ref={ref} className="mt-4 h-48 w-full min-w-0">
+      <div
+        ref={ref}
+        className="mt-4 h-48 w-full min-w-0"
+        role="img"
+        aria-label={`Balance history for this account over the selected range, latest ${formatCurrency(
+          Number(chartData?.[chartData.length - 1]?.netWorth ?? 0),
+        )}.`}
+      >
         {size.width > 0 && size.height > 0 ? (
           <AreaChart
+            accessibilityLayer={false}
             width={size.width}
             height={size.height}
             data={chartData}
@@ -75,8 +83,8 @@ export function AccountSummaryCard({
           >
             <defs>
               <linearGradient id="netWorthFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#17c964" stopOpacity={0.22} />
-                <stop offset="100%" stopColor="#17c964" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--chart-net-worth)" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="var(--chart-net-worth)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <ChartTooltip
@@ -91,8 +99,9 @@ export function AccountSummaryCard({
             <Area
               dataKey="netWorth"
               type="linear"
-              stroke="#17c964"
+              stroke="var(--chart-net-worth)"
               strokeWidth={3}
+              isAnimationActive={false}
               fill="url(#netWorthFill)"
             />
           </AreaChart>
@@ -106,7 +115,7 @@ export function AccountSummaryCard({
             aria-pressed={item === range}
             onClick={() => setRange(item)}
             className={[
-              "rounded-full px-3 py-1 text-xs font-bold",
+              "flex min-h-8 items-center rounded-full px-3 text-xs font-bold",
               item === range
                 ? "bg-content2 text-foreground"
                 : "text-default-400 hover:text-foreground",

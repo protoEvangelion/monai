@@ -232,13 +232,13 @@ export function CategoryDetailPanel({
 
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
-              <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Spent</p>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-default-400">Spent</p>
               <p className="truncate text-sm font-bold text-foreground">
                 {formatCurrency(selectedSpent)}
               </p>
             </div>
             <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
-              <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">Left</p>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-default-400">Left</p>
               <p
                 className={`truncate text-sm font-bold ${selectedAvailable < 0 ? "text-danger" : "text-success"}`}
               >
@@ -255,7 +255,7 @@ export function CategoryDetailPanel({
               />
             ) : (
               <div className="min-w-0 rounded-xl border border-divider/40 bg-default-50 px-2 py-2">
-                <p className="text-[9px] uppercase tracking-[0.12em] text-default-400">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-default-400">
                   {isIncome ? "Transactions" : "Categories"}
                 </p>
                 <p className="truncate text-sm font-bold text-foreground">
